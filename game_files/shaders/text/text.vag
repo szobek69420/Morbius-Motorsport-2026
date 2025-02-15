@@ -1,0 +1,15 @@
+#version 330 core
+layout (location=0) in vec2 aPos;
+layout (location=1) in vec2 aUV;
+
+out vec2 uv;
+
+uniform mat4 pv;
+uniform vec2 position;
+uniform vec2 scale;
+
+void main()
+{
+	uv=aUV;
+	gl_Position=pv*vec4(scale*aPos+position, 0.0, 1.0);
+}

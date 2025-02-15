@@ -1,0 +1,333 @@
+[BITS 32]
+
+;GLFW functions follow cdecl!!!!!!!!!!!!!!!!!!!!
+
+%macro dll_import 2
+    import %2 %1
+    extern %2
+%endmacro
+
+%macro glfwDefine 2
+	%1 dd %2
+	global %1
+%endmacro
+
+section .rodata use32
+	
+	glfwDefine GLFW_VERSION_MAJOR,3
+	glfwDefine GLFW_VERSION_MINOR,3
+	glfwDefine GLFW_VERSION_REVISION,8
+	glfwDefine GLFW_TRUE,1
+	glfwDefine GLFW_FALSE,0
+	glfwDefine GLFW_RELEASE,0
+	glfwDefine GLFW_PRESS,1
+	glfwDefine GLFW_REPEAT,2
+	glfwDefine GLFW_HAT_CENTERED,0
+	glfwDefine GLFW_HAT_UP,1
+	glfwDefine GLFW_HAT_RIGHT,2
+	glfwDefine GLFW_HAT_DOWN,4
+	glfwDefine GLFW_HAT_LEFT,8
+	glfwDefine GLFW_HAT_RIGHT_UP,3
+	glfwDefine GLFW_HAT_RIGHT_DOWN,6
+	glfwDefine GLFW_HAT_LEFT_UP,9
+	glfwDefine GLFW_HAT_LEFT_DOWN,12
+	glfwDefine GLFW_KEY_UNKNOWN,-1
+	glfwDefine GLFW_KEY_SPACE,32
+	glfwDefine GLFW_KEY_APOSTROPHE,39
+	glfwDefine GLFW_KEY_COMMA,44
+	glfwDefine GLFW_KEY_MINUS,45
+	glfwDefine GLFW_KEY_PERIOD,46
+	glfwDefine GLFW_KEY_SLASH,47
+	glfwDefine GLFW_KEY_0,48
+	glfwDefine GLFW_KEY_1,49
+	glfwDefine GLFW_KEY_2,50
+	glfwDefine GLFW_KEY_3,51
+	glfwDefine GLFW_KEY_4,52
+	glfwDefine GLFW_KEY_5,53
+	glfwDefine GLFW_KEY_6,54
+	glfwDefine GLFW_KEY_7,55
+	glfwDefine GLFW_KEY_8,56
+	glfwDefine GLFW_KEY_9,57
+	glfwDefine GLFW_KEY_SEMICOLON,59
+	glfwDefine GLFW_KEY_EQUAL,61
+	glfwDefine GLFW_KEY_A,65
+	glfwDefine GLFW_KEY_B,66
+	glfwDefine GLFW_KEY_C,67
+	glfwDefine GLFW_KEY_D,68
+	glfwDefine GLFW_KEY_E,69
+	glfwDefine GLFW_KEY_F,70
+	glfwDefine GLFW_KEY_G,71
+	glfwDefine GLFW_KEY_H,72
+	glfwDefine GLFW_KEY_I,73
+	glfwDefine GLFW_KEY_J,74
+	glfwDefine GLFW_KEY_K,75
+	glfwDefine GLFW_KEY_L,76
+	glfwDefine GLFW_KEY_M,77
+	glfwDefine GLFW_KEY_N,78
+	glfwDefine GLFW_KEY_O,79
+	glfwDefine GLFW_KEY_P,80
+	glfwDefine GLFW_KEY_Q,81
+	glfwDefine GLFW_KEY_R,82
+	glfwDefine GLFW_KEY_S,83
+	glfwDefine GLFW_KEY_T,84
+	glfwDefine GLFW_KEY_U,85
+	glfwDefine GLFW_KEY_V,86
+	glfwDefine GLFW_KEY_W,87
+	glfwDefine GLFW_KEY_X,88
+	glfwDefine GLFW_KEY_Y,89
+	glfwDefine GLFW_KEY_Z,90
+	glfwDefine GLFW_KEY_LEFT_BRACKET,91
+	glfwDefine GLFW_KEY_BACKSLASH,92
+	glfwDefine GLFW_KEY_RIGHT_BRACKET,93
+	glfwDefine GLFW_KEY_GRAVE_ACCENT,96
+	glfwDefine GLFW_KEY_WORLD_1,161
+	glfwDefine GLFW_KEY_WORLD_2,162
+	glfwDefine GLFW_KEY_ESCAPE,256
+	glfwDefine GLFW_KEY_ENTER,257
+	glfwDefine GLFW_KEY_TAB,258
+	glfwDefine GLFW_KEY_BACKSPACE,259
+	glfwDefine GLFW_KEY_INSERT,260
+	glfwDefine GLFW_KEY_DELETE,261
+	glfwDefine GLFW_KEY_RIGHT,262
+	glfwDefine GLFW_KEY_LEFT,263
+	glfwDefine GLFW_KEY_DOWN,264
+	glfwDefine GLFW_KEY_UP,265
+	glfwDefine GLFW_KEY_PAGE_UP,266
+	glfwDefine GLFW_KEY_PAGE_DOWN,267
+	glfwDefine GLFW_KEY_HOME,268
+	glfwDefine GLFW_KEY_END,269
+	glfwDefine GLFW_KEY_CAPS_LOCK,280
+	glfwDefine GLFW_KEY_SCROLL_LOCK,281
+	glfwDefine GLFW_KEY_NUM_LOCK,282
+	glfwDefine GLFW_KEY_PRINT_SCREEN,283
+	glfwDefine GLFW_KEY_PAUSE,284
+	glfwDefine GLFW_KEY_F1,290
+	glfwDefine GLFW_KEY_F2,291
+	glfwDefine GLFW_KEY_F3,292
+	glfwDefine GLFW_KEY_F4,293
+	glfwDefine GLFW_KEY_F5,294
+	glfwDefine GLFW_KEY_F6,295
+	glfwDefine GLFW_KEY_F7,296
+	glfwDefine GLFW_KEY_F8,297
+	glfwDefine GLFW_KEY_F9,298
+	glfwDefine GLFW_KEY_F10,299
+	glfwDefine GLFW_KEY_F11,300
+	glfwDefine GLFW_KEY_F12,301
+	glfwDefine GLFW_KEY_F13,302
+	glfwDefine GLFW_KEY_F14,303
+	glfwDefine GLFW_KEY_F15,304
+	glfwDefine GLFW_KEY_F16,305
+	glfwDefine GLFW_KEY_F17,306
+	glfwDefine GLFW_KEY_F18,307
+	glfwDefine GLFW_KEY_F19,308
+	glfwDefine GLFW_KEY_F20,309
+	glfwDefine GLFW_KEY_F21,310
+	glfwDefine GLFW_KEY_F22,311
+	glfwDefine GLFW_KEY_F23,312
+	glfwDefine GLFW_KEY_F24,313
+	glfwDefine GLFW_KEY_F25,314
+	glfwDefine GLFW_KEY_KP_0,320
+	glfwDefine GLFW_KEY_KP_1,321
+	glfwDefine GLFW_KEY_KP_2,322
+	glfwDefine GLFW_KEY_KP_3,323
+	glfwDefine GLFW_KEY_KP_4,324
+	glfwDefine GLFW_KEY_KP_5,325
+	glfwDefine GLFW_KEY_KP_6,326
+	glfwDefine GLFW_KEY_KP_7,327
+	glfwDefine GLFW_KEY_KP_8,328
+	glfwDefine GLFW_KEY_KP_9,329
+	glfwDefine GLFW_KEY_KP_DECIMAL,330
+	glfwDefine GLFW_KEY_KP_DIVIDE,331
+	glfwDefine GLFW_KEY_KP_MULTIPLY,332
+	glfwDefine GLFW_KEY_KP_SUBTRACT,333
+	glfwDefine GLFW_KEY_KP_ADD,334
+	glfwDefine GLFW_KEY_KP_ENTER,335
+	glfwDefine GLFW_KEY_KP_EQUAL,336
+	glfwDefine GLFW_KEY_LEFT_SHIFT,340
+	glfwDefine GLFW_KEY_LEFT_CONTROL,341
+	glfwDefine GLFW_KEY_LEFT_ALT,342
+	glfwDefine GLFW_KEY_LEFT_SUPER,343
+	glfwDefine GLFW_KEY_RIGHT_SHIFT,344
+	glfwDefine GLFW_KEY_RIGHT_CONTROL,345
+	glfwDefine GLFW_KEY_RIGHT_ALT,346
+	glfwDefine GLFW_KEY_RIGHT_SUPER,347
+	glfwDefine GLFW_KEY_MENU,348
+	glfwDefine GLFW_KEY_LAST,348
+	glfwDefine GLFW_MOD_SHIFT,0x0001
+	glfwDefine GLFW_MOD_CONTROL,0x0002
+	glfwDefine GLFW_MOD_ALT,0x0004
+	glfwDefine GLFW_MOD_SUPER,0x0008
+	glfwDefine GLFW_MOD_CAPS_LOCK,0x0010
+	glfwDefine GLFW_MOD_NUM_LOCK,0x0020
+	glfwDefine GLFW_MOUSE_BUTTON_1,0
+	glfwDefine GLFW_MOUSE_BUTTON_2,1
+	glfwDefine GLFW_MOUSE_BUTTON_3,2
+	glfwDefine GLFW_MOUSE_BUTTON_4,3
+	glfwDefine GLFW_MOUSE_BUTTON_5,4
+	glfwDefine GLFW_MOUSE_BUTTON_6,5
+	glfwDefine GLFW_MOUSE_BUTTON_7,6
+	glfwDefine GLFW_MOUSE_BUTTON_8,7
+	glfwDefine GLFW_MOUSE_BUTTON_LAST,7
+	glfwDefine GLFW_MOUSE_BUTTON_LEFT,0
+	glfwDefine GLFW_MOUSE_BUTTON_RIGHT,1
+	glfwDefine GLFW_MOUSE_BUTTON_MIDDLE,2
+	glfwDefine GLFW_JOYSTICK_1,0
+	glfwDefine GLFW_JOYSTICK_2,1
+	glfwDefine GLFW_JOYSTICK_3,2
+	glfwDefine GLFW_JOYSTICK_4,3
+	glfwDefine GLFW_JOYSTICK_5,4
+	glfwDefine GLFW_JOYSTICK_6,5
+	glfwDefine GLFW_JOYSTICK_7,6
+	glfwDefine GLFW_JOYSTICK_8,7
+	glfwDefine GLFW_JOYSTICK_9,8
+	glfwDefine GLFW_JOYSTICK_10,9
+	glfwDefine GLFW_JOYSTICK_11,10
+	glfwDefine GLFW_JOYSTICK_12,11
+	glfwDefine GLFW_JOYSTICK_13,12
+	glfwDefine GLFW_JOYSTICK_14,13
+	glfwDefine GLFW_JOYSTICK_15,14
+	glfwDefine GLFW_JOYSTICK_16,15
+	glfwDefine GLFW_JOYSTICK_LAST,15
+	glfwDefine GLFW_GAMEPAD_BUTTON_A,0
+	glfwDefine GLFW_GAMEPAD_BUTTON_B,1
+	glfwDefine GLFW_GAMEPAD_BUTTON_X,2
+	glfwDefine GLFW_GAMEPAD_BUTTON_Y,3
+	glfwDefine GLFW_GAMEPAD_BUTTON_LEFT_BUMPER,4
+	glfwDefine GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER,5
+	glfwDefine GLFW_GAMEPAD_BUTTON_BACK,6
+	glfwDefine GLFW_GAMEPAD_BUTTON_START,7
+	glfwDefine GLFW_GAMEPAD_BUTTON_GUIDE,8
+	glfwDefine GLFW_GAMEPAD_BUTTON_LEFT_THUMB,9
+	glfwDefine GLFW_GAMEPAD_BUTTON_RIGHT_THUMB,10
+	glfwDefine GLFW_GAMEPAD_BUTTON_DPAD_UP,11
+	glfwDefine GLFW_GAMEPAD_BUTTON_DPAD_RIGHT,12
+	glfwDefine GLFW_GAMEPAD_BUTTON_DPAD_DOWN,13
+	glfwDefine GLFW_GAMEPAD_BUTTON_DPAD_LEFT,14
+	glfwDefine GLFW_GAMEPAD_BUTTON_LAST,14
+	glfwDefine GLFW_GAMEPAD_BUTTON_CROSS,0
+	glfwDefine GLFW_GAMEPAD_BUTTON_CIRCLE,1
+	glfwDefine GLFW_GAMEPAD_BUTTON_SQUARE,2
+	glfwDefine GLFW_GAMEPAD_BUTTON_TRIANGLE,3
+	glfwDefine GLFW_GAMEPAD_AXIS_LEFT_X,0
+	glfwDefine GLFW_GAMEPAD_AXIS_LEFT_Y,1
+	glfwDefine GLFW_GAMEPAD_AXIS_RIGHT_X,2
+	glfwDefine GLFW_GAMEPAD_AXIS_RIGHT_Y,3
+	glfwDefine GLFW_GAMEPAD_AXIS_LEFT_TRIGGER,4
+	glfwDefine GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER,5
+	glfwDefine GLFW_GAMEPAD_AXIS_LAST,5
+	glfwDefine GLFW_NO_ERROR,0
+	glfwDefine GLFW_NOT_INITIALIZED,0x00010001
+	glfwDefine GLFW_NO_CURRENT_CONTEXT,0x00010002
+	glfwDefine GLFW_INVALID_ENUM,0x00010003
+	glfwDefine GLFW_INVALID_VALUE,0x00010004
+	glfwDefine GLFW_OUT_OF_MEMORY,0x00010005
+	glfwDefine GLFW_API_UNAVAILABLE,0x00010006
+	glfwDefine GLFW_VERSION_UNAVAILABLE,0x00010007
+	glfwDefine GLFW_PLATFORM_ERROR,0x00010008
+	glfwDefine GLFW_FORMAT_UNAVAILABLE,0x00010009
+	glfwDefine GLFW_NO_WINDOW_CONTEXT,0x0001000A
+	glfwDefine GLFW_FOCUSED,0x00020001
+	glfwDefine GLFW_ICONIFIED,0x00020002
+	glfwDefine GLFW_RESIZABLE,0x00020003
+	glfwDefine GLFW_VISIBLE,0x00020004
+	glfwDefine GLFW_DECORATED,0x00020005
+	glfwDefine GLFW_AUTO_ICONIFY,0x00020006
+	glfwDefine GLFW_FLOATING,0x00020007
+	glfwDefine GLFW_MAXIMIZED,0x00020008
+	glfwDefine GLFW_CENTER_CURSOR,0x00020009
+	glfwDefine GLFW_TRANSPARENT_FRAMEBUFFER,0x0002000A
+	glfwDefine GLFW_HOVERED,0x0002000B
+	glfwDefine GLFW_FOCUS_ON_SHOW,0x0002000C
+	glfwDefine GLFW_RED_BITS,0x00021001
+	glfwDefine GLFW_GREEN_BITS,0x00021002
+	glfwDefine GLFW_BLUE_BITS,0x00021003
+	glfwDefine GLFW_ALPHA_BITS,0x00021004
+	glfwDefine GLFW_DEPTH_BITS,0x00021005
+	glfwDefine GLFW_STENCIL_BITS,0x00021006
+	glfwDefine GLFW_ACCUM_RED_BITS,0x00021007
+	glfwDefine GLFW_ACCUM_GREEN_BITS,0x00021008
+	glfwDefine GLFW_ACCUM_BLUE_BITS,0x00021009
+	glfwDefine GLFW_ACCUM_ALPHA_BITS,0x0002100A
+	glfwDefine GLFW_AUX_BUFFERS,0x0002100B
+	glfwDefine GLFW_STEREO,0x0002100C
+	glfwDefine GLFW_SAMPLES,0x0002100D
+	glfwDefine GLFW_SRGB_CAPABLE,0x0002100E
+	glfwDefine GLFW_REFRESH_RATE,0x0002100F
+	glfwDefine GLFW_DOUBLEBUFFER,0x00021010
+	glfwDefine GLFW_CLIENT_API,0x00022001
+	glfwDefine GLFW_CONTEXT_VERSION_MAJOR,0x00022002
+	glfwDefine GLFW_CONTEXT_VERSION_MINOR,0x00022003
+	glfwDefine GLFW_CONTEXT_REVISION,0x00022004
+	glfwDefine GLFW_CONTEXT_ROBUSTNESS,0x00022005
+	glfwDefine GLFW_OPENGL_FORWARD_COMPAT,0x00022006
+	glfwDefine GLFW_OPENGL_DEBUG_CONTEXT,0x00022007
+	glfwDefine GLFW_OPENGL_PROFILE,0x00022008
+	glfwDefine GLFW_CONTEXT_RELEASE_BEHAVIOR,0x00022009
+	glfwDefine GLFW_CONTEXT_NO_ERROR,0x0002200A
+	glfwDefine GLFW_CONTEXT_CREATION_API,0x0002200B
+	glfwDefine GLFW_SCALE_TO_MONITOR,0x0002200C
+	glfwDefine GLFW_COCOA_RETINA_FRAMEBUFFER,0x00023001
+	glfwDefine GLFW_COCOA_FRAME_NAME,0x00023002
+	glfwDefine GLFW_COCOA_GRAPHICS_SWITCHING,0x00023003
+	glfwDefine GLFW_X11_CLASS_NAME,0x00024001
+	glfwDefine GLFW_X11_INSTANCE_NAME,0x00024002
+	glfwDefine GLFW_NO_API,0
+	glfwDefine GLFW_OPENGL_API,0x00030001
+	glfwDefine GLFW_OPENGL_ES_API,0x00030002
+	glfwDefine GLFW_NO_ROBUSTNESS,0
+	glfwDefine GLFW_NO_RESET_NOTIFICATION,0x00031001
+	glfwDefine GLFW_LOSE_CONTEXT_ON_RESET,0x00031002
+	glfwDefine GLFW_OPENGL_ANY_PROFILE,0
+	glfwDefine GLFW_OPENGL_CORE_PROFILE,0x00032001
+	glfwDefine GLFW_OPENGL_COMPAT_PROFILE,0x00032002
+	glfwDefine GLFW_CURSOR,0x00033001
+	glfwDefine GLFW_STICKY_KEYS,0x00033002
+	glfwDefine GLFW_STICKY_MOUSE_BUTTONS,0x00033003
+	glfwDefine GLFW_LOCK_KEY_MODS,0x00033004
+	glfwDefine GLFW_RAW_MOUSE_MOTION,0x00033005
+	glfwDefine GLFW_CURSOR_NORMAL,0x00034001
+	glfwDefine GLFW_CURSOR_HIDDEN,0x00034002
+	glfwDefine GLFW_CURSOR_DISABLED,0x00034003
+	glfwDefine GLFW_ANY_RELEASE_BEHAVIOR,0
+	glfwDefine GLFW_RELEASE_BEHAVIOR_FLUSH,0x00035001
+	glfwDefine GLFW_RELEASE_BEHAVIOR_NONE,0x00035002
+	glfwDefine GLFW_NATIVE_CONTEXT_API,0x00036001
+	glfwDefine GLFW_EGL_CONTEXT_API,0x00036002
+	glfwDefine GLFW_OSMESA_CONTEXT_API,0x00036003
+	glfwDefine GLFW_ARROW_CURSOR,0x00036001
+	glfwDefine GLFW_IBEAM_CURSOR,0x00036002
+	glfwDefine GLFW_CROSSHAIR_CURSOR,0x00036003
+	glfwDefine GLFW_HAND_CURSOR,0x00036004
+	glfwDefine GLFW_HRESIZE_CURSOR,0x00036005
+	glfwDefine GLFW_VRESIZE_CURSOR,0x00036006
+	glfwDefine GLFW_CONNECTED,0x00040001
+	glfwDefine GLFW_DISCONNECTED,0x00040002
+	glfwDefine GLFW_JOYSTICK_HAT_BUTTONS,0x00050001
+	glfwDefine GLFW_COCOA_CHDIR_RESOURCES,0x00051001
+	glfwDefine GLFW_COCOA_MENUBAR,0x00051002
+	glfwDefine GLFW_DONT_CARE,-1
+	
+section .text use32
+	
+	dll_import glfw3.dll, glfwCreateWindow
+	dll_import glfw3.dll, glfwDestroyWindow
+	dll_import glfw3.dll, glfwInit
+	dll_import glfw3.dll, glfwGetCurrentContext
+	dll_import glfw3.dll, glfwGetError
+	dll_import glfw3.dll, glfwGetProcAddress
+	dll_import glfw3.dll, glfwMakeContextCurrent
+	dll_import glfw3.dll, glfwPollEvents
+	dll_import glfw3.dll, glfwSetCursorPos
+	dll_import glfw3.dll, glfwSetCursorPosCallback
+	dll_import glfw3.dll, glfwSetFramebufferSizeCallback
+	dll_import glfw3.dll, glfwSetInputMode
+	dll_import glfw3.dll, glfwSetKeyCallback
+	dll_import glfw3.dll, glfwSetMouseButtonCallback
+	dll_import glfw3.dll, glfwSetScrollCallback
+	dll_import glfw3.dll, glfwSetWindowShouldClose
+	dll_import glfw3.dll, glfwSetWindowSizeCallback
+	dll_import glfw3.dll, glfwSwapBuffers
+	dll_import glfw3.dll, glfwSwapInterval
+	dll_import glfw3.dll, glfwTerminate
+	dll_import glfw3.dll, glfwWindowHint
+	dll_import glfw3.dll, glfwWindowShouldClose
