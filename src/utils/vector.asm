@@ -28,7 +28,7 @@ section .text use32
 	global vector_push_back		;void vector_push_back(vector*, <element> element)
 	global vector_pop_back		;void vector_pop_back(vector*)
 	global vector_insert		;void vector_insert(vector*, int index, <element> element)
-	global vector_remove_at	;void vector_remove_at(vector*, int index)
+	global vector_remove_at		;void vector_remove_at(vector*, int index)
 	global vector_remove		;int vector_remove(vector*, <element> element)	removes the first matching element. removes 0 if no removal took place, 69 else
 
 vector_init: ;vector vector_init(element_size)

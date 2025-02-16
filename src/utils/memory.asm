@@ -21,7 +21,7 @@ section .text use32
 	global my_memset			;void my_memset(void* mem, int(!!!) byteValue, int numberOfBytes)		;the last byte of the value will be berucksichtingt
 	global my_memset_dword		;void my_memset_dword(void* mem, int dwordValue, int numberOfBytes)		;the number of bytes shall be divisible by 4
 	
-	global my_memcmp			;void my_memcmp(void* m1, void* m2, int byteCount)
+	global my_memcmp			;int my_memcmp(void* m1, void* m2, int byteCount)
 	
 	global my_malloc			;void* my_malloc(int numberOfBytes)
 	global my_realloc			;void* my_realloc(void* org, int newNumberOfBytes)

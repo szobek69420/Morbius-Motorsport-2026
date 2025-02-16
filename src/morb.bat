@@ -8,7 +8,6 @@ nasm -fobj input/input.asm -o build/input.o
 nasm -fobj glfw/glfw.asm -o build/glfw.o
 nasm -fobj opengl/opengl.asm -o build/opengl.o
 nasm -fobj shader/shader.asm -o build/shader.o
-nasm -fobj kuba/kuba.asm -o build/kuba.o
 nasm -fobj utils/thread_safe_queue.asm -o build/thread_safe_queue.o
 nasm -fobj utils/multithreading.asm -o build/multithreading.o
 nasm -fobj utils/queue.asm -o build/queue.o
@@ -26,6 +25,8 @@ nasm -fobj hypershapes/hyperplane.asm -o build/hyperplane.o
 nasm -fobj renderable/renderable.asm -o build/renderable.o
 nasm -fobj renderer/text/font.asm -o build/font.o
 nasm -fobj renderer/text/text_renderer.asm -o build/text_renderer.o
+nasm -fobj image/image.asm -o build/image.o
+nasm -fobj renderer/texture/texture_handler.asm -o build/texture_handler.o
 alink.exe -subsys console -oPE ^
 build/main.o ^
 build/window.o ^
@@ -34,12 +35,13 @@ build/game_loop.o ^
 build/camera.o ^
 build/input.o ^
 build/glfw.o ^
+build/texture_handler.o ^
+build/image.o ^
 build/text_renderer.o ^
 build/font.o ^
 build/renderable.o ^
 build/opengl.o ^
 build/shader.o ^
-build/kuba.o ^
 build/player.o ^
 build/hyperplane.o ^
 build/mat4.o ^
