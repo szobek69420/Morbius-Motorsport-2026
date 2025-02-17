@@ -20,13 +20,57 @@ section .rodata use32
 	
 	image_path db "./sprites/morbussin.bmp",0
 	
+	vertex_data_vector:		;imitates a vector
+	dd 120
+	dd 120
+	dd 4
+	dd vertex_data
+	vertex_data:
+	dd -1.0, -1.0, 1.0, 0.0, 0.0,
+	dd -1.0, 1.0, 1.0, 0.0, 1.0,
+	dd 1.0, 1.0, 1.0, 1.0, 1.0,
+	dd 1.0, -1.0, 1.0, 1.0, 0.0,
+	dd -1.0, -1.0, 1.0, 0.0, 0.0,
+	dd -1.0, 1.0, 1.0, 0.0, 1.0,
+	dd -1.0, 1.0, -1.0, 1.0, 1.0,
+	dd -1.0, -1.0, -1.0, 1.0, 0.0,
+	dd 1.0, -1.0, -1.0, 1.0, 0.0,
+	dd 1.0, 1.0, -1.0, 1.0, 1.0,
+	dd -1.0, 1.0, -1.0, 0.0, 1.0,
+	dd -1.0, -1.0, -1.0, 0.0, 0.0,
+	dd 1.0, -1.0, -1.0, 1.0, 0.0,
+	dd 1.0, 1.0, -1.0, 1.0, 1.0,
+	dd 1.0, 1.0, 1.0, 0.0, 1.0,
+	dd 1.0, -1.0, 1.0, 0.0, 0.0,
+	dd -1.0, 1.0, 1.0, 0.0, 0.0,
+	dd -1.0, 1.0, -1.0, 0.0, 1.0,
+	dd 1.0, 1.0, -1.0, 1.0, 1.0,
+	dd 1.0, 1.0, 1.0, 1.0, 0.0,
+	dd 1.0, -1.0, 1.0, 1.0, 0.0,
+	dd 1.0, -1.0, -1.0, 1.0, 1.0,
+	dd -1.0, -1.0, -1.0, 0.0, 1.0,
+	dd -1.0, -1.0, 1.0, 0.0, 0.0
+	
+	indices_vector:
+	dd 36
+	dd 36
+	dd 4
+	dd indices
+	indices:
+	dd 1,0,2,3,2,0
+	dd 4,5,6,6,7,4
+	dd 9,8,10,11,10,8
+	dd 12,13,14,14,15,12
+	dd 17,16,18,19,18,16
+	dd 21,20,22,23,22,20
+	
 section .bss use32
 	camera resb 36
 	pv_matrix resb 64
 	
 	pplayer resb 4
 	
-	image_texture resb 4
+	image_renderable resb 4
 	
 section .data use32
 	last_frame_milliseconds dd 0		;int, the GetTickCount of the last frame
@@ -92,7 +136,11 @@ section .text use32
 	
 	extern renderable_init
 	extern renderable_deinit
-	
+	extern renderable_create
+	extern renderable_destroy
+	extern renderable_render
+	extern renderable_setAlbedo
+	extern RENDERABLE_ATTRIB_P3UV2
 	
 	extern vector_init
 	extern vector_destroy
@@ -180,6 +228,18 @@ game_loop:
 	mov dword[pplayer], eax
 	add esp, 4
 	
+	;create morbius poster
+	push dword[RENDERABLE_ATTRIB_P3UV2]
+	push indices_vector
+	push vertex_data_vector
+	call renderable_create
+	add esp, 12
+	mov dword[image_renderable], eax
+	
+	push image_path
+	push dword[image_renderable]
+	call renderable_setAlbedo
+	add esp, 8
 	
 	
 	;enable depth test and face cull
@@ -247,6 +307,12 @@ game_loop:
 		call camera_viewProjection
 		add esp, 8
 		
+		;render morbius poster
+		push pv_matrix
+		push dword[image_renderable]
+		call renderable_render
+		add esp, 8
+		
 		
 		;draw text
 		push 0
@@ -285,6 +351,10 @@ game_loop:
 		test eax, eax
 		jz gameLoop_loop_start
 		
+	;destroy morbius poster
+	push dword[image_renderable]
+	call renderable_destroy
+	add esp, 4
 	
 	;destroy player
 	push dword[pplayer]

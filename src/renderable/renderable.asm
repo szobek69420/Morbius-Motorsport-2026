@@ -2,13 +2,14 @@
 
 ;layout
 ;struct Renderable{
-;	GLuint vao, vbo, ebo;		;0
-;	int indexCount;				;12
-;	vec3 position;				;16
-;	vec3 rotation;				;28
-;	vec3 scale;					;40
-;	int vertexAttribLayout;		;52
-;}		;56 bytes overall
+;	GLuint vao, vbo, ebo;			;0
+;	int indexCount;					;12
+;	vec3 position;					;16
+;	vec3 rotation;					;28
+;	vec3 scale;						;40
+;	int vertexAttribLayout;			;52
+;	GLuint albedoMap, specularMap	;56
+;}		;64 bytes overall
 
 section .rodata
 
@@ -20,16 +21,23 @@ section .rodata
 	RENDERABLE_ATTRIB_P3UV2 dd 2
 	RENDERABLE_ATTRIB_P3C3 dd 3
 	
-	error_not_initialized db "Renderable: renderable_init has not been called",10,0
+	error_not_initialized db "renderable: renderable_init has not been called",10,0
+	error_unsupported_layout db "renderable_create: unsupported vertex attribute layout",10,0
 	
-	vertex_shader_p3 db "shaders/p3.vag",0
-	fragment_shader_p3 db "shaders/p3.fag",0
+	vertex_shader_p3 db "shaders/renderable/p3.vag",0
+	fragment_shader_p3 db "shaders/renderable/p3.fag",0
 	
-	vertex_shader_p3c3 db "shaders/p3c3.vag",0
-	fragment_shader_p3c3 db "shaders/p3c3.fag",0
+	vertex_shader_p3c3 db "shaders/renderable/p3c3.vag",0
+	fragment_shader_p3c3 db "shaders/renderable/p3c3.fag",0
+	
+	vertex_shader_p3uv2 db "shaders/renderable/p3uv2.vag",0
+	fragment_shader_p3uv2 db "shaders/renderable/p3uv2.fag",0
+	
 	
 	uniform_name_pv db "pv",0
 	uniform_name_model db "model",0
+	uniform_name_albedo db "albedo",0
+	uniform_name_specular db "specular",0
 	
 	EPSILON dd 0.00001
 	ONE dd 1.0
@@ -42,6 +50,7 @@ section .data use32
 	renderable_initialized dd 0
 	shader_p3 dd 0
 	shader_p3c3 dd 0
+	shader_p3uv2 dd 0
 	
 	renderable_primitive dd 0
 	
@@ -50,11 +59,16 @@ section .text use32
 	global renderable_init				;void renderable_init()		//initializes the components of the renderable handler
 	global renderable_deinit			;void renderable_deinit()	//undoes renderable_init
 	
-	global renderable_create			;Renderable* renderable_create(vector<float>* vertices, vector<int>* indices, int vertexAttribLayout)
+	global renderable_create			;Renderable* renderable_create(const vector<float>* vertices, const vector<int>* indices, int vertexAttribLayout)
 	global renderable_destroy			;void renderable_destroy(Renderable* renderable)
 	
-	global renderable_render			;void renderable_render(Renderable* renderable, mat4* pv, GLuint texture)
+	global renderable_render			;void renderable_render(Renderable* renderable, mat4* pv)
+
+	;both setAlbedo and setSpecular sets the textures the 0 if the path is NULL
+	global renderable_setAlbedo			;void renderable_setAlbedo(Renderable* renderable, const char* albedoMapPath)
+	global renderable_setSpecular		;void renderable_setSpecular(Renderable* renderable, const char* specularMapPath)
 	
+	;it is a system state setting function
 	global renderable_setPrimitive		;void renderable_setPrimitive(GLuint primitive)
 	
 	
@@ -68,6 +82,7 @@ section .text use32
 	extern glVertexAttribPointer
 	extern glEnableVertexAttribArray
 	extern glGetUniformLocation
+	extern glUniform1i
 	extern glUniformMatrix4fv
 	extern glUseProgram
 	extern glDrawElements
@@ -80,6 +95,14 @@ section .text use32
 	extern GL_FALSE
 	extern GL_TRIANGLES
 	
+	extern glBindTexture
+	extern glActiveTexture
+	extern GL_TEXTURE_2D
+	extern GL_TEXTURE0
+	extern GL_TEXTURE1
+	extern GL_REPEAT
+	extern GL_NEAREST
+	
 	extern my_printf
 	
 	extern my_malloc
@@ -88,6 +111,9 @@ section .text use32
 	
 	extern shader_import
 	extern shader_destroy
+	
+	extern textureHandler_load
+	extern textureHandler_unload
 	
 	extern mat4_init
 	extern mat4_scale
@@ -111,6 +137,13 @@ renderable_init:
 	push vertex_shader_p3c3
 	call shader_import
 	mov dword[shader_p3c3], eax
+	add esp, 12
+	
+	push 0
+	push fragment_shader_p3uv2
+	push vertex_shader_p3uv2
+	call shader_import
+	mov dword[shader_p3uv2], eax
 	add esp, 12
 	
 	;init other values
@@ -142,6 +175,11 @@ renderable_deinit:
 	call shader_destroy
 	add esp, 4
 	
+	push dword[shader_p3uv2]
+	call shader_destroy
+	add esp, 4
+	
+	
 	mov esp, ebp
 	pop ebp
 	ret
@@ -167,13 +205,13 @@ renderable_create:
 	renderable_create_initialized:
 	
 	;alloc the space for the renderable
-	push 56
+	push 64
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
 	
 	;zero all of the values
-	push 56
+	push 64
 	push 0
 	push dword[ebp-4]
 	call my_memset_dword
@@ -242,9 +280,10 @@ renderable_create:
 	je renderable_create_attrib_p3
 	cmp eax, dword[RENDERABLE_ATTRIB_P3C3]
 	je renderable_create_attrib_p3c3
+	cmp eax, dword[RENDERABLE_ATTRIB_P3UV2]
+	je renderable_create_attrib_p3uv2
 	jmp renderable_create_attrib_done
 	renderable_create_attrib_p3:
-	
 		push 0
 		push 12
 		push dword[GL_FALSE]
@@ -256,9 +295,9 @@ renderable_create:
 		push 0
 		call [glEnableVertexAttribArray]
 		jmp renderable_create_attrib_done
+		
 		
 	renderable_create_attrib_p3c3:
-		
 		push 0
 		push 24
 		push dword[GL_FALSE]
@@ -281,6 +320,37 @@ renderable_create:
 		call [glEnableVertexAttribArray]
 		
 		jmp renderable_create_attrib_done
+		
+		
+	renderable_create_attrib_p3uv2:
+		push 0
+		push 20
+		push dword[GL_FALSE]
+		push dword[GL_FLOAT]
+		push 3
+		push 0
+		call [glVertexAttribPointer]
+		
+		push 12
+		push 20
+		push dword[GL_FALSE]
+		push dword[GL_FLOAT]
+		push 2
+		push 1
+		call [glVertexAttribPointer]
+		
+		push 0
+		call [glEnableVertexAttribArray]
+		push 1
+		call [glEnableVertexAttribArray]
+		
+		jmp renderable_create_attrib_done
+		
+	renderable_create_attrib_unsupported:
+		push error_unsupported_layout
+		call my_printf
+		xor eax, eax
+		jmp renderable_create_end
 	
 	renderable_create_attrib_done:
 	
@@ -315,6 +385,24 @@ renderable_destroy:
 	push ebp
 	mov ebp, esp
 	
+	;destroy textures if necessary
+	mov eax, dword[ebp+8]
+	cmp dword[eax+56], 0
+	je renderable_destroy_no_albedo
+		push dword[eax+56]
+		call textureHandler_unload
+		add esp, 4
+	renderable_destroy_no_albedo:
+	
+	mov eax, dword[ebp+8]
+	cmp dword[eax+60], 0
+	je renderable_destroy_no_specular
+		push dword[eax+60]
+		call textureHandler_unload
+		add esp, 4
+	renderable_destroy_no_specular:
+	
+	;destroy buffers and vertex arrays
 	mov eax, dword[ebp+8]
 	
 	lea ecx, [eax]
@@ -347,15 +435,6 @@ renderable_render:
 	sub esp, 4		;currently used shader
 	sub esp, 64		;model matrix
 	
-	;is texture necessary
-	mov eax, dword[ebp+8]
-	mov eax, dword[eax+52]
-	cmp eax, dword[RENDERABLE_ATTRIB_P3]
-	je renderable_render_bind_texture_done
-	cmp eax, dword[RENDERABLE_ATTRIB_P3C3]
-	je renderable_render_bind_texture_done
-		;set texture
-	renderable_render_bind_texture_done:
 	
 	;choose shader
 	mov eax, dword[ebp+8]
@@ -364,9 +443,12 @@ renderable_render:
 	je renderable_render_shader_p3
 	cmp eax, dword[RENDERABLE_ATTRIB_P3C3]
 	je renderable_render_shader_p3c3
+	cmp eax, dword[RENDERABLE_ATTRIB_P3UV2]
+	je renderable_render_shader_p3uv2
 	jmp renderable_render_end
 	
 	renderable_render_shader_p3:
+		;use shader
 		push dword[shader_p3]
 		call [glUseProgram]
 		
@@ -375,11 +457,51 @@ renderable_render:
 		jmp renderable_render_shader_done
 		
 	renderable_render_shader_p3c3:
+		;use shader
 		push dword[shader_p3c3]
 		call [glUseProgram]
 		
 		mov eax, dword[shader_p3c3]
 		mov dword[ebp-4], eax
+		jmp renderable_render_shader_done
+		
+	renderable_render_shader_p3uv2:
+		;bind textures
+		mov eax, dword[ebp+8]
+		push dword[eax+60]			;specular map
+		push dword[GL_TEXTURE_2D]
+		push dword[GL_TEXTURE1]
+		push dword[eax+56]			;albedo map
+		push dword[GL_TEXTURE_2D]
+		push dword[GL_TEXTURE0]
+		call [glActiveTexture]
+		call [glBindTexture]
+		call [glActiveTexture]
+		call [glBindTexture]
+		
+		;use shader
+		push dword[shader_p3uv2]
+		call [glUseProgram]
+		
+		mov eax, dword[shader_p3uv2]
+		mov dword[ebp-4], eax
+		jmp renderable_render_shader_done
+		
+		;set texture uniforms
+		push uniform_name_albedo
+		push dword[ebp-4]			;current shader
+		call [glGetUniformLocation]
+		push 0
+		push eax					;albedo uniform location
+		call [glUniform1i]
+		
+		push uniform_name_specular
+		push dword[ebp-4]			;current shader
+		call [glGetUniformLocation]
+		push 1
+		push eax					;specular uniform location
+		call [glUniform1i]
+		
 		jmp renderable_render_shader_done
 		
 	renderable_render_shader_done:
@@ -502,6 +624,75 @@ renderable_calculateModel:
 	mov esp, ebp
 	pop ebp
 	ret
+	
+	
+renderable_setAlbedo:
+	push ebp
+	mov ebp, esp
+	
+	;check if there is already an albedo map loaded and unload it if necessary
+	mov eax, dword[ebp+8]
+	cmp dword[eax+56], 0
+	je renderable_setAlbedo_unload_done
+		push dword[eax+56]
+		call textureHandler_unload
+		add esp, 4
+		mov dword[eax+56], 0
+	renderable_setAlbedo_unload_done:
+	
+	;check if the path is NULL (no texture)
+	cmp dword[ebp+12], 0
+	je renderable_setAlbedo_done
+	
+	;load the new albedo map
+	push 0
+	push dword[GL_NEAREST]
+	push dword[GL_REPEAT]
+	push dword[ebp+12]
+	call textureHandler_load
+	
+	mov ecx, dword[ebp+8]
+	mov dword[ecx+56], eax			;save the new texture
+	
+	renderable_setAlbedo_done:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+renderable_setSpecular:
+	push ebp
+	mov ebp, esp
+	
+	;check if there is already a specular map loaded and unload it if necessary
+	mov eax, dword[ebp+8]
+	cmp dword[eax+60], 0
+	je renderable_setSpecular_unload_done
+		push dword[eax+60]
+		call textureHandler_unload
+		add esp, 4
+		mov dword[eax+60], 0
+	renderable_setSpecular_unload_done:
+	
+	;check if the path is NULL (no texture)
+	cmp dword[ebp+12], 0
+	je renderable_setSpecular_done
+	
+	;load the new specular map
+	push 0
+	push dword[GL_NEAREST]
+	push dword[GL_REPEAT]
+	push dword[ebp+12]
+	call textureHandler_load
+	
+	mov ecx, dword[ebp+8]
+	mov dword[ecx+60], eax			;save the new texture
+	
+	renderable_setSpecular_done:
+	mov esp, ebp
+	pop ebp
+	ret
+	
 	
 	
 renderable_setPrimitive:
