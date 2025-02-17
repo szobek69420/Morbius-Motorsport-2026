@@ -64,6 +64,42 @@ section .rodata use32
 	dd 17,16,18,19,18,16
 	dd 21,20,22,23,22,20
 	
+	mesh_vertex_count dd 24
+	mesh_vertices:
+	dd -1.0, -1.0, 1.0
+	dd -1.0, 1.0, 1.0
+	dd 1.0, 1.0, 1.0
+	dd 1.0, -1.0, 1.0
+	dd -1.0, -1.0, 1.0
+	dd -1.0, 1.0, 1.0
+	dd -1.0, 1.0, -1.0
+	dd -1.0, -1.0, -1.0
+	dd 1.0, -1.0, -1.0
+	dd 1.0, 1.0, -1.0
+	dd -1.0, 1.0, -1.0
+	dd -1.0, -1.0, -1.0
+	dd 1.0, -1.0, -1.0
+	dd 1.0, 1.0, -1.0
+	dd 1.0, 1.0, 1.0
+	dd 1.0, -1.0, 1.0
+	dd -1.0, 1.0, 1.0
+	dd -1.0, 1.0, -1.0
+	dd 1.0, 1.0, -1.0
+	dd 1.0, 1.0, 1.0
+	dd 1.0, -1.0, 1.0
+	dd 1.0, -1.0, -1.0
+	dd -1.0, -1.0, -1.0
+	dd -1.0, -1.0, 1.0
+	
+	mesh_index_count dd 36
+	mesh_indices:
+	dd 1,0,2,3,2,0
+	dd 4,5,6,6,7,4
+	dd 9,8,10,11,10,8
+	dd 12,13,14,14,15,12
+	dd 17,16,18,19,18,16
+	dd 21,20,22,23,22,20
+	
 section .bss use32
 	camera resb 36
 	pv_matrix resb 64
@@ -161,6 +197,9 @@ section .text use32
 	extern WINDOW_SIZE_X
 	extern WINDOW_SIZE_Y
 	
+	extern collider_createMesh
+	extern collider_destroy
+	
 game_loop:
 	push ebp
 	mov ebp, esp
@@ -240,6 +279,16 @@ game_loop:
 	push dword[image_renderable]
 	call renderable_setAlbedo
 	add esp, 8
+	
+	;create mesh collider
+	push dword[mesh_index_count]
+	push dword[mesh_vertex_count]
+	push mesh_indices
+	push mesh_vertices
+	call collider_createMesh
+	
+	push eax
+	call collider_destroy
 	
 	
 	;enable depth test and face cull

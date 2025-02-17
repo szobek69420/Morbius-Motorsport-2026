@@ -8,6 +8,9 @@ nasm -fobj input/input.asm -o build/input.o
 nasm -fobj glfw/glfw.asm -o build/glfw.o
 nasm -fobj opengl/opengl.asm -o build/opengl.o
 nasm -fobj shader/shader.asm -o build/shader.o
+nasm -fobj physics/colliders/mesh_collider.asm -o build/mesh_collider.o
+nasm -fobj physics/colliders/cylinder_collider.asm -o build/cylinder_collider.o
+nasm -fobj physics/colliders/collider.asm -o build/collider.o
 nasm -fobj utils/thread_safe_queue.asm -o build/thread_safe_queue.o
 nasm -fobj utils/multithreading.asm -o build/multithreading.o
 nasm -fobj utils/queue.asm -o build/queue.o
@@ -43,6 +46,9 @@ build/renderable.o ^
 build/opengl.o ^
 build/shader.o ^
 build/player.o ^
+build/mesh_collider.o ^
+build/cylinder_collider.o ^
+build/collider.o ^
 build/hyperplane.o ^
 build/mat4.o ^
 build/mat3.o ^
