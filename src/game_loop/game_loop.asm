@@ -197,7 +197,9 @@ section .text use32
 	extern WINDOW_SIZE_X
 	extern WINDOW_SIZE_Y
 	
-	extern collider_createMesh
+	extern collider_init
+	extern collider_deinit
+	extern collider_createCylinder
 	extern collider_destroy
 	
 game_loop:
@@ -246,6 +248,8 @@ game_loop:
 	call [glfwSetInputMode]
 	add esp, 12
 	
+	;init physics
+	call collider_init
 	
 	;init camera
 	push camera
@@ -279,16 +283,6 @@ game_loop:
 	push dword[image_renderable]
 	call renderable_setAlbedo
 	add esp, 8
-	
-	;create mesh collider
-	push dword[mesh_index_count]
-	push dword[mesh_vertex_count]
-	push mesh_indices
-	push mesh_vertices
-	call collider_createMesh
-	
-	push eax
-	call collider_destroy
 	
 	
 	;enable depth test and face cull
@@ -418,6 +412,9 @@ game_loop:
 	
 	;deinit renderable
 	call renderable_deinit
+	
+	;deinit physics
+	call collider_deinit
 	
 	
 	mov dword[current_window], 0
