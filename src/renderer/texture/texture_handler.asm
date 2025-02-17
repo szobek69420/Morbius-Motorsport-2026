@@ -16,6 +16,8 @@ section .rodata use32
 	error_unsupported_file_format db "textureHandler_load: unsupported file format",10,0
 	error_invalid_color_depth db "textureHandler_load: only RGB and RGBA formats are supported",10,0
 	
+	error_texture_not_registered db "textureHandler_unload: function only handles textures that has been loaded with textureHandler_load",10,0
+	
 	file_extension_bmp db ".bmp",0
 
 section .data use32
@@ -32,6 +34,7 @@ section .text use32
 	
 	;supports textures up to 10MB
 	global textureHandler_load						;GLuint textureHandler(const char* imagePath, GLint wrap, GLint filter, int flipped)
+	global textureHandler_unload					;void textureHandler(GLuint texture)
 	
 	extern vector_init
 	extern vector_destroy
@@ -107,7 +110,22 @@ textureHandler_deinit:
 	;mark as uninitialized
 	mov dword[is_initialized], 0
 	
-	;yeet imported_textures
+	;empty imported_textures
+	cmp dword[imported_textures], 0	
+	jle textureHandler_deinit_unload_loop_end			;already empty
+	textureHandler_deinit_unload_loop_start:
+		mov eax, imported_textures
+		mov eax, dword[eax+12]
+		push dword[eax]				;gl texture in the first texture info
+		call textureHandler_unload
+		add esp, 4
+		
+		cmp dword[imported_textures], 0
+		jg textureHandler_deinit_unload_loop_start
+	
+	textureHandler_deinit_unload_loop_end:
+	
+	;yeet imported_textures vector
 	push imported_textures
 	call vector_destroy
 	
@@ -319,6 +337,78 @@ textureHandler_load:
 	mov eax, dword[ebp-16]
 	
 	textureHandler_load_end:
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+textureHandler_unload:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	sub esp, 4				;index in imported_textures
+	mov dword[ebp-4], -1
+	
+	;search for the imported texture
+	xor esi, esi							;index in esi
+	mov edi, imported_textures
+	mov edi, dword[edi+12]					;textureinfo array in edi
+	cmp dword[imported_textures], 0
+	jle textureHandler_unload_loop_end
+	textureHandler_unload_loop_start:
+		;check if the current texture id is the one that we are searching for
+		mov eax, dword[ebp+16]
+		cmp eax, dword[edi]
+		jne textureHandler_unload_loop_continue
+		
+		;save index and exit
+		mov dword[ebp-4], esi
+		jmp textureHandler_unload_loop_end
+		
+		textureHandler_unload_loop_continue:
+		add edi, 24
+		inc esi
+		cmp esi, dword[imported_textures]
+		jl textureHandler_unload_loop_start
+	textureHandler_unload_loop_end:
+	
+	;check if the texture is in the registry
+	cmp dword[ebp-4], -1
+	jne textureHandler_unload_registered
+		push error_texture_not_registered
+		call my_printf
+		jmp textureHandler_unload_end
+	textureHandler_unload_registered:
+	
+	;decrement import count
+	mov eax, imported_textures
+	mov eax, dword[eax+12]
+	
+	mov ecx, dword[ebp-4]
+	imul ecx, 24
+	
+	dec dword[eax+ecx+20]
+	
+	;has the import count reached 0?
+	cmp dword[eax+ecx+20], 0
+	jg textureHandler_unload_end			;no work left
+		
+		lea edx, [eax+ecx]
+		push dword[edx+4]			;path
+		push edx					;&gl texture
+		push 1
+		call [glDeleteTextures]
+		call my_free
+		
+		push dword[ebp-4]			;index
+		push imported_textures
+		call vector_remove_at
+	
+	textureHandler_unload_end:
 	mov esp, ebp
 	pop edi
 	pop esi

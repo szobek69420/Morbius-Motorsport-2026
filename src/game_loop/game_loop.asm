@@ -18,13 +18,15 @@ section .rodata use32
 	print_float db "%f",0
 	print_new_line db 10,0
 	
-section .bss use32
-	pkuba resb 4
+	image_path db "./sprites/morbussin.bmp",0
 	
+section .bss use32
 	camera resb 36
 	pv_matrix resb 64
 	
 	pplayer resb 4
+	
+	image_texture resb 4
 	
 section .data use32
 	last_frame_milliseconds dd 0		;int, the GetTickCount of the last frame
@@ -100,11 +102,13 @@ section .text use32
 	
 	extern textRenderer_init
 	extern textRenderer_deinit
-	extern textRenderer_setScreenSize
 	extern textRenderer_drawText
-	
+	extern textRenderer_setScreenSize	
 	extern TEXT_ORIGIN_BOTTOM_CENTER
 	extern TEXT_PIVOT_BOTTOM_CENTER
+	
+	extern textureHandler_init
+	extern textureHandler_deinit
 	
 	extern WINDOW_SIZE_X
 	extern WINDOW_SIZE_Y
@@ -166,6 +170,9 @@ game_loop:
 	
 	;init text renderer
 	call textRenderer_init
+	
+	;init texture handler
+	call textureHandler_init
 	
 	;create player
 	push camera
@@ -283,6 +290,9 @@ game_loop:
 	push dword[pplayer]
 	call player_destroy
 	add esp, 4
+	
+	;deinit texture handler
+	call textureHandler_deinit
 	
 	;deinit text renderer
 	call textRenderer_deinit
