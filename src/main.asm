@@ -6,6 +6,7 @@ section .bss use32
 	pwindow resb 4		;GLFWwindow*
 	
 
+
 section .text use32
 	
 	import ExitProcess kernel32.dll
