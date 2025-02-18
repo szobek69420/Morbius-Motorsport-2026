@@ -4,12 +4,14 @@
 ;struct Collider{
 ;	vec3 position;							;0
 ;	int colliderType;						;12
-;	void (*)(ColliderInfo*)	destructor;		;16
-;	union{									;20
+;	int tag;								;16
+;	Collider* lastCollision;				;20
+;	void (*)(ColliderInfo*)	destructor;		;24
+;	union{									;28
 ;		CylinderColliderInfo* cylinderData;
 ;		MeshColliderInfo* meshData;
 ;	}
-;}		24 bytes overall
+;}		32 bytes overall
 
 section .rodata use32
 	global COLLIDER_CYLINDER
@@ -125,7 +127,7 @@ collider_createCylinder:
 	collider_createCylinder_initialized:
 	
 	;alloc space for collider
-	push 24
+	push 32
 	call my_malloc
 	mov dword[ebp-4], eax
 	
@@ -141,15 +143,21 @@ collider_createCylinder:
 	mov eax, dword[COLLIDER_CYLINDER]
 	mov dword[ecx+12], eax
 	
+	;set tag
+	mov dword[ecx+16], 0
+	
+	;set lastCollision
+	mov dword[ecx+20], 0
+	
 	;set destructor
-	mov dword[ecx+16], cylinderCollider_destroyInfo
+	mov dword[ecx+24], cylinderCollider_destroyInfo
 	
 	;set info
 	push dword[ebp+12]
 	push dword[ebp+8]
 	call cylinderCollider_createInfo
 	mov ecx, dword[ebp-4]
-	mov dword[ecx+20], eax
+	mov dword[ecx+28], eax
 	
 	
 	;add collider to loaded colliders
@@ -186,7 +194,7 @@ collider_createMesh:
 	
 	
 	;alloc space for collider
-	push 24
+	push 32
 	call my_malloc
 	mov dword[ebp-4], eax
 	
@@ -202,8 +210,14 @@ collider_createMesh:
 	mov eax, dword[COLLIDER_MESH]
 	mov dword[ecx+12], eax
 	
+	;set tag
+	mov dword[ecx+16], 0
+	
+	;set lastCollision
+	mov dword[ecx+20], 0
+	
 	;set destructor
-	mov dword[ecx+16], meshCollider_destroyInfo
+	mov dword[ecx+24], meshCollider_destroyInfo
 	
 	;set info
 	push dword[ebp+20]
@@ -212,7 +226,7 @@ collider_createMesh:
 	push dword[ebp+8]
 	call meshCollider_createInfo
 	mov ecx, dword[ebp-4]
-	mov dword[ecx+20], eax
+	mov dword[ecx+28], eax
 	
 	
 	;add collider to loaded colliders
@@ -241,8 +255,8 @@ collider_destroy:
 	
 	;destroy info
 	mov eax, dword[ebp+8]
-	push dword[eax+20]
-	call dword[eax+16]
+	push dword[eax+28]
+	call dword[eax+24]
 	
 	;dealloc collider
 	push dword[ebp+8]
