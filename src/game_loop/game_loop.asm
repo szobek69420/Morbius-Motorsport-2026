@@ -201,6 +201,7 @@ section .text use32
 	extern collider_deinit
 	extern collider_createCylinder
 	extern collider_destroy
+	extern collisionDetection_collisionCylinderMesh
 	
 game_loop:
 	push ebp
@@ -250,6 +251,7 @@ game_loop:
 	
 	;init physics
 	call collider_init
+	call collisionDetection_collisionCylinderMesh
 	
 	;init camera
 	push camera
