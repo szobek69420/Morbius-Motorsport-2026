@@ -8,6 +8,7 @@
 section .rodata use32
 	ZERO dd 0.0
 	ONE dd 1.0
+	MINUS_ONE dd -1.0
 	ONE_PER_THOUSAND dd 0.001
 	P15 dd 0.15
 	P6 dd 0.6
@@ -108,6 +109,9 @@ section .bss use32
 	
 	image_renderable resb 4
 	
+	cylinder resb 4
+	mesh resb 4
+	
 section .data use32
 	last_frame_milliseconds dd 0		;int, the GetTickCount of the last frame
 	delta_time_milliseconds dd 0		;int
@@ -200,8 +204,9 @@ section .text use32
 	extern collider_init
 	extern collider_deinit
 	extern collider_createCylinder
+	extern collider_createMesh
 	extern collider_destroy
-	extern collisionDetection_collisionCylinderMesh
+	extern collisionDetection_resolveCylinderMesh
 	
 game_loop:
 	push ebp
@@ -251,7 +256,43 @@ game_loop:
 	
 	;init physics
 	call collider_init
-	call collisionDetection_collisionCylinderMesh
+	
+	push dword[ONE]
+	push dword[ONE]
+	call collider_createCylinder
+	add esp, 8
+	mov dword[cylinder], eax
+	mov ecx, dword[MINUS_ONE]
+	mov dword[eax+4], ecx			;cylinder.position.y=-1
+	
+	push dword[mesh_index_count]
+	push dword[mesh_vertex_count]
+	push mesh_indices
+	push mesh_vertices
+	call collider_createMesh
+	add esp, 16
+	mov dword[mesh], eax
+	
+	push dword[mesh]
+	push dword[cylinder]
+	call collisionDetection_resolveCylinderMesh
+	add esp, 8
+	test eax, eax
+	jz gameLoop_no_collision
+		push dword[cylinder]
+		call vec3_print
+		add esp, 4
+		
+		push dword[mesh]
+		call vec3_print
+		add esp, 4
+		
+		push test_text
+		call my_printf
+		add esp, 4
+	
+	gameLoop_no_collision:
+	
 	
 	;init camera
 	push camera

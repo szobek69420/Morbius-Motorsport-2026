@@ -8,8 +8,12 @@ section .rodata use32
 	
 	VEC3_ZERO dd 0.0, 0.0, 0.0
 	
+	print_two_floats_nl db "%f %f",10,0
+	
 	test_line0 dd 0.0, 0.0, -13.8
 	test_line1 dd -13.8, 0.0, 0.0
+	
+	test_text db "feliz navidad",10,0
 	
 section .bss use32
 	test_vec3_buffer resb 12
@@ -28,6 +32,7 @@ section .text use32
 	extern vec3_scale
 	extern vec3_print
 	
+	extern my_printf
 	extern my_malloc
 	extern my_free
 	extern my_memcpy
@@ -49,6 +54,7 @@ collisionDetection_resolveCylinderMesh:
 	sub esp, 12			;min resolution dir					;52 (i messed this up but who cares)
 	sub esp, 4			;temp penetration					;56
 	sub esp, 12			;temp resolution dir				;68
+	
 	
 	;get vertex count, triangle count, triangle indices and triangle normals
 	mov eax, dword[ebp+24]
@@ -93,7 +99,7 @@ collisionDetection_resolveCylinderMesh:
 	collisionDetection_rcm_translate_loop_start:
 		push esi
 		push esi
-		call vec3_sub
+		call vec3_add
 		add esp, 8
 	
 		add esi, 12
@@ -103,6 +109,7 @@ collisionDetection_resolveCylinderMesh:
 	
 	collisionDetection_rcm_translate_loop_end:
 	add esp, 4
+	
 	
 	;resolve collision
 	mov dword[ebp-36], 0x7f800000		;+infinity
@@ -142,7 +149,7 @@ collisionDetection_resolveCylinderMesh:
 			mov ecx, dword[esi]
 			imul ecx, 12
 			add ecx, eax
-			push ecx				;tri2
+			push ecx				;tri0
 			
 			push dword[ebp+20]		;cylinder
 			
@@ -168,6 +175,7 @@ collisionDetection_resolveCylinderMesh:
 					jmp collisionDetection_rcm_resolve_loop_continue
 					
 		collisionDetection_rcm_resolve_loop_continue:
+		
 		add esi, 12
 		add edi, 12
 		dec ebx
@@ -184,26 +192,27 @@ collisionDetection_resolveCylinderMesh:
 		
 	collisionDetection_rcm_collision_happened:
 	
+	
 	;resolve according to the kinematicness of the colliders
 	xor eax, eax
 	
 	mov ecx, dword[ebp+20]
 	cmp dword[ecx+32], 0
-	je collisionDetection_rcm_cylinder_kinematic
+	je collisionDetection_rcm_cylinder_nonkinematic
 		mov eax, 0x1
-	collisionDetection_rcm_cylinder_kinematic:
+	collisionDetection_rcm_cylinder_nonkinematic:
 	mov ecx, dword[ebp+24]
 	cmp dword[ecx+32], 0
-	je collisionDetection_rcm_mesh_kinematic
+	je collisionDetection_rcm_mesh_nonkinematic
 		or eax, 0x2
-	collisionDetection_rcm_mesh_kinematic:
+	collisionDetection_rcm_mesh_nonkinematic:
 	
+	test eax, eax
+	jz collisionDetection_rcm_cylinder_nonkinematic_mesh_nonkinematic
 	cmp eax, 1
-	je collisionDetection_rcm_cylinder_nonkinematic_mesh_kinematic
-	cmp eax, 2
 	je collisionDetection_rcm_cylinder_kinematic_mesh_nonkinematic
-	cmp eax, 3
-	je collisionDetection_rcm_cylinder_nonkinematic_mesh_nonkinematic
+	cmp eax, 2
+	je collisionDetection_rcm_cylinder_nonkinematic_mesh_kinematic
 	xor eax, eax
 	jmp collisionDetection_rcm_end
 	
@@ -227,7 +236,7 @@ collisionDetection_resolveCylinderMesh:
 		
 	collisionDetection_rcm_cylinder_nonkinematic_mesh_nonkinematic:
 		lea eax, [ebp-52]
-		push dword[TWO]
+		push dword[HALF]
 		push eax
 		push eax
 		call vec3_scale
@@ -482,6 +491,7 @@ collisionDetection_rcmHorizontalTriangle:
 		
 	collisionDetection_rcmHorizontalTriangle_within_bounds_y:
 	
+	
 	;get the closest point on one of the sides of the triangle
 	push dword[ebp+16]
 	push dword[ebp+12]
@@ -567,12 +577,14 @@ collisionDetection_rcmHorizontalTriangle:
 	collisionDetection_rcmHorizontalTriangle_side3_not_closer:
 	add esp, 4
 	
+	
+	
 	;check if the cylinder intersexts with the triangle horizontally
 	mov eax, dword[ebp+8]
 	mov eax, dword[eax+28]
 	mov eax, dword[eax+4]			;cylinder radius
 	cmp eax, dword[ebp-28]
-	jl collisionDetection_rcmHorizontalTriangle_horizontal_intersection
+	jg collisionDetection_rcmHorizontalTriangle_horizontal_intersection
 		;if the closest point is not in the radius of the cylinder
 		;there is still a chance that the cylinder is on the triangle
 		;if so, < ( triNormal x closestSide ); closestPoint > will be negative
@@ -609,6 +621,7 @@ collisionDetection_rcmHorizontalTriangle:
 			
 		collisionDetection_rcmHorizontalTriangle_closest_side_calculated:
 	
+	
 		;calculate the cross product
 		lea eax, [ebp-40]
 		lea ecx, [ebp-56]
@@ -627,6 +640,7 @@ collisionDetection_rcmHorizontalTriangle:
 			jmp collisionDetection_rcmHorizontalTriangle_end
 			
 	collisionDetection_rcmHorizontalTriangle_horizontal_intersection:
+	
 	
 	;get the penetration
 	mov eax, dword[ebp+24]
