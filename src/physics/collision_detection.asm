@@ -21,8 +21,15 @@ section .bss use32
 section .text use32
 
 	;returns non-zero if a collision happened
+	global collisionDetection_resolveKinematicNonkinematic	;int collisionDetection_resolveKinematicNonkinematic(Collider* cKinematic, Collider* cNonkinematic)
+
+	;returns non-zero if a collision happened
 	;only supports mesh colliders with horizontal and vertical normals
-	global collisionDetection_resolveCylinderMesh		;int cd_rCylinderMesh(Collider* cylinder, Collider* mesh)
+	;the resolution dir points in the direction of the cylinder
+	;global collisionDetection_resolveCylinderMesh		;int cd_rCylinderMesh(Collider* cylinder, Collider* mesh, float* outPenetration, vec3* outResolutionDir)
+	
+	extern COLLIDER_CYLINDER
+	extern COLLIDER_MESH
 	
 	extern vec3_sub
 	extern vec3_add
@@ -36,6 +43,95 @@ section .text use32
 	extern my_malloc
 	extern my_free
 	extern my_memcpy
+	
+collisionDetection_resolveKinematicNonkinematic:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;penetration
+	sub esp, 12			;resolution dir
+	
+	;TODO: pre-calculation check using bounding boxes
+	
+	mov eax, dword[ebp+8]
+	mov ecx, dword[COLLIDER_CYLINDER]
+	cmp dword[eax+12], ecx
+	je collisionDetection_rkn_k_cylinder
+	mov ecx, dword[COLLIDER_MESH]
+	cmp dword[eax+12], ecx
+	je collisionDetection_rkn_k_mesh
+	xor eax, eax
+	jmp collisionDetection_rkn_end
+	
+	collisionDetection_rkn_k_cylinder:
+		mov eax, dword[ebp+12]
+		mov ecx, dword[COLLIDER_MESH]
+		cmp dword[eax+12], ecx
+		je collisionDetection_rkn_k_cylinder_nk_mesh
+		xor eax, eax
+		jmp collisionDetection_rkn_end
+		collisionDetection_rkn_k_cylinder_nk_mesh:
+			lea eax, [ebp-16]
+			push eax
+			lea eax, [ebp-4]
+			push eax
+			push dword[ebp+12]
+			push dword[ebp+8]
+			call collisionDetection_resolveCylinderMesh
+			test eax, eax
+			jz collisionDetection_rkn_end
+			
+			;resolve if a collision has been detected
+			push dword[ebp-4]
+			lea eax, [ebp-16]
+			push eax
+			push eax
+			call vec3_scale
+			
+			push dword[ebp+12]
+			push dword[ebp+12]
+			call vec3_sub
+			
+			mov eax, 69
+			jmp collisionDetection_rkn_end
+			
+	collisionDetection_rkn_k_mesh:
+		mov eax, dword[ebp+12]
+		mov ecx, dword[COLLIDER_CYLINDER]
+		cmp dword[eax+12], ecx
+		je collisionDetection_rkn_k_mesh_nk_cylinder
+		xor eax, eax
+		jmp collisionDetection_rkn_end
+		collisionDetection_rkn_k_mesh_nk_cylinder:
+			lea eax, [ebp-16]
+			push eax
+			lea eax, [ebp-4]
+			push eax
+			push dword[ebp+8]
+			push dword[ebp+12]
+			call collisionDetection_resolveCylinderMesh
+			test eax, eax
+			jz collisionDetection_rkn_end
+			
+			;resolve if a collision has been detected
+			push dword[ebp-4]
+			lea eax, [ebp-16]
+			push eax
+			push eax
+			call vec3_scale
+			
+			push dword[ebp+12]
+			push dword[ebp+12]
+			call vec3_add
+			
+			mov eax, 69
+			jmp collisionDetection_rkn_end
+	
+	collisionDetection_rkn_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
 	
 collisionDetection_resolveCylinderMesh:
 	push ebp
@@ -51,7 +147,7 @@ collisionDetection_resolveCylinderMesh:
 	sub esp, 4			;triangle indices					;28
 	sub esp, 4			;triangle normals					;32
 	sub esp, 4			;min penetration					;36
-	sub esp, 12			;min resolution dir					;52 (i messed this up but who cares)
+	sub esp, 16			;min resolution dir					;52 (it should have been 12 bytes but who cares)
 	sub esp, 4			;temp penetration					;56
 	sub esp, 12			;temp resolution dir				;68
 	
@@ -193,65 +289,20 @@ collisionDetection_resolveCylinderMesh:
 	collisionDetection_rcm_collision_happened:
 	
 	
-	;resolve according to the kinematicness of the colliders
-	xor eax, eax
+	;set outPenetration and outResolutionDir
+	mov eax, dword[ebp+28]
+	mov ecx, dword[ebp-36]
+	mov dword[eax], ecx
 	
-	mov ecx, dword[ebp+20]
-	cmp dword[ecx+32], 0
-	je collisionDetection_rcm_cylinder_nonkinematic
-		mov eax, 0x1
-	collisionDetection_rcm_cylinder_nonkinematic:
-	mov ecx, dword[ebp+24]
-	cmp dword[ecx+32], 0
-	je collisionDetection_rcm_mesh_nonkinematic
-		or eax, 0x2
-	collisionDetection_rcm_mesh_nonkinematic:
+	mov eax, dword[ebp+32]
+	mov ecx, dword[ebp-52]
+	mov dword[eax], ecx
+	mov ecx, dword[ebp-48]
+	mov dword[eax+4], ecx
+	mov ecx, dword[ebp-44]
+	mov dword[eax+8], ecx
 	
-	test eax, eax
-	jz collisionDetection_rcm_cylinder_nonkinematic_mesh_nonkinematic
-	cmp eax, 1
-	je collisionDetection_rcm_cylinder_kinematic_mesh_nonkinematic
-	cmp eax, 2
-	je collisionDetection_rcm_cylinder_nonkinematic_mesh_kinematic
-	xor eax, eax
-	jmp collisionDetection_rcm_end
-	
-	collisionDetection_rcm_cylinder_nonkinematic_mesh_kinematic:
-		lea eax, [ebp-52]
-		push eax
-		push dword[ebp+20]
-		push dword[ebp+20]
-		call vec3_add
-		mov eax, 69
-		jmp collisionDetection_rcm_end
-		
-	collisionDetection_rcm_cylinder_kinematic_mesh_nonkinematic:
-		lea eax, [ebp-52]
-		push eax
-		push dword[ebp+24]
-		push dword[ebp+24]
-		call vec3_sub
-		mov eax, 69
-		jmp collisionDetection_rcm_end
-		
-	collisionDetection_rcm_cylinder_nonkinematic_mesh_nonkinematic:
-		lea eax, [ebp-52]
-		push dword[HALF]
-		push eax
-		push eax
-		call vec3_scale
-		
-		push dword[ebp+20]
-		push dword[ebp+20]
-		call vec3_add
-		
-		add esp, 8
-		push dword[ebp+24]
-		push dword[ebp+24]
-		call vec3_sub
-		
-		mov eax, 69
-		jmp collisionDetection_rcm_end
+	mov eax, 69
 	
 	collisionDetection_rcm_end:
 	mov esp, ebp

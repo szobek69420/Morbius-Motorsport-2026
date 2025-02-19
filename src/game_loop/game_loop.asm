@@ -206,7 +206,12 @@ section .text use32
 	extern collider_createCylinder
 	extern collider_createMesh
 	extern collider_destroy
-	extern collisionDetection_resolveCylinderMesh
+	extern collisionDetection_resolveKinematicNonkinematic
+	extern physics_init
+	extern physics_deinit
+	extern physics_update
+	extern physics_registerNonkinematic
+	extern physics_registerKinematic
 	
 game_loop:
 	push ebp
@@ -256,14 +261,19 @@ game_loop:
 	
 	;init physics
 	call collider_init
+	call physics_init
 	
-	push dword[ONE]
+	push dword[ONE_PER_THOUSAND]
 	push dword[ONE]
 	call collider_createCylinder
 	add esp, 8
 	mov dword[cylinder], eax
-	mov ecx, dword[MINUS_ONE]
-	mov dword[eax+4], ecx			;cylinder.position.y=-1
+	mov ecx, dword[P15]
+	mov dword[eax], ecx				;cylinder.position.x=0.15
+	mov ecx, dword[ONE]
+	mov dword[eax+4], ecx			;cylinder.position.y=1
+	mov ecx, dword[P15]
+	mov dword[eax+8], ecx			;cylinder.position.z=0.15
 	
 	push dword[mesh_index_count]
 	push dword[mesh_vertex_count]
@@ -273,25 +283,28 @@ game_loop:
 	add esp, 16
 	mov dword[mesh], eax
 	
-	push dword[mesh]
 	push dword[cylinder]
-	call collisionDetection_resolveCylinderMesh
-	add esp, 8
-	test eax, eax
-	jz gameLoop_no_collision
-		push dword[cylinder]
-		call vec3_print
-		add esp, 4
-		
-		push dword[mesh]
-		call vec3_print
-		add esp, 4
-		
-		push test_text
-		call my_printf
-		add esp, 4
+	call physics_registerKinematic
+	add esp, 4
+	push dword[mesh]
+	call physics_registerNonkinematic
+	add esp, 4
 	
-	gameLoop_no_collision:
+	push dword[cylinder]
+	call vec3_print
+	push dword[mesh]
+	call vec3_print
+	add esp, 8
+	
+	push 0
+	call physics_update
+	add esp, 4
+	
+	push dword[cylinder]
+	call vec3_print
+	push dword[mesh]
+	call vec3_print
+	add esp, 8
 	
 	
 	;init camera
@@ -457,6 +470,7 @@ game_loop:
 	call renderable_deinit
 	
 	;deinit physics
+	call physics_deinit
 	call collider_deinit
 	
 	
