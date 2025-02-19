@@ -25,6 +25,8 @@ section .text use32
 	
 	global tsQueue_clear		;void tsQueue_clear(tsQueue* pqueue)
 	
+	global tsQueue_isEmpty		;int tsQueue_isEmpty(tsQueue* pqueue)
+	
 	global tsQueue_printInfo	;void tsQueue_printInfo(tsQueue* pqueue)
 	
 	
@@ -34,6 +36,7 @@ section .text use32
 	extern queue_pop
 	extern queue_at
 	extern queue_clear
+	extern queue_isEmpty
 	extern queue_printInfo
 	
 	extern mutex_create
@@ -245,6 +248,37 @@ tsQueue_clear:
 	push dword[eax]
 	call mutex_unlock
 	
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+tsQueue_isEmpty:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4				;return value
+	
+	;lock mutex
+	mov eax, dword[ebp+8]
+	push -1
+	push dword[eax]
+	call mutex_lock
+	
+	;call clear
+	mov eax, dword[ebp+8]
+	push dword[eax+4]			;queue*
+	call queue_isEmpty
+	mov dword[ebp-4], eax		;save return value
+	
+	;release mutex
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	call mutex_unlock
+	
+	
+	mov eax, dword[ebp-4]
 	
 	mov esp, ebp
 	pop ebp

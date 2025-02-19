@@ -1,5 +1,12 @@
 [BITS 32]
 
+;layout:
+;struct PhysicsRegisterOperation{
+;	Collider* collider;
+;	int isKinematic;
+;	int register;
+;}		//overall 12 bytes
+
 section .rodata use32
 	error_not_initialized_update db "physics_update: physics_init should be called",10,0
 	error_not_initialized_registerKinematic db "physics_registerKinematic: physics_init should be called",10,0
@@ -13,6 +20,8 @@ section .data use32
 section .bss use32
 	registered_nonkinematic resb 16			;vector<Collider*>
 	registered_kinematic resb 16			;vector<Collider*>
+	
+	register_operation_buffer resb 8		;tsQueue<PhysicsRegisterOperation>
 
 section .text use32
 
@@ -21,6 +30,7 @@ section .text use32
 	
 	global physics_update					;void physics_update(float deltaTime)
 	
+	;void physics_processPendingRegisterOperations()
 	global physics_registerNonkinematic		;void physics_registerNonkinematic(Collider* collider)
 	global physics_registerKinematic		;void physics_registerKinematic(Collider* collider)
 	global physics_unregisterNonkinematic	;void physics_unregisterNonkinematic(Collider* collider)
@@ -35,6 +45,11 @@ section .text use32
 	extern vector_destroy
 	extern vector_push_back
 	extern vector_remove
+	
+	extern tsQueue_init
+	extern tsQueue_destroy
+	extern tsQueue_pushBuffer
+	extern tsQueue_pop
 	
 	extern vec3_add
 	extern vec3_scale
@@ -52,6 +67,12 @@ physics_init:
 	push 4
 	push registered_kinematic
 	call vector_init
+	
+	;init thread safe queue
+	push 50
+	push 12
+	push register_operation_buffer
+	call tsQueue_init
 	
 	;mark as initialized
 	mov dword[is_initialized], 69
@@ -71,6 +92,9 @@ physics_deinit:
 	push print_remaining_colliders
 	call my_printf
 	
+	;destroy thread safe queue
+	push register_operation_buffer
+	call tsQueue_destroy
 	
 	;destroy vectors
 	push registered_nonkinematic
@@ -107,6 +131,8 @@ physics_update:
 	
 	physics_update_initialized:
 	
+	;process pending register operations
+	call physics_processPendingRegisterOperations
 	
 	;clear collision info
 	mov esi, dword[registered_nonkinematic]		;index in esi
@@ -194,9 +220,55 @@ physics_update:
 	ret
 	
 	
+physics_processPendingRegisterOperations:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 12				;PhysicsRegisterOperation
+	
+	physics_ppro_loop_start:
+		lea eax, [ebp-12]
+		push eax
+		push register_operation_buffer
+		call tsQueue_pop
+		add esp, 8
+		test eax, eax
+		jnz physics_ppro_loop_end			;a problem arose while popping, most likely the queue is empty
+	
+		push dword[ebp-12]			;collider*
+		cmp dword[ebp-8], 0		;isKinematic
+		je physics_ppro_loop_isKinematic_false
+		physics_ppro_loop_isKinematic_true:
+			push registered_kinematic
+			jmp physics_ppro_loop_isKinematic_done
+		physics_ppro_loop_isKinematic_false:
+			push registered_nonkinematic
+		physics_ppro_loop_isKinematic_done:
+		cmp dword[ebp-4], 0		;register
+		je physics_ppro_loop_register_false
+		physics_ppro_loop_register_true:
+			mov eax, vector_push_back
+			jmp physics_ppro_loop_register_done
+		physics_ppro_loop_register_false:
+			mov eax, vector_remove
+		physics_ppro_loop_register_done:
+		call eax
+		add esp, 8
+		
+		jmp physics_ppro_loop_start
+		
+	physics_ppro_loop_end:
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
 physics_registerNonkinematic:
 	push ebp
 	mov ebp, esp
+	
+	sub esp, 12				;PhysicsRegisterOperation
 	
 	;check if the system has been initialized
 	cmp dword[is_initialized], 0
@@ -207,9 +279,18 @@ physics_registerNonkinematic:
 	
 	physics_registerNonkinematic_initialized:
 	
-	push dword[ebp+8]
-	push registered_nonkinematic
-	call vector_push_back
+	mov ecx, dword[ebp+8]
+	mov dword[ebp-12], ecx		;collider
+	mov dword[ebp-8], 0		;nonkinematic
+	mov dword[ebp-4], 69		;register
+	lea eax, [ebp-12]
+	push eax
+	push register_operation_buffer
+	call tsQueue_pushBuffer
+	
+	;push dword[ebp+8]
+	;push registered_nonkinematic
+	;call vector_push_back
 	
 	physics_registerNonkinematic_end:
 	mov esp, ebp
@@ -221,6 +302,8 @@ physics_registerKinematic:
 	push ebp
 	mov ebp, esp
 	
+	sub esp, 12					;PhysicsRegisterOperation
+	
 	;check if the system has been initialized
 	cmp dword[is_initialized], 0
 	jne physics_registerKinematic_initialized
@@ -230,9 +313,18 @@ physics_registerKinematic:
 	
 	physics_registerKinematic_initialized:
 	
-	push dword[ebp+8]
-	push registered_kinematic
-	call vector_push_back
+	mov ecx, dword[ebp+8]
+	mov dword[ebp-12], ecx		;collider
+	mov dword[ebp-8], 69		;kinematic
+	mov dword[ebp-4], 69		;register
+	lea eax, [ebp-12]
+	push eax
+	push register_operation_buffer
+	call tsQueue_pushBuffer
+	
+	;push dword[ebp+8]
+	;push registered_kinematic
+	;call vector_push_back
 	
 	physics_registerKinematic_end:
 	mov esp, ebp
@@ -244,9 +336,20 @@ physics_unregisterNonkinematic:
 	push ebp
 	mov ebp, esp
 	
-	push dword[ebp+8]
-	push registered_nonkinematic
-	call vector_remove
+	sub esp, 12					;PhysicsRegisterOperation
+	
+	mov ecx, dword[ebp+8]
+	mov dword[ebp-12], ecx		;collider
+	mov dword[ebp-8], 0		;nonkinematic
+	mov dword[ebp-4], 0		;not register
+	lea eax, [ebp-12]
+	push eax
+	push register_operation_buffer
+	call tsQueue_pushBuffer
+	
+	;push dword[ebp+8]
+	;push registered_nonkinematic
+	;call vector_remove
 
 	mov esp, ebp
 	pop ebp
@@ -257,9 +360,20 @@ physics_unregisterKinematic:
 	push ebp
 	mov ebp, esp
 	
-	push dword[ebp+8]
-	push registered_kinematic
-	call vector_remove
+	sub esp, 12					;PhysicsRegisterOperation
+	
+	mov ecx, dword[ebp+8]
+	mov dword[ebp-12], ecx		;collider
+	mov dword[ebp-8], 69		;kinematic
+	mov dword[ebp-4], 0		;not register
+	lea eax, [ebp-12]
+	push eax
+	push register_operation_buffer
+	call tsQueue_pushBuffer
+	
+	;push dword[ebp+8]
+	;push registered_kinematic
+	;call vector_remove
 
 	mov esp, ebp
 	pop ebp

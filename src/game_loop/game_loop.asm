@@ -283,10 +283,10 @@ game_loop:
 	add esp, 16
 	mov dword[mesh], eax
 	
-	push dword[cylinder]
+	push dword[mesh]
 	call physics_registerKinematic
 	add esp, 4
-	push dword[mesh]
+	push dword[cylinder]
 	call physics_registerNonkinematic
 	add esp, 4
 	

@@ -37,6 +37,8 @@ section .text use32
 	
 	global queue_clear			;void queue_clear(queue* pqueue)
 	
+	global queue_isEmpty		;int queue_isEmpty(queue* pqueue)
+	
 	global queue_printInfo		;void queue_printInfo(queue* pqueue)
 	
 	
@@ -275,6 +277,17 @@ queue_clear:
 	mov eax, dword[esp+4]
 	mov dword[eax], 0
 	mov dword[eax+4], 0
+	ret
+	
+	
+queue_isEmpty:
+	xor eax, eax
+	mov ecx, dword[esp+4]
+	cmp dword[ecx+4], 0
+	jne queue_isEmpty
+		mov eax, 69
+	
+	queue_isEmpty_end:
 	ret
 	
 	
