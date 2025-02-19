@@ -14,6 +14,7 @@ nasm -fobj physics/colliders/mesh_collider.asm -o build/mesh_collider.o
 nasm -fobj physics/colliders/cylinder_collider.asm -o build/cylinder_collider.o
 nasm -fobj physics/colliders/collider.asm -o build/collider.o
 nasm -fobj utils/thread_safe_queue.asm -o build/thread_safe_queue.o
+nasm -fobj utils/thread_safe_value.asm -o build/thread_safe_value.o
 nasm -fobj utils/multithreading.asm -o build/multithreading.o
 nasm -fobj utils/queue.asm -o build/queue.o
 nasm -fobj utils/vector.asm -o build/vector.o
@@ -59,6 +60,7 @@ build/mat3.o ^
 build/vec4.o ^
 build/vec3.o ^
 build/thread_safe_queue.o ^
+build/thread_safe_value.o ^
 build/multithreading.o ^
 build/queue.o ^
 build/vector.o ^

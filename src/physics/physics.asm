@@ -50,6 +50,7 @@ section .text use32
 	extern tsQueue_destroy
 	extern tsQueue_pushBuffer
 	extern tsQueue_pop
+	extern tsQueue_isEmpty
 	
 	extern vec3_add
 	extern vec3_scale
@@ -230,10 +231,11 @@ physics_processPendingRegisterOperations:
 		lea eax, [ebp-12]
 		push eax
 		push register_operation_buffer
+		call tsQueue_isEmpty
+		test eax, eax
+		jnz physics_ppro_loop_end
 		call tsQueue_pop
 		add esp, 8
-		test eax, eax
-		jnz physics_ppro_loop_end			;a problem arose while popping, most likely the queue is empty
 	
 		push dword[ebp-12]			;collider*
 		cmp dword[ebp-8], 0		;isKinematic

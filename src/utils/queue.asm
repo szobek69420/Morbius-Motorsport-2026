@@ -284,7 +284,7 @@ queue_isEmpty:
 	xor eax, eax
 	mov ecx, dword[esp+4]
 	cmp dword[ecx+4], 0
-	jne queue_isEmpty
+	jne queue_isEmpty_end
 		mov eax, 69
 	
 	queue_isEmpty_end:
