@@ -11,7 +11,8 @@
 ;		CylinderColliderInfo* cylinderData;
 ;		MeshColliderInfo* meshData;
 ;	}
-;}		32 bytes overall
+;	int isKinematic;						;32
+;}		36 bytes overall
 
 section .rodata use32
 	global COLLIDER_CYLINDER
@@ -127,7 +128,7 @@ collider_createCylinder:
 	collider_createCylinder_initialized:
 	
 	;alloc space for collider
-	push 32
+	push 36
 	call my_malloc
 	mov dword[ebp-4], eax
 	
@@ -151,6 +152,9 @@ collider_createCylinder:
 	
 	;set destructor
 	mov dword[ecx+24], cylinderCollider_destroyInfo
+	
+	;set kinematic
+	mov dword[ecx+32], 0
 	
 	;set info
 	push dword[ebp+12]
@@ -194,7 +198,7 @@ collider_createMesh:
 	
 	
 	;alloc space for collider
-	push 32
+	push 36
 	call my_malloc
 	mov dword[ebp-4], eax
 	
@@ -218,6 +222,9 @@ collider_createMesh:
 	
 	;set destructor
 	mov dword[ecx+24], meshCollider_destroyInfo
+	
+	;set kinematic
+	mov dword[ecx+32], 0
 	
 	;set info
 	push dword[ebp+20]

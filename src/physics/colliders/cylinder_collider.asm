@@ -2,7 +2,7 @@
 
 ;layout:
 ;struct CylinderColliderInfo{
-;	float height;			;0
+;	float height;			;0		//the height of the cylinder in both the positive and negative direction on the y-axis (overall height is 2*height)
 ;	float radius;			;4
 ;} 8 bytes overall
 
