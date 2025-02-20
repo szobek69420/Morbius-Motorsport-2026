@@ -93,8 +93,6 @@ player_init:
 	mov ecx, dword[ebp-4]
 	mov dword[ecx+24], eax
 	
-	mov ecx, dword[MINUS_ONE]
-	mov dword[eax+36], ecx
 	
 	push eax
 	call physics_registerNonkinematic
@@ -150,7 +148,7 @@ player_updatePhysics:
 	
 	push dword[ebp+12]
 	push dword[ebp+8]
-	;call player_applyGravity
+	call player_applyGravity
 	add esp, 8
 	
 	mov eax, dword[ebp+8]

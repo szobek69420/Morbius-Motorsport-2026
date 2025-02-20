@@ -1,7 +1,7 @@
 [BITS 32]
 
 section .rodata use32
-	EPSILON dd 0.00001
+	EPSILON dd 0.001
 	
 	HALF dd 0.5
 	TWO dd 2.0
@@ -11,8 +11,8 @@ section .rodata use32
 	print_float_nl db "%f",10,0
 	print_two_floats_nl db "%f %f",10,0
 	
-	test_line0 dd 0.0, 0.0, -13.8
-	test_line1 dd -13.8, 0.0, 0.0
+	test_line0 dd -0.88, 0.827, -1.623
+	test_line1 dd -0.88, 0.827, -21.623
 	
 	test_text db "feliz navidad",10,0
 	
@@ -52,6 +52,12 @@ collisionDetection_resolveKinematicNonkinematic:
 	sub esp, 4			;penetration
 	sub esp, 12			;resolution dir
 	
+	
+	push test_line1
+	push test_line0
+	push test_vec3_buffer
+	call collisionDetection_closestPointOnLineOrigo
+	call vec3_print
 	;TODO: pre-calculation check using bounding boxes
 	
 	mov eax, dword[ebp+8]
@@ -449,10 +455,10 @@ collisionDetection_closestPointOnLineOrigo:
 		mov dword[eax+4], edx
 		mov edx, dword[ecx+8]
 		mov dword[eax+8], edx
+		
 		jmp collisionDetection_closestPointOnLineOrigo_end
 		
 	collisionDetection_cpolo_not_beyond_line0:
-	
 	
 	;calculate <line1; line0-line1>
 	push dword[ebp+16]
@@ -568,7 +574,7 @@ collisionDetection_rcmHorizontalTriangle:
 	lea eax, [ebp-40]		;borrowing var40
 	push eax
 	call collisionDetection_closestPointOnLineOrigo
-	sub esp, 8				;4 bytes are left on the stack
+	add esp, 8				;4 bytes are left on the stack
 	movss xmm0, dword[ebp-40]
 	mulss xmm0, xmm0
 	movss xmm1, dword[ebp-32]
@@ -602,7 +608,7 @@ collisionDetection_rcmHorizontalTriangle:
 	lea eax, [ebp-40]		;borrowing var40
 	push eax
 	call collisionDetection_closestPointOnLineOrigo
-	sub esp, 8				;4 bytes are left on the stack
+	add esp, 8				;4 bytes are left on the stack
 	movss xmm0, dword[ebp-40]
 	mulss xmm0, xmm0
 	movss xmm1, dword[ebp-32]
@@ -629,7 +635,6 @@ collisionDetection_rcmHorizontalTriangle:
 		
 	collisionDetection_rcmHorizontalTriangle_side3_not_closer:
 	add esp, 4
-	
 	
 	
 	;check if the cylinder intersexts with the triangle horizontally
@@ -674,6 +679,9 @@ collisionDetection_rcmHorizontalTriangle:
 			
 		collisionDetection_rcmHorizontalTriangle_closest_side_calculated:
 	
+		push test_text
+			call my_printf
+			add esp, 4
 	
 		;calculate the cross product
 		lea eax, [ebp-40]
@@ -699,8 +707,8 @@ collisionDetection_rcmHorizontalTriangle:
 	mov eax, dword[ebp+24]
 	mov eax, dword[eax+4]		;triNormal.y
 	test eax, 0x80000000
-	jnz collisionDetection_rcmHorizontalTriangle_penetration_neg_y
-	collisionDetection_rcmHorizontalTriangle_penetration_pos_y:
+	jz collisionDetection_rcmHorizontalTriangle_penetration_pos_y
+	collisionDetection_rcmHorizontalTriangle_penetration_neg_y:
 		mov eax, dword[ebp+28]		;outPenetration
 		movss xmm0, dword[ebp-8]	;cylinder height
 		movss xmm1, dword[ebp-12]	;triangle y pos
@@ -708,7 +716,7 @@ collisionDetection_rcmHorizontalTriangle:
 		movss dword[eax], xmm0
 		jmp collisionDetection_rcmHorizontalTriangle_penetration_done
 		
-	collisionDetection_rcmHorizontalTriangle_penetration_neg_y:
+	collisionDetection_rcmHorizontalTriangle_penetration_pos_y:
 		mov eax, dword[ebp+28]		;outPenetration
 		movss xmm0, dword[ebp-8]	;cylinder height
 		movss xmm1, dword[ebp-12]	;triangle y pos
@@ -726,6 +734,18 @@ collisionDetection_rcmHorizontalTriangle:
 	mov dword[eax+4], edx
 	mov edx, dword[ecx+8]
 	mov dword[eax+8], edx
+	
+	push test_text
+	call my_printf
+	push dword[ebp+12]
+	call vec3_print
+	push dword[ebp+16]
+	call vec3_print
+	push dword[ebp+20]
+	call vec3_print
+	lea eax, [ebp-24]
+	push eax
+	call vec3_print
 	
 	mov eax, 69
 

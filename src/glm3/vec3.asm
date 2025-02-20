@@ -1,3 +1,4 @@
+
 [BITS 32]
 
 ;layout: (12 bytes)
@@ -82,24 +83,25 @@ vec3_add:
 	
 	mov eax, dword[ebp+12]		;a in eax
 	mov ecx, dword[ebp+16]		;b in ecx
+	mov edx, dword[ebp+8]		;buffer in edx
 	
-	;push all of the numbers to the fpu stack
-	fld dword[eax]		;a.x
-	fld dword[ecx]		;b.x
-	fld dword[eax+4]	;a.y
-	fld dword[ecx+4]	;b.y
-	fld dword[eax+8]	;a.z
-	fld dword[ecx+8]	;b.z
-	
-	;do the calculations and pop the numbers from the fpu stack
-	mov eax, dword[ebp+8]	;buffer in eax
-	
-	faddp			;add the two z values
-	fstp dword[eax+8]	;store the new z
+	;calculate x
+	fld dword[eax]
+	fld dword[ecx]
 	faddp
-	fstp dword[eax+4]
+	fstp dword[edx]
+	
+	;calculate y
+	fld dword[eax+4]
+	fld dword[ecx+4]
 	faddp
-	fstp dword[eax]
+	fstp dword[edx+4]
+	
+	;calculate z
+	fld dword[eax+8]
+	fld dword[ecx+8]
+	faddp
+	fstp dword[edx+8]
 	
 	mov esp, ebp
 	pop ebp
@@ -112,24 +114,26 @@ vec3_sub:
 	
 	mov eax, dword[ebp+12]		;a in eax
 	mov ecx, dword[ebp+16]		;b in ecx
+	mov edx, dword[ebp+8]		;buffer in edx
 	
-	;push all of the numbers to the fpu stack
-	fld dword[eax]		;a.x
-	fld dword[ecx]		;b.x
-	fld dword[eax+4]	;a.y
-	fld dword[ecx+4]	;b.y
-	fld dword[eax+8]	;a.z
-	fld dword[ecx+8]	;b.z
-	
-	;do the calculations and pop the numbers from the fpu stack
-	mov eax, dword[ebp+8]	;buffer in eax
-	
-	fsubp			;add the two z values
-	fstp dword[eax+8]	;store the new z
+	;calculate x
+	fld dword[eax]
+	fld dword[ecx]
 	fsubp
-	fstp dword[eax+4]
+	fstp dword[edx]
+	
+	;calculate y
+	fld dword[eax+4]
+	fld dword[ecx+4]
 	fsubp
-	fstp dword[eax]
+	fstp dword[edx+4]
+	
+	;calculate z
+	fld dword[eax+8]
+	fld dword[ecx+8]
+	fsubp
+	fstp dword[edx+8]
+	
 	
 	mov esp, ebp
 	pop ebp
@@ -148,11 +152,10 @@ vec3_dot:
 	fld dword[eax+4]
 	fld dword[ecx+4]
 	fmulp
+	faddp
 	fld dword[eax+8]
 	fld dword[ecx+8]
 	fmulp
-	
-	faddp
 	faddp
 	
 	mov esp, ebp
@@ -177,7 +180,7 @@ vec3_cross:
 	fld dword[edx+4]
 	fmulp
 	fsubp
-	fstp dword[esp]
+	fstp dword[eax]
 	
 	;calculate y
 	fld dword[ecx+8]
@@ -187,7 +190,7 @@ vec3_cross:
 	fld dword[edx+8]
 	fmulp
 	fsubp
-	fstp dword[esp+4]
+	fstp dword[eax+4]
 	
 	;calculate z
 	fld dword[ecx]
@@ -197,15 +200,7 @@ vec3_cross:
 	fld dword[edx]
 	fmulp
 	fsubp
-	fstp dword[esp+8]
-	
-	;copying the result into the buffer
-	mov edx, dword[esp]
-	mov dword[eax], edx
-	mov edx, dword[esp+4]
-	mov dword[eax+4], edx
-	mov edx, dword[esp+8]
-	mov dword[eax+8], edx
+	fstp dword[eax+8]
 	
 	mov esp, ebp
 	pop ebp
