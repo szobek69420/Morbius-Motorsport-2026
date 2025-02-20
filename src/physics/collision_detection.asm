@@ -51,6 +51,10 @@ collisionDetection_resolveKinematicNonkinematic:
 	
 	sub esp, 4			;penetration
 	sub esp, 12			;resolution dir
+	sub esp, 4			;collision happened
+	sub esp, 12			;<nkCollider.velocity; resolutionDir> * resolutionDir
+	
+	mov dword[ebp-20], 0
 	
 	
 	;TODO: pre-calculation check using bounding boxes
@@ -80,22 +84,16 @@ collisionDetection_resolveKinematicNonkinematic:
 			push dword[ebp+12]
 			push dword[ebp+8]
 			call collisionDetection_resolveCylinderMesh
-			test eax, eax
-			jz collisionDetection_rkn_end
+			mov dword[ebp-20], eax
 			
-			;resolve if a collision has been detected
-			push dword[ebp-4]
-			lea eax, [ebp-16]
-			push eax
-			push eax
-			call vec3_scale
+			;invert the resolution direction
+			;(it is now pointed as if the cylinder needs to be resolved
+			;and the mesh is the non-kinematic)
+			xor dword[ebp-16], 0x80000000
+			xor dword[ebp-12], 0x80000000
+			xor dword[ebp-8], 0x80000000
 			
-			push dword[ebp+12]
-			push dword[ebp+12]
-			call vec3_sub
-			
-			mov eax, 69
-			jmp collisionDetection_rkn_end
+			jmp collisionDetection_rkn_resolve
 			
 	collisionDetection_rkn_k_mesh:
 		mov eax, dword[ebp+12]
@@ -112,22 +110,46 @@ collisionDetection_resolveKinematicNonkinematic:
 			push dword[ebp+8]
 			push dword[ebp+12]
 			call collisionDetection_resolveCylinderMesh
-			test eax, eax
-			jz collisionDetection_rkn_end
+			mov dword[ebp-20], eax
 			
-			;resolve if a collision has been detected
-			push dword[ebp-4]
-			lea eax, [ebp-16]
-			push eax
-			push eax
-			call vec3_scale
+			jmp collisionDetection_rkn_resolve
 			
-			push dword[ebp+12]
-			push dword[ebp+12]
-			call vec3_add
-			
-			mov eax, 69
-			jmp collisionDetection_rkn_end
+	collisionDetection_rkn_resolve:
+	
+	;check if there was a collision
+	mov eax, dword[ebp-20]
+	test eax, eax
+	jz collisionDetection_rkn_end
+		;change the velocity of the non-kinematic collider
+		mov eax, dword[ebp+12]
+		add eax, 32
+		push eax				;&collider.velocity
+		lea eax, [ebp-16]
+		push eax				;&resolutionDir
+		call vec3_dot
+		fstp dword[esp+4]
+		lea eax, [ebp-32]
+		push eax				;& the resolutionDir component in the velocity
+		call vec3_scale
+		
+		mov eax, dword[ebp+12]
+		add eax, 32
+		push eax
+		push eax
+		call vec3_sub
+		
+		;change the position based on the value of the resolutionDir and penetration
+		push dword[ebp-4]
+		lea eax, [ebp-16]
+		push eax
+		push eax
+		call vec3_scale
+		
+		push dword[ebp+12]
+		push dword[ebp+12]
+		call vec3_add
+	
+		mov eax, dword[ebp-20]
 	
 	collisionDetection_rkn_end:
 	mov esp, ebp
@@ -722,10 +744,6 @@ collisionDetection_rcmHorizontalTriangle:
 			
 	collisionDetection_rcmHorizontalTriangle_horizontal_intersection:
 	
-	lea eax, [ebp-24]
-	push eax
-	call vec3_print
-	add esp, 4
 	
 	;get the penetration
 	mov eax, dword[ebp+24]
