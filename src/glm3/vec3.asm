@@ -180,7 +180,7 @@ vec3_cross:
 	fld dword[edx+4]
 	fmulp
 	fsubp
-	fstp dword[eax]
+	fstp dword[ebp-12]
 	
 	;calculate y
 	fld dword[ecx+8]
@@ -190,7 +190,7 @@ vec3_cross:
 	fld dword[edx+8]
 	fmulp
 	fsubp
-	fstp dword[eax+4]
+	fstp dword[ebp-8]
 	
 	;calculate z
 	fld dword[ecx]
@@ -200,7 +200,15 @@ vec3_cross:
 	fld dword[edx]
 	fmulp
 	fsubp
-	fstp dword[eax+8]
+	fstp dword[ebp-4]
+	
+	;copying the result into the buffer
+	mov edx, dword[esp]
+	mov dword[eax], edx
+	mov edx, dword[esp+4]
+	mov dword[eax+4], edx
+	mov edx, dword[esp+8]
+	mov dword[eax+8], edx
 	
 	mov esp, ebp
 	pop ebp
@@ -214,19 +222,23 @@ vec3_scale:
 	mov ecx, dword[ebp+8]		;buffer in ecx
 	mov eax, dword[ebp+12]		;vec in eax
 	
-	movss xmm1, dword[ebp+16]	;scale factor in xmm1
+	fld dword[ebp+16]			;scale factor
 	
-	movss xmm0, dword[eax]
-	mulss xmm0, xmm1
-	movss dword[ecx], xmm0
+	fld dword[eax]
+	fmul st0, st1
+	fstp dword[ecx]
 	
-	movss xmm0, dword[eax+4]
-	mulss xmm0, xmm1
-	movss dword[ecx+4], xmm0
+	fld dword[eax+4]
+	fmul st0, st1
+	fstp dword[ecx+4]
 	
-	movss xmm0, dword[eax+8]
-	mulss xmm0, xmm1
-	movss dword[ecx+8], xmm0
+	fld dword[eax+8]
+	fmul st0, st1
+	fstp dword[ecx+8]
+	
+	;fstp st0
+	sub esp, 4
+	fstp dword[esp]
 	
 	mov esp, ebp
 	pop ebp

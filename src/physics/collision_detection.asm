@@ -53,11 +53,6 @@ collisionDetection_resolveKinematicNonkinematic:
 	sub esp, 12			;resolution dir
 	
 	
-	push test_line1
-	push test_line0
-	push test_vec3_buffer
-	call collisionDetection_closestPointOnLineOrigo
-	call vec3_print
 	;TODO: pre-calculation check using bounding boxes
 	
 	mov eax, dword[ebp+8]
@@ -119,7 +114,6 @@ collisionDetection_resolveKinematicNonkinematic:
 			call collisionDetection_resolveCylinderMesh
 			test eax, eax
 			jz collisionDetection_rkn_end
-			
 			
 			;resolve if a collision has been detected
 			push dword[ebp-4]
@@ -239,7 +233,7 @@ collisionDetection_resolveCylinderMesh:
 			lea eax, [ebp-56]
 			push eax				;outPenetration
 			push edi				;triNormal
-			
+
 			mov eax, dword[ebp-4]
 			
 			mov ecx, dword[esi+8]
@@ -415,9 +409,10 @@ collisionDetection_closestPointOnLine:
 	ret
 	
 
+;returns 0 if the closest point is not on the end of the line
 ;assumes that the point is (0,0,0)
 ;for the vertical collision detection this can be further optimized by assuming that the triangle is horizontal (vec2 operations instead of vec3)
-;void collisionDetection_cpolo(
+;int collisionDetection_cpolo(
 ;	vec3* buffer,
 ;	vec3* line0,
 ;	vec3* line1
@@ -456,6 +451,8 @@ collisionDetection_closestPointOnLineOrigo:
 		mov edx, dword[ecx+8]
 		mov dword[eax+8], edx
 		
+		mov eax, 69
+		
 		jmp collisionDetection_closestPointOnLineOrigo_end
 		
 	collisionDetection_cpolo_not_beyond_line0:
@@ -476,6 +473,9 @@ collisionDetection_closestPointOnLineOrigo:
 		mov dword[eax+4], edx
 		mov edx, dword[ecx+8]
 		mov dword[eax+8], edx
+		
+		mov eax, 69
+		
 		jmp collisionDetection_closestPointOnLineOrigo_end
 		
 	collisionDetection_cpolo_not_beyond_line1:
@@ -498,6 +498,8 @@ collisionDetection_closestPointOnLineOrigo:
 	push dword[ebp+16]
 	push dword[ebp+8]
 	call vec3_add
+	
+	xor eax, eax
 	
 	collisionDetection_closestPointOnLineOrigo_end:
 	mov esp, ebp
@@ -528,6 +530,8 @@ collisionDetection_rcmHorizontalTriangle:
 	sub esp, 12			;triNormal x closestTriangleSide			;40
 	sub esp, 4			;closest triangle side index				;44
 	sub esp, 12			;closest triangle side						;56
+	sub esp, 4			;return value of closestPointOnLineOrigo	;60
+	sub esp, 4			;temp return value of cpolo					;64
 	
 	;get cylinder height
 	mov eax, dword[ebp+8]
@@ -557,6 +561,7 @@ collisionDetection_rcmHorizontalTriangle:
 	lea eax, [ebp-24]
 	push eax
 	call collisionDetection_closestPointOnLineOrigo
+	mov dword[ebp-60], eax
 	add esp, 12
 	movss xmm0, dword[ebp-24]
 	mulss xmm0, xmm0
@@ -574,6 +579,7 @@ collisionDetection_rcmHorizontalTriangle:
 	lea eax, [ebp-40]		;borrowing var40
 	push eax
 	call collisionDetection_closestPointOnLineOrigo
+	mov dword[ebp-64], eax	;it's only temp
 	add esp, 8				;4 bytes are left on the stack
 	movss xmm0, dword[ebp-40]
 	mulss xmm0, xmm0
@@ -599,6 +605,9 @@ collisionDetection_rcmHorizontalTriangle:
 		
 		mov dword[ebp-44], 1
 		
+		mov ecx, dword[ebp-64]
+		mov dword[ebp-60], ecx		;now the return value is final
+		
 	collisionDetection_rcmHorizontalTriangle_side2_not_closer:
 	add esp, 4
 	
@@ -608,6 +617,7 @@ collisionDetection_rcmHorizontalTriangle:
 	lea eax, [ebp-40]		;borrowing var40
 	push eax
 	call collisionDetection_closestPointOnLineOrigo
+	mov dword[ebp-64], eax	;it's only temp
 	add esp, 8				;4 bytes are left on the stack
 	movss xmm0, dword[ebp-40]
 	mulss xmm0, xmm0
@@ -633,6 +643,9 @@ collisionDetection_rcmHorizontalTriangle:
 		
 		mov dword[ebp-44], 2
 		
+		mov ecx, dword[ebp-64]
+		mov dword[ebp-60], ecx		;now the return value is final
+		
 	collisionDetection_rcmHorizontalTriangle_side3_not_closer:
 	add esp, 4
 	
@@ -643,6 +656,16 @@ collisionDetection_rcmHorizontalTriangle:
 	mov eax, dword[eax+4]			;cylinder radius
 	cmp eax, dword[ebp-28]
 	jg collisionDetection_rcmHorizontalTriangle_horizontal_intersection
+		;if the point is on the end of the side
+		;and not in the radius of the cylinder
+		;then it is surely not in the triangle
+		cmp dword[ebp-60], 0
+		je collisionDetection_rcmHorizontalTriangle_not_end_of_side
+			xor eax, eax
+			jmp collisionDetection_rcmHorizontalTriangle_end
+			
+		collisionDetection_rcmHorizontalTriangle_not_end_of_side:
+		
 		;if the closest point is not in the radius of the cylinder
 		;there is still a chance that the cylinder is on the triangle
 		;if so, < ( triNormal x closestSide ); closestPoint > will be negative
@@ -679,9 +702,6 @@ collisionDetection_rcmHorizontalTriangle:
 			
 		collisionDetection_rcmHorizontalTriangle_closest_side_calculated:
 	
-		push test_text
-			call my_printf
-			add esp, 4
 	
 		;calculate the cross product
 		lea eax, [ebp-40]
@@ -702,6 +722,10 @@ collisionDetection_rcmHorizontalTriangle:
 			
 	collisionDetection_rcmHorizontalTriangle_horizontal_intersection:
 	
+	lea eax, [ebp-24]
+	push eax
+	call vec3_print
+	add esp, 4
 	
 	;get the penetration
 	mov eax, dword[ebp+24]
@@ -734,18 +758,6 @@ collisionDetection_rcmHorizontalTriangle:
 	mov dword[eax+4], edx
 	mov edx, dword[ecx+8]
 	mov dword[eax+8], edx
-	
-	push test_text
-	call my_printf
-	push dword[ebp+12]
-	call vec3_print
-	push dword[ebp+16]
-	call vec3_print
-	push dword[ebp+20]
-	call vec3_print
-	lea eax, [ebp-24]
-	push eax
-	call vec3_print
 	
 	mov eax, 69
 

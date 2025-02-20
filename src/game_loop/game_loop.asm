@@ -587,6 +587,8 @@ gameLoop_physics:
 	sub esp, 4			;0.001f*(current-last)		;12
 	sub esp, 4			;glfwGetTime test			;16
 	
+	finit
+	
 	;reset last and current tick count
 	call [GetTickCount]
 	mov dword[ebp-4], eax

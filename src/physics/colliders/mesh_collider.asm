@@ -16,6 +16,8 @@ section .rodata use32
 	print_vertex_count db "vertex count: %d",10,0
 	print_triangle_count db "triangle count: %d",10,0
 	
+	test_text db "globus",10,0
+	
 section .text use32
 	
 	global meshCollider_createInfo			;MeshColliderInfo* meshCollider_createInfo(vec3* vertices, int* indices, int vertexCount, int indexCount)
@@ -24,6 +26,7 @@ section .text use32
 	extern vec3_sub
 	extern vec3_cross
 	extern vec3_normalize
+	extern vec3_print
 	
 	extern my_printf
 	extern my_malloc
@@ -117,11 +120,13 @@ meshCollider_createInfo:
 		call vec3_sub				;tri[0]-tri[1]
 		add esp, 12
 		
+		
 		;normal
 		mov ecx, esi
 		shl ecx, 2			;offset in normal array = (index/3)*12 = 4*index
 		add ecx, dword[ebp-16]
 		
+		lea eax, [ebp-40]
 		push eax
 		lea eax, [ebp-28]
 		push eax
@@ -129,6 +134,7 @@ meshCollider_createInfo:
 		call vec3_cross
 		call vec3_normalize
 		add esp, 12
+		
 		
 		;continue
 		add edi, 12
