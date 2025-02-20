@@ -84,6 +84,7 @@ tsValue_get:
 	mov ebp, esp
 	
 	;lock mutex
+	push -1
 	mov eax, dword[ebp+8]
 	push dword[eax]
 	call mutex_lock
@@ -111,6 +112,7 @@ tsValue_set:
 	mov ebp, esp
 	
 	;lock mutex
+	push -1
 	mov eax, dword[ebp+8]
 	push dword[eax]
 	call mutex_lock
@@ -139,6 +141,7 @@ tsValue_setBuffer:
 	mov ebp, esp
 	
 	;lock mutex
+	push -1
 	mov eax, dword[ebp+8]
 	push dword[eax]
 	call mutex_lock
@@ -168,6 +171,7 @@ tsValue_isEqual:
 	sub esp, 4			;return value of memcmp
 	
 	;lock mutex
+	push -1
 	mov eax, dword[ebp+8]
 	push dword[eax]
 	call mutex_lock
@@ -204,6 +208,7 @@ tsValue_isEqualBuffer:
 	sub esp, 4			;return value of memcmp
 	
 	;lock mutex
+	push -1
 	mov eax, dword[ebp+8]
 	push dword[eax]
 	call mutex_lock

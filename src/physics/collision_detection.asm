@@ -8,6 +8,7 @@ section .rodata use32
 	
 	VEC3_ZERO dd 0.0, 0.0, 0.0
 	
+	print_float_nl db "%f",10,0
 	print_two_floats_nl db "%f %f",10,0
 	
 	test_line0 dd 0.0, 0.0, -13.8
@@ -112,6 +113,7 @@ collisionDetection_resolveKinematicNonkinematic:
 			call collisionDetection_resolveCylinderMesh
 			test eax, eax
 			jz collisionDetection_rkn_end
+			
 			
 			;resolve if a collision has been detected
 			push dword[ebp-4]

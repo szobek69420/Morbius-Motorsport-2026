@@ -6,6 +6,8 @@
 %endmacro
 
 section .rodata use32
+	PHYSICS_UPDATE_INTERVAL_MS dd 15
+
 	ZERO dd 0.0
 	ONE dd 1.0
 	MINUS_ONE dd -1.0
@@ -14,9 +16,10 @@ section .rodata use32
 	P6 dd 0.6
 	
 	test_text db "OTTO VON BISMARCK",0
-	print_int db "%d",10,0
-	print_two_ints db "%d %d",10,0
+	print_int_nl db "%d",10,0
+	print_two_ints_nl db "%d %d",10,0
 	print_float db "%f",0
+	print_float_nl db "%f",10,0
 	print_new_line db 10,0
 	
 	image_path db "./sprites/morbussin.bmp",0
@@ -102,6 +105,9 @@ section .rodata use32
 	dd 21,20,22,23,22,20
 	
 section .bss use32
+	should_close resb 4					;tsValue*
+	physics_thread resb 4				;thread*
+
 	camera resb 36
 	pv_matrix resb 64
 	
@@ -157,6 +163,7 @@ section .text use32
 	extern glfwSetScrollCallback
 	extern glfwSetInputMode
 	extern glfwSetFramebufferSizeCallback
+	extern glfwGetTime
 	extern GLFW_CURSOR
 	extern GLFW_CURSOR_DISABLED
 	extern GLFW_KEY_ESCAPE
@@ -173,6 +180,7 @@ section .text use32
 	extern player_init
 	extern player_destroy
 	extern player_update
+	extern player_updatePhysics
 	
 	extern renderable_init
 	extern renderable_deinit
@@ -213,6 +221,14 @@ section .text use32
 	extern physics_registerNonkinematic
 	extern physics_registerKinematic
 	
+	extern thread_create
+	extern thread_join
+	extern thread_resume
+	extern tsValue_create
+	extern tsValue_destroy
+	extern tsValue_set
+	extern tsValue_isEqual
+	
 game_loop:
 	push ebp
 	mov ebp, esp
@@ -222,29 +238,28 @@ game_loop:
 	mov eax, dword[ebp+8]
 	mov dword[current_window], eax
 	
+	;init should_close
+	push 4
+	call tsValue_create
+	mov dword[should_close], eax
+	add esp, 4
+	
+	push 0
+	push dword[should_close]
+	call tsValue_set
+	add esp, 8
+	
+	;init the threads (don't start them just yet tho)
+	push 0					;dont start immediately
+	push 0
+	push gameLoop_physics
+	call thread_create
+	mov dword[physics_thread], eax
+	add esp, 12
+	
+	
 	;init input and set callbacks
-	call input_init
-	
-	
-	push input_keyCallback
-	push dword[current_window]
-	call [glfwSetKeyCallback]
-	add esp, 8
-	
-	push input_mouseButtonCallback
-	push dword[current_window]
-	call [glfwSetMouseButtonCallback]
-	add esp, 8
-	
-	push input_mouseMoveCallback
-	push dword[current_window]
-	call [glfwSetCursorPosCallback]
-	add esp, 8
-	
-	push input_mouseScrollCallback
-	push dword[current_window]
-	call [glfwSetScrollCallback]
-	add esp, 8
+	call gameLoop_initWindow
 	
 	;set window resize callback
 	push gameLoop_windowResizeCallback
@@ -263,18 +278,6 @@ game_loop:
 	call collider_init
 	call physics_init
 	
-	push dword[ONE_PER_THOUSAND]
-	push dword[ONE]
-	call collider_createCylinder
-	add esp, 8
-	mov dword[cylinder], eax
-	mov ecx, dword[P15]
-	mov dword[eax], ecx				;cylinder.position.x=0.15
-	mov ecx, dword[ONE]
-	mov dword[eax+4], ecx			;cylinder.position.y=1
-	mov ecx, dword[P15]
-	mov dword[eax+8], ecx			;cylinder.position.z=0.15
-	
 	push dword[mesh_index_count]
 	push dword[mesh_vertex_count]
 	push mesh_indices
@@ -286,25 +289,7 @@ game_loop:
 	push dword[mesh]
 	call physics_registerKinematic
 	add esp, 4
-	push dword[cylinder]
-	call physics_registerNonkinematic
-	add esp, 4
-	
-	push dword[cylinder]
-	call vec3_print
-	push dword[mesh]
-	call vec3_print
-	add esp, 8
-	
-	push 0
-	call physics_update
-	add esp, 4
-	
-	push dword[cylinder]
-	call vec3_print
-	push dword[mesh]
-	call vec3_print
-	add esp, 8
+
 	
 	
 	;init camera
@@ -354,6 +339,11 @@ game_loop:
 	call [GetTickCount]
 	mov dword[last_frame_milliseconds], eax
 	
+	;start the threads
+	push dword[physics_thread]
+	call thread_resume
+	add esp, 4
+	
 	;the actual game loop
 	gameLoop_loop_start:
 		
@@ -379,12 +369,11 @@ game_loop:
 		gameLoop_loop_no_resize:
 		
 		
-		;player
+		;update player
 		push dword[delta_time_seconds]
 		push dword[pplayer]
 		call player_update
 		add esp, 8
-	
 	
 		;set clear color
 		push dword[ONE]
@@ -426,7 +415,7 @@ game_loop:
 		push dword[current_window]
 		call [glfwSwapBuffers]
 		add esp, 4
-		
+
 		;poll events and update input
 		call [glfwPollEvents]
 		call input_update
@@ -438,17 +427,27 @@ game_loop:
 		test eax, eax
 		jz gameLoop_loop_no_escape
 			push 69
-			push dword[current_window]
-			call [glfwSetWindowShouldClose]
+			push dword[should_close]
+			call tsValue_set
 			add esp, 8
 		gameLoop_loop_no_escape:
 		
 		;check if the window is closed or not
-		push dword[current_window]
-		call [glfwWindowShouldClose]
-		add esp, 4
+		push 0
+		push dword[should_close]
+		call tsValue_isEqual
+		add esp, 8
 		test eax, eax
-		jz gameLoop_loop_start
+		jnz gameLoop_loop_start
+
+
+	
+	;wait for the other threads
+	push -1
+	push dword[physics_thread]
+	call thread_join
+	add esp, 8
+	
 		
 	;destroy morbius poster
 	push dword[image_renderable]
@@ -473,6 +472,11 @@ game_loop:
 	call physics_deinit
 	call collider_deinit
 	
+	;destroy should_close
+	push dword[should_close]
+	call tsValue_destroy
+	add esp, 4
+	
 	
 	mov dword[current_window], 0
 	
@@ -481,6 +485,32 @@ game_loop:
 	ret
 	
 
+gameLoop_initWindow:
+	push ebp
+	mov ebp, esp
+	
+	call input_init
+	
+	
+	push input_keyCallback
+	push dword[current_window]
+	call [glfwSetKeyCallback]
+	
+	push input_mouseButtonCallback
+	push dword[current_window]
+	call [glfwSetMouseButtonCallback]
+	
+	push input_mouseMoveCallback
+	push dword[current_window]
+	call [glfwSetCursorPosCallback]
+	
+	push input_mouseScrollCallback
+	push dword[current_window]
+	call [glfwSetScrollCallback]
+	
+	mov esp, ebp
+	pop ebp
+	ret
 	
 ;only sets the window size and the should_resize flag
 ;therefore only triggering handleWindowResize once per frame at most
@@ -542,6 +572,73 @@ gameLoop_handleWindowResize:
 
 	
 	gameLoop_handleWindowResize_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;void gameLoop_physics
+gameLoop_physics:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;last tick(ms) count		;4
+	sub esp, 4			;current tick(ms) count		;8
+	sub esp, 4			;0.001f*(current-last)		;12
+	sub esp, 4			;glfwGetTime test			;16
+	
+	;reset last and current tick count
+	call [GetTickCount]
+	mov dword[ebp-4], eax
+	mov dword[ebp-8], eax
+	
+	gameLoop_physics_loop_start:
+		
+		;check if enough time has elapsed since the last update
+		call [GetTickCount]
+		sub eax, dword[ebp-8]
+		cmp eax, dword[PHYSICS_UPDATE_INTERVAL_MS]
+		jl gameLoop_physics_loop_start
+		
+		;calculate the delta time
+		mov eax, dword[ebp-8]
+		mov dword[ebp-4], eax
+		
+		call [GetTickCount]
+		mov dword[ebp-8], eax
+		
+		mov eax, dword[ebp-8]
+		sub eax, dword[ebp-4]
+		mov dword[ebp-12], eax
+		fild dword[ebp-12]
+		fstp dword[ebp-12]
+		movss xmm0, dword[ebp-12]
+		movss xmm1, dword[ONE_PER_THOUSAND]
+		mulss xmm0, xmm1
+		movss dword[ebp-12], xmm0
+	
+	
+		
+		;call physics_update
+		push dword[ebp-12]
+		call physics_update
+		add esp, 4
+		
+		;update player
+		push dword[ebp-12]
+		push dword[pplayer]
+		call player_updatePhysics
+		add esp, 8
+		
+		
+		;check if an exit is necessary
+		push 0
+		push dword[should_close]
+		call tsValue_isEqual
+		add esp, 8
+		test eax, eax
+		jnz gameLoop_physics_loop_start
+	
 	mov esp, ebp
 	pop ebp
 	ret
