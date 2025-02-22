@@ -32,6 +32,11 @@ section .text use32
 	extern COLLIDER_CYLINDER
 	extern COLLIDER_MESH
 	
+	extern collider_getPosition
+	
+	extern cylinderCollider_getBounds
+	extern meshCollider_getBounds
+	
 	extern vec3_sub
 	extern vec3_add
 	extern vec3_dot
@@ -56,8 +61,6 @@ collisionDetection_resolveKinematicNonkinematic:
 	
 	mov dword[ebp-20], 0
 	
-	
-	;TODO: pre-calculation check using bounding boxes
 	
 	mov eax, dword[ebp+8]
 	mov ecx, dword[COLLIDER_CYLINDER]
@@ -174,6 +177,19 @@ collisionDetection_resolveCylinderMesh:
 	sub esp, 16			;min resolution dir					;52 (it should have been 12 bytes but who cares)
 	sub esp, 4			;temp penetration					;56
 	sub esp, 12			;temp resolution dir				;68
+	
+	
+	;check if the bounding boxes intersect
+	push dword[ebp+24]
+	push dword[ebp+20]
+	call collisionDetection_boundsIntersectCylinderMesh
+	add esp, 8
+	test eax, eax
+	jnz collisionDetection_rcm_bounding_boxes_intersect
+		xor eax, eax
+		jmp collisionDetection_rcm_end
+		
+	collisionDetection_rcm_bounding_boxes_intersect:
 	
 	
 	;get vertex count, triangle count, triangle indices and triangle normals
@@ -335,6 +351,117 @@ collisionDetection_resolveCylinderMesh:
 	pop esi
 	pop ebp
 	ret
+	
+;returns 0 if there is no intersection
+;int collisionDetection_bicm(Collider* cylinder, Collider* mesh)
+collisionDetection_boundsIntersectCylinderMesh:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 12				;mesh.position-cylinder.position			;12
+	sub esp, 12				;cylinder.lowerBound						;24
+	sub esp, 12				;cylinder.upperBound						;36
+	sub esp, 12				;mesh.lowerBound							;48
+	sub esp, 12				;mesh.upperBound							;60
+	
+	;calculate mesh.position-cylinder.position
+	push dword[ebp+8]
+	call collider_getPosition
+	mov dword[esp], eax
+	push dword[ebp+12]
+	call collider_getPosition
+	mov dword[esp], eax
+	lea eax, [ebp-12]
+	push eax
+	call vec3_sub
+	
+	;get the bounds
+	lea eax, [ebp-36]
+	push eax
+	lea eax, [ebp-24]
+	push eax
+	mov eax, dword[ebp+8]
+	push dword[eax+28]			;CylinderColliderInfo*
+	call cylinderCollider_getBounds
+	
+	lea eax, [ebp-60]
+	push eax
+	lea eax, [ebp-48]
+	push eax
+	mov eax, dword[ebp+12]
+	push dword[eax+28]			;MeshColliderInfo*
+	call meshCollider_getBounds
+	
+	;transform the mesh collider bounds into the local space of the cylinder collider
+	lea eax, [ebp-12]
+	push eax
+	lea eax, [ebp-48]
+	push eax
+	push eax
+	call vec3_add
+	lea eax, [ebp-60]
+	mov dword[esp+4], eax
+	mov dword[esp], eax
+	call vec3_add
+	
+	
+	;check for intersection
+	movss xmm0, dword[ebp-36]
+	movss xmm1, dword[ebp-48]
+	ucomiss xmm0, xmm1
+	ja collisionDetection_boundsIntersectCylinderMesh_pass_1	;cylinder.upperBound.x>mesh.lowerBound.x
+		xor eax, eax
+		jmp collisionDetection_boundsIntersectCylinderMesh_end
+	collisionDetection_boundsIntersectCylinderMesh_pass_1:
+	
+	movss xmm0, dword[ebp-32]
+	movss xmm1, dword[ebp-44]
+	ucomiss xmm0, xmm1
+	ja collisionDetection_boundsIntersectCylinderMesh_pass_2	;cylinder.upperBound.y>mesh.lowerBound.y
+		xor eax, eax
+		jmp collisionDetection_boundsIntersectCylinderMesh_end
+	collisionDetection_boundsIntersectCylinderMesh_pass_2:
+	
+	movss xmm0, dword[ebp-28]
+	movss xmm1, dword[ebp-40]
+	ucomiss xmm0, xmm1
+	ja collisionDetection_boundsIntersectCylinderMesh_pass_3	;cylinder.upperBound.z>mesh.lowerBound.z
+		xor eax, eax
+		jmp collisionDetection_boundsIntersectCylinderMesh_end
+	collisionDetection_boundsIntersectCylinderMesh_pass_3:
+	
+	
+	movss xmm0, dword[ebp-24]
+	movss xmm1, dword[ebp-60]
+	ucomiss xmm0, xmm1
+	jb collisionDetection_boundsIntersectCylinderMesh_pass_4	;cylinder.lowerBound.x<mesh.upperBound.x
+		xor eax, eax
+		jmp collisionDetection_boundsIntersectCylinderMesh_end
+	collisionDetection_boundsIntersectCylinderMesh_pass_4:
+	
+	movss xmm0, dword[ebp-20]
+	movss xmm1, dword[ebp-56]
+	ucomiss xmm0, xmm1
+	jb collisionDetection_boundsIntersectCylinderMesh_pass_5	;cylinder.lowerBound.y<mesh.upperBound.y
+		xor eax, eax
+		jmp collisionDetection_boundsIntersectCylinderMesh_end
+	collisionDetection_boundsIntersectCylinderMesh_pass_5:
+	
+	movss xmm0, dword[ebp-16]
+	movss xmm1, dword[ebp-52]
+	ucomiss xmm0, xmm1
+	jb collisionDetection_boundsIntersectCylinderMesh_pass_6	;cylinder.lowerBound.z<mesh.upperBound.z
+		xor eax, eax
+		jmp collisionDetection_boundsIntersectCylinderMesh_end
+	collisionDetection_boundsIntersectCylinderMesh_pass_6:
+	
+	mov eax, 69
+	
+	collisionDetection_boundsIntersectCylinderMesh_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
 	
 ;void collisionDetection_cpol(vec3* buffer, vec3* point, vec3* line0, vec3* line1)
 collisionDetection_closestPointOnLine:

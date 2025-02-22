@@ -7,10 +7,14 @@
 ;	vec3* triangleNormals;			;8		//calculated from the vertex data, 1 vec3/triangle
 ;	int vertexCount;				;12
 ;	int triangleCount;				;16		//NOT INDEX COUNT!!!
-;}		20 bytes overall
+;//bounds are in the local space of the collider
+;	vec3 lowerBound;				;20
+;	vec3 upperBound;				;32
+;}		44 bytes overall
 
 section .rodata use32
 	print_int_nl db "%d",10,0
+	print_three_ints_nl db "%d %d %d",10,0
 	print_three_ints_three_floats_nl db "%d %d %d %f %f %f",10,0
 	
 	print_vertex_count db "vertex count: %d",10,0
@@ -22,6 +26,8 @@ section .text use32
 	
 	global meshCollider_createInfo			;MeshColliderInfo* meshCollider_createInfo(vec3* vertices, int* indices, int vertexCount, int indexCount)
 	global meshCollider_destroyInfo			;void meshCollider_destroyInfo(MeshColliderInfo* mci)
+
+	global meshCollider_getBounds			;void meshCollider_getBounds(MeshColliderInfo* mci, vec3* lowerBoundBuffer, vec3* upperBoundBuffer)
 
 	extern vec3_sub
 	extern vec3_cross
@@ -47,7 +53,7 @@ meshCollider_createInfo:
 	sub esp, 12			;tri[0]-tri[1]						;-40
 	
 	;alloc mesh collider info
-	push 20
+	push 44
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
@@ -165,6 +171,87 @@ meshCollider_createInfo:
 	mov dword[ecx+16], eax			;triangle count
 	
 	
+	;calculate the bounds
+	mov eax, dword[ebp-4]
+	cmp dword[eax+12], 0			;vertex count is zero
+	jne meshCollider_createInfo_calculate_bounds
+		mov dword[eax+20], 0		;lowerBound=0
+		mov dword[eax+24], 0
+		mov dword[eax+28], 0
+		mov dword[eax+32], 0		;upperBound=0
+		mov dword[eax+36], 0
+		mov dword[eax+40], 0
+		jmp meshCollider_createInfo_calculate_bounds_done
+		
+	meshCollider_createInfo_calculate_bounds:
+	
+	mov dword[eax+20], 0x7f800000	;lowerBound=vec3(+Infinity)
+	mov dword[eax+24], 0x7f800000
+	mov dword[eax+28], 0x7f800000
+	mov dword[eax+32], 0xff800000	;upperBound=vec3(-Infinity)
+	mov dword[eax+36], 0xff800000
+	mov dword[eax+40], 0xff800000
+	
+	mov esi, dword[eax]				;current vertex in esi
+	mov edi, dword[eax+12]			;vertex count in edi
+	meshCollider_createInfo_calculate_bounds_loop_start:
+		;vertex.x<lowerBound.x?
+		movss xmm0, dword[esi]
+		movss xmm1, dword[eax+20]
+		ucomiss xmm0, xmm1
+		jae meshCollider_createInfo_calculate_bounds_loop_lower_x_done
+			movss dword[eax+20], xmm0
+		meshCollider_createInfo_calculate_bounds_loop_lower_x_done:
+		
+		;vertex.y<lowerBound.y?
+		movss xmm0, dword[esi+4]
+		movss xmm1, dword[eax+24]
+		ucomiss xmm0, xmm1
+		jae meshCollider_createInfo_calculate_bounds_loop_lower_y_done
+			movss dword[eax+24], xmm0
+		meshCollider_createInfo_calculate_bounds_loop_lower_y_done:
+		
+		;vertex.z<lowerBound.z?
+		movss xmm0, dword[esi+8]
+		movss xmm1, dword[eax+28]
+		ucomiss xmm0, xmm1
+		jae meshCollider_createInfo_calculate_bounds_loop_lower_z_done
+			movss dword[eax+28], xmm0
+		meshCollider_createInfo_calculate_bounds_loop_lower_z_done:
+		
+		
+		;vertex.x>upperBound.x?
+		movss xmm0, dword[esi]
+		movss xmm1, dword[eax+32]
+		ucomiss xmm0, xmm1
+		jbe meshCollider_createInfo_calculate_bounds_loop_upper_x_done
+			movss dword[eax+32], xmm0
+		meshCollider_createInfo_calculate_bounds_loop_upper_x_done:
+		
+		;vertex.y>upperBound.y?
+		movss xmm0, dword[esi+4]
+		movss xmm1, dword[eax+36]
+		ucomiss xmm0, xmm1
+		jbe meshCollider_createInfo_calculate_bounds_loop_upper_y_done
+			movss dword[eax+36], xmm0
+		meshCollider_createInfo_calculate_bounds_loop_upper_y_done:
+		
+		;vertex.z>upperBound.z?
+		movss xmm0, dword[esi+8]
+		movss xmm1, dword[eax+40]
+		ucomiss xmm0, xmm1
+		jbe meshCollider_createInfo_calculate_bounds_loop_upper_z_done
+			movss dword[eax+40], xmm0
+		meshCollider_createInfo_calculate_bounds_loop_upper_z_done:
+		
+		
+		add esi, 12
+		dec edi
+		test edi, edi
+		jnz meshCollider_createInfo_calculate_bounds_loop_start
+	
+	meshCollider_createInfo_calculate_bounds_done:
+	
 	;set return value
 	mov eax, dword[ebp-4]
 	
@@ -206,5 +293,28 @@ meshCollider_destroyInfo:
 	push eax
 	call my_free
 	add esp, 4
+	
+	ret
+	
+	
+	
+meshCollider_getBounds:
+	mov eax, dword[esp+4]			;MeshColliderInfo* in eax
+	
+	mov ecx, dword[esp+8]			;lowerBoundBuffer in ecx
+	mov edx, dword[eax+20]
+	mov dword[ecx], edx
+	mov edx, dword[eax+24]
+	mov dword[ecx+4], edx
+	mov edx, dword[eax+28]
+	mov dword[ecx+8], edx
+	
+	mov ecx, dword[esp+12]			;upperBoundBuffer in ecx
+	mov edx, dword[eax+32]
+	mov dword[ecx], edx
+	mov edx, dword[eax+36]
+	mov dword[ecx+4], edx
+	mov edx, dword[eax+40]
+	mov dword[ecx+8], edx
 	
 	ret

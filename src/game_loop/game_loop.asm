@@ -120,6 +120,8 @@ section .rodata use32
 	dd 1.0, -1.0, 1.0
 	dd 0.0, -1.0, -1.0
 	
+	mesh_vertex_count_2 dd 6
+	
 	indices_2_vector:
 	dd 24
 	dd 24
@@ -315,7 +317,7 @@ game_loop:
 	mov dword[mesh], eax
 	
 	push dword[indices_2_vector]
-	push dword[vertex_data_2_vector]
+	push dword[mesh_vertex_count_2]
 	push indices_2
 	push vertex_data_2
 	call collider_createMesh
