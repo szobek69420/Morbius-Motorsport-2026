@@ -87,6 +87,11 @@ physics_deinit:
 	push ebp
 	mov ebp, esp
 	
+	;process pending operations
+	;so that if a collider is unregistered in the last frame (or after)
+	;it still counts as a valid unregister (easier for debugging)
+	call physics_processPendingRegisterOperations
+	
 	;print remaining colliders
 	push dword[registered_kinematic]
 	push dword[registered_nonkinematic]
@@ -221,6 +226,7 @@ physics_update:
 	ret
 	
 	
+;void physics_processPendingRegisterOperation()
 physics_processPendingRegisterOperations:
 	push ebp
 	mov ebp, esp

@@ -57,7 +57,7 @@ tsQueue_init:
 	mov dword[ecx], eax
 	
 	;alloc space for queue
-	push 8
+	push 20
 	call my_malloc
 	mov ecx, dword[ebp+8]
 	mov dword[ecx+4], eax

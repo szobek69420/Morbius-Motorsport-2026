@@ -42,6 +42,11 @@ section .text use32
 	
 	global collider_destroy						;void collider_destroy(Collider* collider)
 	
+	global collider_getPosition					;vec3* collider_getPosition(Collider*)
+	global collider_setPosition					;void collider_setPosition(Collider* collider, vec3* newValue)
+	global collider_getVelocity					;vec3* collider_getVelocity(Collider*)
+	global collider_setVelocity					;void collider_setVelocity(Collider* collider, vec3* newValue)
+	
 	extern my_printf	
 	extern my_malloc
 	extern my_free
@@ -279,4 +284,45 @@ collider_destroy:
 	
 	mov esp, ebp
 	pop ebp
+	ret
+	
+	
+collider_getPosition:
+	mov eax, dword[esp+4]
+	ret
+	
+	
+collider_setPosition:
+	mov eax, dword[esp+4]			;&collider.velocity in eax
+	mov ecx, dword[esp+8]			;&newValue in ecx
+	
+	mov edx, dword[ecx]
+	mov dword[eax], edx
+	mov edx, dword[ecx+4]
+	mov dword[eax+4], edx
+	mov edx, dword[ecx+8]
+	mov dword[eax+8], edx
+	
+	ret
+	
+	
+	
+collider_getVelocity:
+	mov eax, dword[esp+4]
+	add eax, 32
+	ret
+	
+	
+collider_setVelocity:
+	mov eax, dword[esp+4]
+	add eax, 32						;&collider.velocity in eax
+	mov ecx, dword[esp+8]			;&newValue in ecx
+	
+	mov edx, dword[ecx]
+	mov dword[eax], edx
+	mov edx, dword[ecx+4]
+	mov dword[eax+4], edx
+	mov edx, dword[ecx+8]
+	mov dword[eax+8], edx
+	
 	ret

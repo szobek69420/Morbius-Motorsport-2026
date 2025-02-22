@@ -15,6 +15,8 @@ section .rodata use32
 	
 	GRAV_ACC dd -9.80625
 	
+	START_POSITION dd 0.0, 3.0, 0.0
+	
 	UP dd 0.0, 1.0, 0.0
 	DOWN dd 0.0, -1.0, 0.0
 	
@@ -93,11 +95,23 @@ player_init:
 	mov ecx, dword[ebp-4]
 	mov dword[ecx+24], eax
 	
-	
 	push eax
 	call physics_registerNonkinematic
 	
+	;init start position
+	mov eax, dword[ebp-4]
+	mov eax, dword[eax+24]
 	
+	mov ecx, dword[START_POSITION]
+	mov dword[eax], ecx
+	mov ecx, START_POSITION
+	mov ecx, dword[ecx+4]
+	mov dword[eax+4], ecx
+	mov ecx, START_POSITION
+	mov ecx, dword[ecx+8]
+	mov dword[eax+8], ecx
+	
+	;set return value
 	mov eax, dword[ebp-4]
 	
 	mov esp, ebp

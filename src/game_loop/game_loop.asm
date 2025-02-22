@@ -24,6 +24,9 @@ section .rodata use32
 	
 	image_path db "./sprites/morbussin.bmp",0
 	
+	test_text_main db "main",10,0
+	test_text_physics db "physics",10,0
+	
 	vertex_data_vector:		;imitates a vector
 	dd 120
 	dd 120
@@ -104,6 +107,33 @@ section .rodata use32
 	dd 17,16,18,19,18,16
 	dd 21,20,22,23,22,20
 	
+	vertex_data_2_vector:
+	dd 18
+	dd 18
+	dd 4
+	dd vertex_data_2
+	vertex_data_2:
+	dd -1.0, 1.0, 1.0
+	dd 1.0, 1.0, 1.0
+	dd 0.0, 1.0, -1.0
+	dd -1.0, -1.0, 1.0
+	dd 1.0, -1.0, 1.0
+	dd 0.0, -1.0, -1.0
+	
+	indices_2_vector:
+	dd 24
+	dd 24
+	dd 4
+	dd indices_2
+	indices_2:
+	dd 0,1,2, 5,4,3
+	dd 0,3,4, 4,1,0
+	dd 1,4,5, 5,2,1
+	dd 2,5,3, 3,0,2
+	
+	position_2 dd 12.0, 10.0, -15.0
+	
+	
 section .bss use32
 	should_close resb 4					;tsValue*
 	physics_thread resb 4				;thread*
@@ -114,9 +144,11 @@ section .bss use32
 	pplayer resb 4
 	
 	image_renderable resb 4
+	plain_renderable resb 4
 	
 	cylinder resb 4
 	mesh resb 4
+	mesh2 resb 4
 	
 section .data use32
 	last_frame_milliseconds dd 0		;int, the GetTickCount of the last frame
@@ -188,6 +220,8 @@ section .text use32
 	extern renderable_destroy
 	extern renderable_render
 	extern renderable_setAlbedo
+	extern renderable_setPosition
+	extern RENDERABLE_ATTRIB_P3
 	extern RENDERABLE_ATTRIB_P3UV2
 	
 	extern vector_init
@@ -214,6 +248,7 @@ section .text use32
 	extern collider_createCylinder
 	extern collider_createMesh
 	extern collider_destroy
+	extern collider_setPosition
 	extern collisionDetection_resolveKinematicNonkinematic
 	extern physics_init
 	extern physics_deinit
@@ -249,14 +284,6 @@ game_loop:
 	call tsValue_set
 	add esp, 8
 	
-	;init the threads (don't start them just yet tho)
-	push 0					;dont start immediately
-	push 0
-	push gameLoop_physics
-	call thread_create
-	mov dword[physics_thread], eax
-	add esp, 12
-	
 	
 	;init input and set callbacks
 	call gameLoop_initWindow
@@ -278,6 +305,7 @@ game_loop:
 	call collider_init
 	call physics_init
 	
+	;init the two mesh colliders
 	push dword[mesh_index_count]
 	push dword[mesh_vertex_count]
 	push mesh_indices
@@ -286,7 +314,23 @@ game_loop:
 	add esp, 16
 	mov dword[mesh], eax
 	
+	push dword[indices_2_vector]
+	push dword[vertex_data_2_vector]
+	push indices_2
+	push vertex_data_2
+	call collider_createMesh
+	add esp, 16
+	mov dword[mesh2], eax
+	push position_2
+	push dword[mesh2]
+	call collider_setPosition
+	add esp, 8
+	
+	
 	push dword[mesh]
+	call physics_registerKinematic
+	add esp, 4
+	push dword[mesh2]
 	call physics_registerKinematic
 	add esp, 4
 
@@ -312,7 +356,7 @@ game_loop:
 	mov dword[pplayer], eax
 	add esp, 4
 	
-	;create morbius poster
+	;create morbius poster and the plain renderable
 	push dword[RENDERABLE_ATTRIB_P3UV2]
 	push indices_vector
 	push vertex_data_vector
@@ -323,6 +367,19 @@ game_loop:
 	push image_path
 	push dword[image_renderable]
 	call renderable_setAlbedo
+	add esp, 8
+	
+	
+	push dword[RENDERABLE_ATTRIB_P3]
+	push indices_2_vector
+	push vertex_data_2_vector
+	call renderable_create
+	add esp, 12
+	mov dword[plain_renderable], eax
+	
+	push position_2
+	push dword[plain_renderable]
+	call renderable_setPosition
 	add esp, 8
 	
 	
@@ -339,10 +396,13 @@ game_loop:
 	call [GetTickCount]
 	mov dword[last_frame_milliseconds], eax
 	
-	;start the threads
-	push dword[physics_thread]
-	call thread_resume
-	add esp, 4
+	;start the pyhsics thread
+	push 69					;start immediately
+	push 0
+	push gameLoop_physics
+	call thread_create
+	mov dword[physics_thread], eax
+	add esp, 12
 	
 	;the actual game loop
 	gameLoop_loop_start:
@@ -395,9 +455,14 @@ game_loop:
 		call camera_viewProjection
 		add esp, 8
 		
-		;render morbius poster
+		;render morbius poster and plain object thingy
 		push pv_matrix
 		push dword[image_renderable]
+		call renderable_render
+		add esp, 8
+		
+		push pv_matrix
+		push dword[plain_renderable]
 		call renderable_render
 		add esp, 8
 		
@@ -449,8 +514,11 @@ game_loop:
 	add esp, 8
 	
 		
-	;destroy morbius poster
+	;destroy morbius poster and plain object thingy
 	push dword[image_renderable]
+	call renderable_destroy
+	add esp, 4
+	push dword[plain_renderable]
 	call renderable_destroy
 	add esp, 4
 	
@@ -479,6 +547,75 @@ game_loop:
 	
 	
 	mov dword[current_window], 0
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;void gameLoop_physics
+gameLoop_physics:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;last tick(ms) count		;4
+	sub esp, 4			;current tick(ms) count		;8
+	sub esp, 4			;0.001f*(current-last)		;12
+	sub esp, 4			;glfwGetTime test			;16
+	
+	finit
+	
+	;reset last and current tick count
+	call [GetTickCount]
+	mov dword[ebp-4], eax
+	mov dword[ebp-8], eax
+	
+	gameLoop_physics_loop_start:
+		
+		;check if enough time has elapsed since the last update
+		call [GetTickCount]
+		sub eax, dword[ebp-8]
+		cmp eax, dword[PHYSICS_UPDATE_INTERVAL_MS]
+		jl gameLoop_physics_loop_start
+		
+		;calculate the delta time
+		mov eax, dword[ebp-8]
+		mov dword[ebp-4], eax
+		
+		call [GetTickCount]
+		mov dword[ebp-8], eax
+		
+		mov eax, dword[ebp-8]
+		sub eax, dword[ebp-4]
+		mov dword[ebp-12], eax
+		fild dword[ebp-12]
+		fstp dword[ebp-12]
+		movss xmm0, dword[ebp-12]
+		movss xmm1, dword[ONE_PER_THOUSAND]
+		mulss xmm0, xmm1
+		movss dword[ebp-12], xmm0
+	
+	
+		
+		;call physics_update
+		push dword[ebp-12]
+		call physics_update
+		add esp, 4
+		
+		;update player
+		push dword[ebp-12]
+		push dword[pplayer]
+		call player_updatePhysics
+		add esp, 8
+		
+		
+		;check if an exit is necessary
+		push 0
+		push dword[should_close]
+		call tsValue_isEqual
+		add esp, 8
+		test eax, eax
+		jnz gameLoop_physics_loop_start
 	
 	mov esp, ebp
 	pop ebp
@@ -576,71 +713,3 @@ gameLoop_handleWindowResize:
 	pop ebp
 	ret
 	
-	
-;void gameLoop_physics
-gameLoop_physics:
-	push ebp
-	mov ebp, esp
-	
-	sub esp, 4			;last tick(ms) count		;4
-	sub esp, 4			;current tick(ms) count		;8
-	sub esp, 4			;0.001f*(current-last)		;12
-	sub esp, 4			;glfwGetTime test			;16
-	
-	finit
-	
-	;reset last and current tick count
-	call [GetTickCount]
-	mov dword[ebp-4], eax
-	mov dword[ebp-8], eax
-	
-	gameLoop_physics_loop_start:
-		
-		;check if enough time has elapsed since the last update
-		call [GetTickCount]
-		sub eax, dword[ebp-8]
-		cmp eax, dword[PHYSICS_UPDATE_INTERVAL_MS]
-		jl gameLoop_physics_loop_start
-		
-		;calculate the delta time
-		mov eax, dword[ebp-8]
-		mov dword[ebp-4], eax
-		
-		call [GetTickCount]
-		mov dword[ebp-8], eax
-		
-		mov eax, dword[ebp-8]
-		sub eax, dword[ebp-4]
-		mov dword[ebp-12], eax
-		fild dword[ebp-12]
-		fstp dword[ebp-12]
-		movss xmm0, dword[ebp-12]
-		movss xmm1, dword[ONE_PER_THOUSAND]
-		mulss xmm0, xmm1
-		movss dword[ebp-12], xmm0
-	
-	
-		
-		;call physics_update
-		push dword[ebp-12]
-		call physics_update
-		add esp, 4
-		
-		;update player
-		push dword[ebp-12]
-		push dword[pplayer]
-		call player_updatePhysics
-		add esp, 8
-		
-		
-		;check if an exit is necessary
-		push 0
-		push dword[should_close]
-		call tsValue_isEqual
-		add esp, 8
-		test eax, eax
-		jnz gameLoop_physics_loop_start
-	
-	mov esp, ebp
-	pop ebp
-	ret

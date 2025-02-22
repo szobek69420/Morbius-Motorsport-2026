@@ -68,6 +68,15 @@ section .text use32
 	global renderable_setAlbedo			;void renderable_setAlbedo(Renderable* renderable, const char* albedoMapPath)
 	global renderable_setSpecular		;void renderable_setSpecular(Renderable* renderable, const char* specularMapPath)
 	
+	
+	global renderable_getPosition		;vec3* renderable_getPosition(Renderable*)
+	global renderable_getRotation		;vec3* renderable_getRotation(Renderable*)
+	global renderable_getScale			;vec3* rendeable_getScale(Renderable*)
+	
+	global renderable_setPosition		;void renderable_setPosition(Renderable*, vec3*)
+	global renderable_setRotation		;void renderable_setRotation(Renderable*, vec3*)
+	global renderable_setScale			;void renderable_setScale(Renderable*, vec3*)
+	
 	;it is a system state setting function
 	global renderable_setPrimitive		;void renderable_setPrimitive(GLuint primitive)
 	
@@ -693,6 +702,69 @@ renderable_setSpecular:
 	pop ebp
 	ret
 	
+	
+	
+renderable_getPosition:
+	mov eax, dword[esp+4]
+	add eax, 16
+	ret
+	
+	
+renderable_getRotation:
+	mov eax, dword[esp+4]
+	add eax, 28
+	ret
+	
+	
+renderable_getScale:
+	mov eax, dword[esp+4]
+	add eax, 40
+	ret
+	
+	
+renderable_setPosition:
+	mov eax, dword[esp+4]
+	add eax, 16					;&renderable.position in eax
+	mov ecx, dword[esp+8]		;&newValue in ecx
+	
+	mov edx, dword[ecx]
+	mov dword[eax], edx
+	mov edx, dword[ecx+4]
+	mov dword[eax+4], edx
+	mov edx, dword[ecx+8]
+	mov dword[eax+8], edx
+	
+	ret
+	
+	
+renderable_setRotation:
+	mov eax, dword[esp+4]
+	add eax, 28					;&renderable.rotation in eax
+	mov ecx, dword[esp+8]		;&newValue in ecx
+	
+	mov edx, dword[ecx]
+	mov dword[eax], edx
+	mov edx, dword[ecx+4]
+	mov dword[eax+4], edx
+	mov edx, dword[ecx+8]
+	mov dword[eax+8], edx
+	
+	ret
+	
+	
+renderable_setScale:
+	mov eax, dword[esp+4]
+	add eax, 40					;&renderable.scale in eax
+	mov ecx, dword[esp+8]		;&newValue in ecx
+	
+	mov edx, dword[ecx]
+	mov dword[eax], edx
+	mov edx, dword[ecx+4]
+	mov dword[eax+4], edx
+	mov edx, dword[ecx+8]
+	mov dword[eax+8], edx
+	
+	ret
 	
 	
 renderable_setPrimitive:
