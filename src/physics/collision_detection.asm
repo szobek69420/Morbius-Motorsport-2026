@@ -820,10 +820,10 @@ collisionDetection_rcmHorizontalTriangle:
 		;if so, < ( triNormal x closestSide ); closestPoint > will be negative
 		mov eax, dword[ebp-44]
 		cmp eax, 1
-		je collisionDetection_rcmVertical_collision_closest_side_1
+		je collisionDetection_rcmHorizontalTriangle_collision_closest_side_1
 		cmp eax, 2
-		je collisionDetection_rcmVertical_collision_closest_side_2
-		collisionDetection_rcmVertical_collision_closest_side_0:
+		je collisionDetection_rcmHorizontalTriangle_collision_closest_side_2
+		collisionDetection_rcmHorizontalTriangle_collision_closest_side_0:
 			push dword[ebp+12]
 			push dword[ebp+16]
 			lea eax, [ebp-56]
@@ -832,7 +832,7 @@ collisionDetection_rcmHorizontalTriangle:
 			add esp, 12
 			jmp collisionDetection_rcmHorizontalTriangle_closest_side_calculated
 		
-		collisionDetection_rcmVertical_collision_closest_side_1:
+		collisionDetection_rcmHorizontalTriangle_collision_closest_side_1:
 			push dword[ebp+16]
 			push dword[ebp+20]
 			lea eax, [ebp-56]
@@ -841,7 +841,7 @@ collisionDetection_rcmHorizontalTriangle:
 			add esp, 12
 			jmp collisionDetection_rcmHorizontalTriangle_closest_side_calculated
 			
-		collisionDetection_rcmVertical_collision_closest_side_2:
+		collisionDetection_rcmHorizontalTriangle_collision_closest_side_2:
 			push dword[ebp+20]
 			push dword[ebp+12]
 			lea eax, [ebp-56]
@@ -907,6 +907,217 @@ collisionDetection_rcmHorizontalTriangle:
 	mov eax, 69
 
 	collisionDetection_rcmHorizontalTriangle_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+	
+;returns non-zero if a collision has happened	
+;expects the tri0, tri1 and tri2 to be in the local space of the cylinder (the position of the cylinder is (0,0,0) )
+;int collisionDetection_rcmVerticalTriangle(
+;	Collider* cylinder,
+;	vec3* tri0,
+;	vec3* tri1,
+;	vec3* tri2,
+;	vec3* triNormal,
+;	float* outPenetration,
+;	vec3* outResolutionDir
+;)
+collisionDetection_rcmVerticalTriangle:
+	push ebp
+	mov ebp, esp
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;calculates the closest point on a line to a point ( (0,0,0) ) as if they were projected onto the XZ plane (y component is ignore)
+;and then returns the point as a vec3 with the correct y coordinate
+;returns 0 if the closest point is not on the end of the line
+;returns 1 if the closest point is on the end of the line
+;returns -1 if the line is vertical
+;assumes that the point (from which the distance is calculated) is (0,0,0)
+;int collisionDetection_cpolo2d(
+;	vec3* buffer,
+;	vec3* line0,
+;	vec3* line1,
+;	vec3* normal			//same as the triangle normal (the normal direction is not eindeutig just from line0 and line1)
+;)
+collisionDetection_closestPointOnLineOrigo2d:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 8			;vec3 dir = line0.xz-line1.xz								;8
+	sub esp, 4			;<line0.xz; dir>											;12
+	sub esp, 4			;<line1.xz; dir>											;16
+	sub esp, 8			;closestPoint.xz											;24
+	sub esp, 4			;ratio=|closestPoint.xz-line1.xz|/|line0.xz-line1.xz|		;28
+	
+	;calculate dir
+	mov eax, dword[ebp+12]			;line0 in eax
+	mov ecx, dword[ebp+16]			;line1 in ecx
+	
+	fld dword[eax]
+	fld dword[ecx]
+	fsubp
+	fstp dword[ebp-8]
+	
+	fld dword[eax+8]
+	fld dword[ecx+8]
+	fsubp
+	fstp dword[ebp-4]
+	
+	;check if the line is vertical
+	mov edx, dword[ebp-8]
+	and edx, 0x7fffffff
+	cmp edx, dword[EPSILON]
+	jg collisionDetection_cpolo2d_not_vertical
+	mov edx, dword[ebp-4]
+	and edx, 0x7fffffff
+	cmp edx, dword[EPSILON]
+	jg collisionDetection_cpolo2d_not_vertical
+		mov eax, 2
+		jmp collisionDetection_closestPointOnLineOrigo2d_end
+		
+	collisionDetection_cpolo2d_not_vertical:
+	
+	;calculate <line0.xz; dir>
+	fld dword[eax]				;line0 is still in eax!!!
+	fld dword[ebp-8]
+	fmulp
+	fld dword[eax+8]
+	fld dword[ebp-4]
+	fmulp
+	faddp
+	fstp dword[ebp-12]
+	test dword[ebp-12], 0x80000000
+	jz collisionDetection_cpolo2d_not_beyond_line_0		;the dot product is negative, line0 is obviously the closest point
+		mov eax, dword[ebp+8]
+		mov ecx, dword[ebp+12]
+		mov edx, dword[ecx]
+		mov dword[eax], edx
+		mov edx, dword[ecx+4]
+		mov dword[eax+4], edx
+		mov edx, dword[ecx+8]
+		mov dword[eax+8], edx
+		
+		mov eax, 1
+		
+		jmp collisionDetection_closestPointOnLineOrigo2d_end
+	
+	collisionDetection_cpolo2d_not_beyond_line_0:
+	
+	;calculate <line1.xz; dir>
+	fld dword[ecx]			;line1 is still in ecx!!!
+	fld dword[ebp-8]
+	fmulp
+	fld dword[ecx+8]
+	fld dword[ebp-4]
+	fmulp
+	faddp
+	fstp dword[ebp-16]
+	test dword[ebp-16], 0x80000000
+	test dword[ebp-20], 0x80000000
+	jnz collisionDetection_cpolo2d_not_beyond_line1	;if the dot product is non-negative, line1 is obviously the closest point
+		mov eax, dword[ebp+8]
+		mov ecx, dword[ebp+16]
+		mov edx, dword[ecx]
+		mov dword[eax], edx
+		mov edx, dword[ecx+4]
+		mov dword[eax+4], edx
+		mov edx, dword[ecx+8]
+		mov dword[eax+8], edx
+		
+		mov eax, 1
+		
+		jmp collisionDetection_closestPointOnLineOrigo2d_end
+		
+	collisionDetection_cpolo2d_not_beyond_line1:
+	
+	;get the closest point on the XZ plane projection
+	;closestPoint.xz=point.xz-<(point.xz-line1.xz);triNormal.xz>*triNormal.xz=
+	;=-<-line1.xz;triNormal.xz>*triNormal.xz=
+	;=<line1.xz;triNormal.xz>*triNormal.xz
+	mov edx, dword[ebp+20]				;normal in edx
+	fld dword[ecx]						;line1 is still in ecx!!!
+	fld dword[edx]
+	fmulp
+	fld dword[ecx+8]
+	fld dword[edx+8]
+	fmulp
+	faddp
+	
+	fld dword[edx]
+	fmul st0, st1
+	fstp dword[ebp-24]
+	fld dword[edx+8]
+	fmul st0, st1
+	fstp dword[ebp-20]
+	sub esp, 4
+	fstp dword[esp]
+	add esp, 4
+	
+	
+	;get the y coordinate of the closest point
+	;first the ratio in which the closest point slices the line has to be obtained
+	;|closestPoint.xz-line1.xz|/|line0.xz-line1.xz|
+	fld dword[ebp-24]
+	fld dword[ecx]			;line1 is still in ecx!!!
+	fsubp
+	fmul st0, st0
+	fld dword[ebp-20]
+	fld dword[ecx+8]
+	fsubp
+	fmul st0, st0
+	faddp
+	fsqrt					;|closestPoint.xz-line1.xz| is on the fpu stack
+	
+	fld dword[eax]			;line0 is still in eax!!!
+	fld dword[ecx]
+	fsubp
+	fmul st0, st0
+	fld dword[eax+8]
+	fld dword[ecx+8]
+	fsubp
+	fmul st0, st0
+	faddp
+	fsqrt
+	
+	fdivp
+	fstp dword[ebp-28]
+	
+	
+	;calculate the closestPoint with the actual y value
+	;closestPoint=ratio*(line0-line1)+line1
+	fld dword[eax+4]				;line0 is still in eax!!!
+	fld dword[ecx+4]				;line1 is still in ecx!!!
+	fsubp
+	
+	mov eax, dword[ebp+8]			;buffer in eax
+	
+	mov edx, dword[ebp-24]
+	mov dword[eax], edx				;line0.x-line1.x
+	fstp dword[eax+4]				;line0.y-line1.y
+	mov edx, dword[ebp-20]
+	mov dword[eax+8], edx			;line0.z-line1.z
+	
+	
+	push dword[ebp+28]
+	push dword[ebp+8]
+	push dword[ebp+8]
+	call vec3_scale
+	
+	push dword[ebp+16]
+	push dword[ebp+8]
+	push dword[ebp+8]
+	call vec3_add
+	
+	
+	xor eax, eax
+	
+	collisionDetection_closestPointOnLineOrigo2d_end:
 	mov esp, ebp
 	pop ebp
 	ret
