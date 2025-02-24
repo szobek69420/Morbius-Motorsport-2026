@@ -8,11 +8,12 @@ section .rodata use32
 	
 	VEC3_ZERO dd 0.0, 0.0, 0.0
 	
+	print_int_nl db "%d",10,0
 	print_float_nl db "%f",10,0
 	print_two_floats_nl db "%f %f",10,0
 	
-	test_line0 dd -0.88, 0.827, -1.623
-	test_line1 dd -0.88, 0.827, -21.623
+	test_line_0 dd 0.88, 0.827, 0.0
+	test_line_1 dd 0.0, 0.827, 0.88
 	
 	test_text db "feliz navidad",10,0
 	
@@ -256,62 +257,60 @@ collisionDetection_resolveCylinderMesh:
 	test ebx, ebx
 	jz collisionDetection_rcm_resolve_loop_end
 	collisionDetection_rcm_resolve_loop_start:
+		;push the function values
+		lea eax, [ebp-68]
+		push eax				;outResolutionDir
+		lea eax, [ebp-56]
+		push eax				;outPenetration
+		push edi				;triNormal
+
+		mov eax, dword[ebp-4]
+			
+		mov ecx, dword[esi+8]
+		imul ecx, 12
+		add ecx, eax
+		push ecx				;tri2
+		mov ecx, dword[esi+4]
+		imul ecx, 12
+		add ecx, eax
+		push ecx				;tri1
+		mov ecx, dword[esi]
+		imul ecx, 12
+		add ecx, eax
+		push ecx				;tri0
+			
+		push dword[ebp+20]		;cylinder
+	
 		;decide if the triangle is vertical or horizontal
+		mov ecx, collisionDetection_rcmHorizontalTriangle
 		mov eax, dword[edi+4]
 		and eax, 0x7fffffff
 		cmp eax, dword[EPSILON]
 		jg collisionDetection_rcm_resolve_loop_horizontal
-		collisionDetection_rcm_resolve_loop_vertical:
-			;TODO
-			jmp collisionDetection_rcm_resolve_loop_continue
-			
+			mov ecx, collisionDetection_rcmVerticalTriangle
 		collisionDetection_rcm_resolve_loop_horizontal:
-			lea eax, [ebp-68]
-			push eax				;outResolutionDir
-			lea eax, [ebp-56]
-			push eax				;outPenetration
-			push edi				;triNormal
-
-			mov eax, dword[ebp-4]
-			
-			mov ecx, dword[esi+8]
-			imul ecx, 12
-			add ecx, eax
-			push ecx				;tri2
-			mov ecx, dword[esi+4]
-			imul ecx, 12
-			add ecx, eax
-			push ecx				;tri1
-			mov ecx, dword[esi]
-			imul ecx, 12
-			add ecx, eax
-			push ecx				;tri0
-			
-			push dword[ebp+20]		;cylinder
-			
-			call collisionDetection_rcmHorizontalTriangle
-			add esp, 28
-			
-			test eax, eax
-			jz collisionDetection_rcm_resolve_loop_continue			;no collision
-			
-				mov eax, dword[ebp-56]
-				cmp eax, dword[ebp-36]
-				jge collisionDetection_rcm_resolve_loop_continue	;penetration is not less
-					mov ecx, dword[ebp-56]
-					mov dword[ebp-36], ecx
-					
-					mov ecx, dword[ebp-68]
-					mov dword[ebp-52], ecx
-					mov ecx, dword[ebp-64]
-					mov dword[ebp-48], ecx
-					mov ecx, dword[ebp-60]
-					mov dword[ebp-44], ecx
-					
-					jmp collisionDetection_rcm_resolve_loop_continue
-					
-		collisionDetection_rcm_resolve_loop_continue:
 		
+		call ecx
+		add esp, 28
+		
+		;check for collision
+		test eax, eax
+		jz collisionDetection_rcm_resolve_loop_continue			;no collision
+			
+			mov eax, dword[ebp-56]
+			cmp eax, dword[ebp-36]
+			jge collisionDetection_rcm_resolve_loop_continue	;penetration is not less
+				mov ecx, dword[ebp-56]
+				mov dword[ebp-36], ecx
+					
+				mov ecx, dword[ebp-68]
+				mov dword[ebp-52], ecx
+				mov ecx, dword[ebp-64]
+				mov dword[ebp-48], ecx
+				mov ecx, dword[ebp-60]
+				mov dword[ebp-44], ecx
+			
+		collisionDetection_rcm_resolve_loop_continue:
 		add esi, 12
 		add edi, 12
 		dec ebx
@@ -920,7 +919,7 @@ collisionDetection_rcmHorizontalTriangle:
 ;	vec3* tri0,
 ;	vec3* tri1,
 ;	vec3* tri2,
-;	vec3* triNormal,
+;	vec3* triNormal,					;a normalized vector is expected
 ;	float* outPenetration,
 ;	vec3* outResolutionDir
 ;)
@@ -928,6 +927,390 @@ collisionDetection_rcmVerticalTriangle:
 	push ebp
 	mov ebp, esp
 	
+	sub esp, 4					;cylinder.height							;4
+	sub esp, 4					;cylinder.radius							;8
+	sub esp, 4					;possible penetration						;12
+	
+	sub esp, 12					;highest side closest point					;24
+	sub esp, 12					;lowest side closest point					;36
+	sub esp, 4					;highest side closest point is end of line	;40
+	sub esp, 4					;lowest side closest point is end of line	;44
+	sub esp, 12					;temp closest point							;56
+	sub esp, 4					;temp is end of line						;60
+	sub esp, 8					;closestPointEndOfLine.xz					;68
+	sub esp, 4					;distance from closestPointEndOfLine.xz		;72
+	
+	;get cylinder height and radius
+	mov eax, dword[ebp+8]
+	mov eax, dword[eax+28]
+	
+	mov edx, dword[eax]
+	mov dword[ebp-4], edx
+	mov edx, dword[eax+4]
+	mov dword[ebp-8], edx
+	
+	;calculate the possible penetration
+	;cylinder.radius-<triNormal; cylinder.position-tri0>=
+	;=cylinder.radius-<triNormal; -tri0>=
+	;=cylinder.radius+<triNormal; tri0>
+	push dword[ebp+12]
+	push dword[ebp+24]
+	call vec3_dot
+	fstp dword[ebp-12]			;<triNormal; tri0>
+	mov eax, dword[ebp-12]
+	cmp eax, dword[ebp-8]
+	jg collisionDetection_rcmVertical_penetration_not_possible		;<triNormal; tri0> > cylinder.radius -> cylinder.radius+<triNormal; tri0> > cylinder.radius -> penetration > cylinder diameter
+	
+	fld dword[ebp-12]
+	fld dword[ebp-8]
+	faddp
+	fstp dword[ebp-12]			;cylinder.radius+<triNormal; tri0>
+	cmp dword[ebp-12], 0
+	jg collisionDetection_rcmVertical_penetration_possible			;possible penetration>0
+		
+		collisionDetection_rcmVertical_penetration_not_possible:
+		xor eax, eax
+		jmp collisionDetection_rcmVerticalTriangle_end
+		
+	collisionDetection_rcmVertical_penetration_possible:
+	
+	;init ebp-40 and ebp-44
+	mov dword[ebp-40], -1
+	mov dword[ebp-44], -1
+	
+	;get the closest points
+	
+	;side 0
+	push dword[ebp+16]
+	push dword[ebp+12]
+	lea eax, [ebp-56]
+	push eax
+	call collisionDetection_closestPointOnLineOrigo2d
+	mov dword[ebp-60], eax
+	add esp, 12
+	cmp eax, -1				;the side is vertical
+	je collisionDetection_closestPointOnLineOrigo2d_side_0_not_lowest
+	
+	cmp dword[ebp-40], -1
+	je collisionDetection_closestPointOnLineOrigo2d_side_0_highest
+	mov edx, dword[ebp-60]
+	cmp edx, dword[ebp-40]
+	jg collisionDetection_closestPointOnLineOrigo2d_side_0_not_highest		;a side end point cannot override a side middle point
+	movss xmm0, dword[ebp-56]
+	ucomiss xmm0, dword[ebp-20]
+	ja collisionDetection_closestPointOnLineOrigo2d_side_0_highest
+	jmp collisionDetection_closestPointOnLineOrigo2d_side_0_not_highest
+
+		collisionDetection_closestPointOnLineOrigo2d_side_0_highest:
+		;copy isSideEnd
+		mov edx, dword[ebp-60]
+		mov dword[ebp-40], edx
+		
+		;copy closest point
+		mov edx, dword[ebp-56]
+		mov dword[ebp-24], edx
+		mov edx, dword[ebp-52]
+		mov dword[ebp-20], edx
+		mov edx, dword[ebp-48]
+		mov dword[ebp-16], edx
+	collisionDetection_closestPointOnLineOrigo2d_side_0_not_highest:
+	
+	cmp dword[ebp-44], -1
+	je collisionDetection_closestPointOnLineOrigo2d_side_0_lowest
+	mov edx, dword[ebp-60]
+	cmp edx, dword[ebp-44]
+	jg collisionDetection_closestPointOnLineOrigo2d_side_0_not_lowest		;a side end point cannot override a side middle point
+	movss xmm0, dword[ebp-56]
+	ucomiss xmm0, dword[ebp-32]
+	jb collisionDetection_closestPointOnLineOrigo2d_side_0_lowest
+	jmp collisionDetection_closestPointOnLineOrigo2d_side_0_not_lowest
+
+		collisionDetection_closestPointOnLineOrigo2d_side_0_lowest:
+		;copy isSideEnd
+		mov edx, dword[ebp-60]
+		mov dword[ebp-44], edx
+		
+		;copy closest point
+		mov edx, dword[ebp-56]
+		mov dword[ebp-36], edx
+		mov edx, dword[ebp-52]
+		mov dword[ebp-32], edx
+		mov edx, dword[ebp-48]
+		mov dword[ebp-28], edx
+	collisionDetection_closestPointOnLineOrigo2d_side_0_not_lowest:
+	
+	;side 1
+	push dword[ebp+20]
+	push dword[ebp+16]
+	lea eax, [ebp-56]
+	push eax
+	call collisionDetection_closestPointOnLineOrigo2d
+	mov dword[ebp-60], eax
+	add esp, 12
+	cmp eax, -1				;the side is vertical
+	je collisionDetection_closestPointOnLineOrigo2d_side_1_not_lowest
+	
+	cmp dword[ebp-40], -1
+	je collisionDetection_closestPointOnLineOrigo2d_side_1_highest
+	mov edx, dword[ebp-60]
+	cmp edx, dword[ebp-40]
+	jg collisionDetection_closestPointOnLineOrigo2d_side_1_not_highest		;a side end point cannot override a side middle point
+	movss xmm0, dword[ebp-56]
+	ucomiss xmm0, dword[ebp-20]
+	ja collisionDetection_closestPointOnLineOrigo2d_side_1_highest
+	jmp collisionDetection_closestPointOnLineOrigo2d_side_1_not_highest
+
+		collisionDetection_closestPointOnLineOrigo2d_side_1_highest:
+		;copy isSideEnd
+		mov edx, dword[ebp-60]
+		mov dword[ebp-40], edx
+		
+		;copy closest point
+		mov edx, dword[ebp-56]
+		mov dword[ebp-24], edx
+		mov edx, dword[ebp-52]
+		mov dword[ebp-20], edx
+		mov edx, dword[ebp-48]
+		mov dword[ebp-16], edx
+	collisionDetection_closestPointOnLineOrigo2d_side_1_not_highest:
+	
+	cmp dword[ebp-44], -1
+	je collisionDetection_closestPointOnLineOrigo2d_side_1_lowest
+	mov edx, dword[ebp-60]
+	cmp edx, dword[ebp-44]
+	jg collisionDetection_closestPointOnLineOrigo2d_side_1_not_lowest		;a side end point cannot override a side middle point
+	movss xmm0, dword[ebp-56]
+	ucomiss xmm0, dword[ebp-32]
+	jb collisionDetection_closestPointOnLineOrigo2d_side_1_lowest
+	jmp collisionDetection_closestPointOnLineOrigo2d_side_1_not_lowest
+
+		collisionDetection_closestPointOnLineOrigo2d_side_1_lowest:
+		;copy isSideEnd
+		mov edx, dword[ebp-60]
+		mov dword[ebp-44], edx
+		
+		;copy closest point
+		mov edx, dword[ebp-56]
+		mov dword[ebp-36], edx
+		mov edx, dword[ebp-52]
+		mov dword[ebp-32], edx
+		mov edx, dword[ebp-48]
+		mov dword[ebp-28], edx
+	collisionDetection_closestPointOnLineOrigo2d_side_1_not_lowest:
+	
+	;side 2
+	push dword[ebp+16]
+	push dword[ebp+12]
+	lea eax, [ebp-56]
+	push eax
+	call collisionDetection_closestPointOnLineOrigo2d
+	mov dword[ebp-60], eax
+	add esp, 12
+	cmp eax, -1				;the side is vertical
+	je collisionDetection_closestPointOnLineOrigo2d_side_2_not_lowest
+	
+	cmp dword[ebp-40], -1
+	je collisionDetection_closestPointOnLineOrigo2d_side_2_highest
+	mov edx, dword[ebp-60]
+	cmp edx, dword[ebp-40]
+	jg collisionDetection_closestPointOnLineOrigo2d_side_2_not_highest		;a side end point cannot override a side middle point
+	movss xmm0, dword[ebp-56]
+	ucomiss xmm0, dword[ebp-20]
+	ja collisionDetection_closestPointOnLineOrigo2d_side_2_highest
+	jmp collisionDetection_closestPointOnLineOrigo2d_side_2_not_highest
+
+		collisionDetection_closestPointOnLineOrigo2d_side_2_highest:
+		;copy isSideEnd
+		mov edx, dword[ebp-60]
+		mov dword[ebp-40], edx
+		
+		;copy closest point
+		mov edx, dword[ebp-56]
+		mov dword[ebp-24], edx
+		mov edx, dword[ebp-52]
+		mov dword[ebp-20], edx
+		mov edx, dword[ebp-48]
+		mov dword[ebp-16], edx
+	collisionDetection_closestPointOnLineOrigo2d_side_2_not_highest:
+	
+	cmp dword[ebp-44], -1
+	je collisionDetection_closestPointOnLineOrigo2d_side_2_lowest
+	mov edx, dword[ebp-60]
+	cmp edx, dword[ebp-44]
+	jg collisionDetection_closestPointOnLineOrigo2d_side_2_not_lowest		;a side end point cannot override a side middle point
+	movss xmm0, dword[ebp-56]
+	ucomiss xmm0, dword[ebp-32]
+	jb collisionDetection_closestPointOnLineOrigo2d_side_2_lowest
+	jmp collisionDetection_closestPointOnLineOrigo2d_side_2_not_lowest
+
+		collisionDetection_closestPointOnLineOrigo2d_side_2_lowest:
+		;copy isSideEnd
+		mov edx, dword[ebp-60]
+		mov dword[ebp-44], edx
+		
+		;copy closest point
+		mov edx, dword[ebp-56]
+		mov dword[ebp-36], edx
+		mov edx, dword[ebp-52]
+		mov dword[ebp-32], edx
+		mov edx, dword[ebp-48]
+		mov dword[ebp-28], edx
+	collisionDetection_closestPointOnLineOrigo2d_side_2_not_lowest:
+	
+	
+	;choose between resolution modes
+	mov eax, dword[ebp-40]
+	or eax, dword[ebp-44]
+	test eax, eax
+	jz collisionDetection_rcmVerticalTriangle_not_line_end
+	jmp collisionDetection_rcmVerticalTriangle_line_end
+	
+	collisionDetection_rcmVerticalTriangle_not_line_end
+		;the highest and lowest sides are not line ends, so the penetration is the same as the possible penetration
+		
+		;check if the triangle is at the same height as the cylinder
+		;so lowestSide.y<cylinder.height AND highestSide.y>-cylinder.height
+		movss xmm0, dword[ebp-32]
+		ucomiss xmm0, dword[ebp-4]
+		jae collisionDetection_rcmVerticalTriangle_not_line_end_not_same_height
+		xor dword[ebp-4], 0x80000000			;-cylinder.height
+		movss xmm0, dword[ebp-20]
+		ucomiss xmm0, dword[ebp-4]
+		jbe collisionDetection_rcmVerticalTriangle_not_line_end_not_same_height
+		jmp collisionDetection_rcmVerticalTriangle_not_line_end_same_height
+		
+		collisionDetection_rcmVerticalTriangle_not_line_end_not_same_height:
+			xor eax, eax
+			jmp collisionDetection_rcmVerticalTriangle_end
+			
+		collisionDetection_rcmVerticalTriangle_not_line_end_same_height:
+			;copy the penetration
+			mov eax, dword[ebp+28]
+			mov ecx, dword[ebp-12]
+			mov dword[eax], ecx
+			
+			;copy the resolution direction
+			mov eax, dword[ebp+32]
+			mov ecx, dword[ebp+24]
+			
+			mov edx, dword[ecx]
+			mov dword[eax], edx
+			mov edx, dword[ecx+4]
+			mov dword[eax+4], edx
+			mov edx, dword[ecx+8]
+			mov dword[eax+8], edx
+			
+			mov eax, 69
+			
+		jmp collisionDetection_rcmVerticalTriangle_end
+	
+	collisionDetection_rcmVerticalTriangle_line_end:
+		;if the triangle is at the same height as the cylinder and the distance from the closest point is < cylinder.radius
+		;and if the cylinder.position.xz is towards the backside of the triangle
+		;then the resolution direction is normalize(closestPoint.xz-(cylinder.position.xz))
+		;and the penetration is cylinder.radius-|closestPoint.xz-cylinder.posiiton.xz|
+		
+		;check if they are at the same height
+		movss xmm0, dword[ebp-32]
+		ucomiss xmm0, dword[ebp-4]
+		jae collisionDetection_rcmVerticalTriangle_line_end_not_same_height
+		mov eax, dword[ebp-4]
+		xor eax, 0x80000000
+		sub esp, 4					;-cylinder.height
+		movss xmm0, dword[ebp-20]
+		ucomiss xmm0, dword[esp]
+		jbe collisionDetection_rcmVerticalTriangle_line_end_not_same_height
+			add esp, 4
+		jmp collisionDetection_rcmVerticalTriangle_line_end_same_height
+		
+		collisionDetection_rcmVerticalTriangle_line_end_not_same_height:
+			xor eax, eax
+			jmp collisionDetection_rcmVerticalTriangle_end
+		collisionDetection_rcmVerticalTriangle_line_end_same_height:
+		
+		;get the closest point
+		fld dword[ebp-24]
+		fmul st0, st0
+		fld dword[ebp-16]
+		fmul st0, st0
+		faddp
+		fsqrt
+		fstp dword[ebp-72]				;distance from the highest point
+		mov ecx, dword[ebp-24]
+		mov dword[ebp-68], ecx
+		mov ecx, dword[ebp-16]
+		mov dword[ebp-64], ecx
+		
+		fld dword[ebp-36]
+		fmul st0, st0
+		fld dword[ebp-28]
+		fmul st0, st0
+		faddp
+		fsqrt
+		sub esp, 4
+		fstp dword[esp]				;distance from the lowest point
+		movss xmm0, dword[esp]
+		add esp, 4
+		ucomiss xmm0, dword[ebp-72]
+		jae collisionDetection_rcmVerticalTriangle_line_end_highest_is_closest
+			mov ecx, dword[ebp-36]
+			mov dword[ebp-68], ecx
+			mov ecx, dword[ebp-28]
+			mov dword[ebp-64], ecx
+		collisionDetection_rcmVerticalTriangle_line_end_highest_is_closest:
+		
+		;check if the closest point is further than cylinder.radius
+		mov eax, dword[ebp-72]
+		cmp eax, dword[ebp-8]
+		jl collisionDetection_rcmVerticalTriangle_line_end_point_in_radius
+			xor eax, eax
+			jmp collisionDetection_rcmVerticalTriangle_end
+			
+		collisionDetection_rcmVerticalTriangle_line_end_point_in_radius:
+		
+		;check if the cylinder is not towards the backside of the triangle
+		mov eax, dword[ebp+24]			;triNormal
+		fld dword[ebp-68]
+		fld dword[eax]
+		fmulp
+		fld dword[ebp-64]
+		fld dword[eax+8]
+		fmulp
+		faddp
+		sub esp, 4
+		fstp dword[esp]
+		mov eax, dword[esp]
+		add esp, 4
+		test eax, 0x80000000
+		jnz collisionDetection_rcmVerticalTriangle_line_end_good_side
+			xor eax, eax
+			jmp collisionDetection_rcmVerticalTriangle_end
+			
+		collisionDetection_rcmVerticalTriangle_line_end_good_side:
+		
+		;it's resolvin' time
+		;resolution direction is normalize(-closestPoint.xz)
+		mov eax, dword[ebp+28]
+		fld dword[ebp-8]
+		fld dword[ebp-72]
+		fsubp
+		fstp dword[eax]
+		
+		
+		mov eax, dword[ebp+32]
+		
+		mov ecx, dword[ebp-68]
+		xor ecx, 0x80000000
+		mov dword[eax], ecx
+		mov dword[eax+4], 0
+		mov ecx, dword[ebp-64]
+		xor ecx, 0x80000000
+		mov dword[eax+8], ecx
+	
+		mov eax, 69
+		jmp collisionDetection_rcmVerticalTriangle_end
+	
+	collisionDetection_rcmVerticalTriangle_end:
 	mov esp, ebp
 	pop ebp
 	ret
@@ -943,17 +1326,17 @@ collisionDetection_rcmVerticalTriangle:
 ;	vec3* buffer,
 ;	vec3* line0,
 ;	vec3* line1,
-;	vec3* normal			//same as the triangle normal (the normal direction is not eindeutig just from line0 and line1)
 ;)
 collisionDetection_closestPointOnLineOrigo2d:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 8			;vec3 dir = line0.xz-line1.xz								;8
+	sub esp, 8			;vec2 dir = line0.xz-line1.xz								;8
 	sub esp, 4			;<line0.xz; dir>											;12
 	sub esp, 4			;<line1.xz; dir>											;16
 	sub esp, 8			;closestPoint.xz											;24
 	sub esp, 4			;ratio=|closestPoint.xz-line1.xz|/|line0.xz-line1.xz|		;28
+	sub esp, 8			;normalize(dir)												;36					
 	
 	;calculate dir
 	mov eax, dword[ebp+12]			;line0 in eax
@@ -978,10 +1361,11 @@ collisionDetection_closestPointOnLineOrigo2d:
 	and edx, 0x7fffffff
 	cmp edx, dword[EPSILON]
 	jg collisionDetection_cpolo2d_not_vertical
-		mov eax, 2
+		mov eax, -1
 		jmp collisionDetection_closestPointOnLineOrigo2d_end
 		
 	collisionDetection_cpolo2d_not_vertical:
+	
 	
 	;calculate <line0.xz; dir>
 	fld dword[eax]				;line0 is still in eax!!!
@@ -1019,7 +1403,6 @@ collisionDetection_closestPointOnLineOrigo2d:
 	faddp
 	fstp dword[ebp-16]
 	test dword[ebp-16], 0x80000000
-	test dword[ebp-20], 0x80000000
 	jnz collisionDetection_cpolo2d_not_beyond_line1	;if the dot product is non-negative, line1 is obviously the closest point
 		mov eax, dword[ebp+8]
 		mov ecx, dword[ebp+16]
@@ -1036,51 +1419,63 @@ collisionDetection_closestPointOnLineOrigo2d:
 		
 	collisionDetection_cpolo2d_not_beyond_line1:
 	
-	;get the closest point on the XZ plane projection
-	;closestPoint.xz=point.xz-<(point.xz-line1.xz);triNormal.xz>*triNormal.xz=
-	;=-<-line1.xz;triNormal.xz>*triNormal.xz=
-	;=<line1.xz;triNormal.xz>*triNormal.xz
-	mov edx, dword[ebp+20]				;normal in edx
-	fld dword[ecx]						;line1 is still in ecx!!!
-	fld dword[edx]
-	fmulp
-	fld dword[ecx+8]
-	fld dword[edx+8]
-	fmulp
-	faddp
 	
-	fld dword[edx]
-	fmul st0, st1
-	fstp dword[ebp-24]
-	fld dword[edx+8]
-	fmul st0, st1
-	fstp dword[ebp-20]
+	;get the closest point on the XZ plane projection
+	;closestPoint.xz=<(point.xz-line1.xz); normalize(dir)>*normalize(dir)+line1.xz=
+	;=<-line1.xz; normalize(dir)>*normalize(dir)+line1=
+	;=line1.xz-<line1.xz; normalize(dir)>*normalize(dir)
+	fld dword[ebp-8]
+	fmul st0, st0
+	fld dword[ebp-4]
+	fmul st0, st0
+	faddp
+	fsqrt
+	fld dword[ebp-8]
+	fdiv st0, st1
+	fstp dword[ebp-36]
+	fld dword[ebp-4]
+	fdiv st0, st1
+	fstp dword[ebp-32]					;normalize(dir)
 	sub esp, 4
 	fstp dword[esp]
 	add esp, 4
 	
 	
+	fld dword[ecx]						;line1 is still in ecx!!!
+	fld dword[ebp-36]
+	fmulp
+	fld dword[ecx+8]
+	fld dword[ebp-32]
+	fmulp
+	faddp
+	fstp dword[ebp-28]					;<line1.xz; normalize(dir)> is the numerator of the ratio times -1
+	
+	
+	fld dword[ecx]
+	fld dword[ebp-28]
+	fld dword[ebp-36]
+	fmulp
+	fsubp
+	fstp dword[ebp-24]
+	
+	fld dword[ecx+8]
+	fld dword[ebp-28]
+	fld dword[ebp-32]
+	fmulp
+	fsubp
+	fstp dword[ebp-20]
+	
+	
+	
 	;get the y coordinate of the closest point
 	;first the ratio in which the closest point slices the line has to be obtained
 	;|closestPoint.xz-line1.xz|/|line0.xz-line1.xz|
-	fld dword[ebp-24]
-	fld dword[ecx]			;line1 is still in ecx!!!
-	fsubp
-	fmul st0, st0
-	fld dword[ebp-20]
-	fld dword[ecx+8]
-	fsubp
-	fmul st0, st0
-	faddp
-	fsqrt					;|closestPoint.xz-line1.xz| is on the fpu stack
+	xor dword[ebp-28], 0x80000000
+	fld dword[ebp-28]				;|closestPoint.xz-line1.xz| is on the fpu stack
 	
-	fld dword[eax]			;line0 is still in eax!!!
-	fld dword[ecx]
-	fsubp
+	fld dword[ebp-8]
 	fmul st0, st0
-	fld dword[eax+8]
-	fld dword[ecx+8]
-	fsubp
+	fld dword[ebp-4]
 	fmul st0, st0
 	faddp
 	fsqrt
@@ -1097,14 +1492,14 @@ collisionDetection_closestPointOnLineOrigo2d:
 	
 	mov eax, dword[ebp+8]			;buffer in eax
 	
-	mov edx, dword[ebp-24]
+	mov edx, dword[ebp-8]
 	mov dword[eax], edx				;line0.x-line1.x
 	fstp dword[eax+4]				;line0.y-line1.y
-	mov edx, dword[ebp-20]
+	mov edx, dword[ebp-4]
 	mov dword[eax+8], edx			;line0.z-line1.z
 	
 	
-	push dword[ebp+28]
+	push dword[ebp-28]
 	push dword[ebp+8]
 	push dword[ebp+8]
 	call vec3_scale

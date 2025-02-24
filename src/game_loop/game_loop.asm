@@ -113,12 +113,12 @@ section .rodata use32
 	dd 4
 	dd vertex_data_2
 	vertex_data_2:
-	dd -1.0, 1.0, 1.0
-	dd 1.0, 1.0, 1.0
-	dd 0.0, 1.0, -1.0
-	dd -1.0, -1.0, 1.0
-	dd 1.0, -1.0, 1.0
-	dd 0.0, -1.0, -1.0
+	dd -1.0, 0.1, 1.0
+	dd 1.0, 0.1, 1.0
+	dd 0.0, 0.1, -1.0
+	dd -1.0, -0.1, 1.0
+	dd 1.0, -0.1, 1.0
+	dd 0.0, -0.1, -1.0
 	
 	mesh_vertex_count_2 dd 6
 	
@@ -133,7 +133,7 @@ section .rodata use32
 	dd 1,4,5, 5,2,1
 	dd 2,5,3, 3,0,2
 	
-	position_2 dd 12.0, 10.0, -15.0
+	position_2 dd 3.0, 1.5, 3.0
 	
 	
 section .bss use32
