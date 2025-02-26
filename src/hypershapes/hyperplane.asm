@@ -18,9 +18,19 @@ section .text use32
 	
 	global hyperPlane_getNormal		;void hyperPlane_getNormal(HyperPlane* hp, vec4* buffer)
 	
+	;rotates the plane
+	;rotationPlaneDir1 and rotationPlaneDir2 must be orthogoonal
+	global hyperPlane_rotate			;void hyperPlane_rotate(HyperPlane* hp, vec4* rotationPlaneDir1, vec4* rotationPlaneDir2, float angleInDegrees)
+	
+	;moves the point of the hyperplane along the based vectors of the hyperplane
+	global hyperPlane_moveInsideOfPlane	;void hyperPlane_moveInsideOfPlane(HyperPlane* hp, vec3* movement)
+	
 	extern my_memset
 	
-	extern mat3_det
+	extern vec4_add
+	extern vec4_scale
+	extern vec4_cross
+	extern vec4_rotateAroundPlane
 	
 hyperPlane_create:
 	push ebp
@@ -45,107 +55,107 @@ hyperPlane_create:
 	ret
 	
 	
-;uses the 4D equivalent of the cross product
+	
 hyperPlane_getNormal:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 36		;temp mat3
-	
 	mov eax, dword[ebp+8]		;HyperPlane* in eax
-	mov edx, dword[ebp+12]		;buffer in edx
 	
-	;calculate the x component
-	mov ecx, dword[eax+20]
-	mov dword[ebp-36], ecx
-	mov ecx, dword[eax+36]
-	mov dword[ebp-24], ecx
-	mov ecx, dword[eax+52]
-	mov dword[ebp-12], ecx
-	
-	mov ecx, dword[eax+24]
-	mov dword[ebp-32], ecx
-	mov ecx, dword[eax+40]
-	mov dword[ebp-20], ecx
-	mov ecx, dword[eax+56]
-	mov dword[ebp-8], ecx
-	
-	mov ecx, dword[eax+28]
-	mov dword[ebp-28], ecx
-	mov ecx, dword[eax+44]
-	mov dword[ebp-16], ecx
-	mov ecx, dword[eax+60]
-	mov dword[ebp-4], ecx
-	
-	lea ecx, [ebp-36]
-	push eax		;save eax
-	push edx		;save edx
+	lea ecx, [eax+48]
 	push ecx
-	call mat3_det
-	add esp, 4
-	pop edx			;restore edx
-	pop eax			;restore eax
-	
-	fstp dword[edx]
-	
-	;calculate y component
-	mov ecx, dword[eax+16]
-	mov dword[ebp-36], ecx
-	mov ecx, dword[eax+32]
-	mov dword[ebp-24], ecx
-	mov ecx, dword[eax+48]
-	mov dword[ebp-12], ecx
-	
-	lea ecx, [ebp-36]
-	push eax		;save eax
-	push edx		;save edx
+	lea ecx, [eax+32]
 	push ecx
-	call mat3_det
-	add esp, 4
-	pop edx			;restore edx
-	pop eax			;restore eax
-	
-	fstp dword[edx+4]
-	xor dword[edx+4], 0x80000000		;negation
-	
-	;calculate z component
-	mov ecx, dword[eax+20]
-	mov dword[ebp-32], ecx
-	mov ecx, dword[eax+36]
-	mov dword[ebp-20], ecx
-	mov ecx, dword[eax+52]
-	mov dword[ebp-8], ecx
-	
-	lea ecx, [ebp-36]
-	push eax		;save eax
-	push edx		;save edx
+	lea ecx, [eax+16]
 	push ecx
-	call mat3_det
-	add esp, 4
-	pop edx			;restore edx
-	pop eax			;restore eax
+	push dword[ebp+12]
+	call vec4_cross
 	
-	fstp dword[edx+8]
-
-	;calculate w component
-	mov ecx, dword[eax+24]
-	mov dword[ebp-28], ecx
-	mov ecx, dword[eax+40]
-	mov dword[ebp-16], ecx
-	mov ecx, dword[eax+56]
-	mov dword[ebp-4], ecx
+	mov esp, ebp
+	pop ebp
+	ret
 	
-	lea ecx, [ebp-36]
-	push eax		;save eax
-	push edx		;save edx
+	
+hyperPlane_rotate:
+	push ebp
+	mov ebp, esp
+	
+	
+	push dword[ebp+20]
+	push dword[ebp+16]
+	push dword[ebp+12]
+	
+	mov eax, dword[ebp+8]
+	lea ecx, [eax+16]
 	push ecx
-	call mat3_det
-	add esp, 4
-	pop edx			;restore edx
-	pop eax			;restore eax
+	call vec4_rotateAroundPlane
 	
-	fstp dword[edx+12]
-	xor dword[edx+12], 0x80000000		;negation
+	mov eax, dword[ebp+8]
+	lea ecx, [eax+32]
+	mov dword[esp], ecx
+	call vec4_rotateAroundPlane
+	
+	mov eax, dword[ebp+8]
+	lea ecx, [eax+48]
+	mov dword[esp], ecx
+	call vec4_rotateAroundPlane
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+hyperPlane_moveInsideOfPlane:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 16					;temp vector
+	
+	;first component
+	mov eax, dword[ebp+12]
+	push dword[eax]
+	mov eax, dword[ebp+8]
+	lea eax, [eax+16]
+	push eax
+	lea eax, [ebp-16]
+	push eax
+	call vec4_scale
+	
+	push dword[ebp+8]
+	push dword[ebp+8]			;&hyperPlane.position
+	call vec4_add
+	
+	
+	;second component
+	mov eax, dword[ebp+12]
+	push dword[eax+4]
+	mov eax, dword[ebp+8]
+	lea eax, [eax+32]
+	push eax
+	lea eax, [ebp-16]
+	push eax
+	call vec4_scale
+	
+	push dword[ebp+8]
+	push dword[ebp+8]			;&hyperPlane.position
+	call vec4_add
+	
+	
+	;third component
+	mov eax, dword[ebp+12]
+	push dword[eax+8]
+	mov eax, dword[ebp+8]
+	lea eax, [eax+48]
+	push eax
+	lea eax, [ebp-16]
+	push eax
+	call vec4_scale
+	
+	push dword[ebp+8]
+	push dword[ebp+8]			;&hyperPlane.position
+	call vec4_add
+	
+	
 	
 	mov esp, ebp
 	pop ebp

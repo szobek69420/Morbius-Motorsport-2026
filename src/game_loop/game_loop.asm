@@ -5,6 +5,16 @@
     extern %2
 %endmacro
 
+%macro render_text 5
+	push %5
+	push %4
+	push %3
+	push %2
+	push %1
+	call textRenderer_drawText
+	add esp, 20
+%endmacro
+
 section .rodata use32
 	PHYSICS_UPDATE_INTERVAL_MS dd 15
 
@@ -20,12 +30,17 @@ section .rodata use32
 	print_two_ints_nl db "%d %d",10,0
 	print_float db "%f",0
 	print_float_nl db "%f",10,0
+	print_four_floats db "%f, %f, %f, %f",0
 	print_new_line db 10,0
 	
 	image_path db "./sprites/morbussin.bmp",0
 	
 	test_text_main db "main",10,0
 	test_text_physics db "physics",10,0
+	
+	text_point db "HYPERPLANE POINT",0
+	text_based_vectors db "HYPERPLANE BASED VECTORS",0
+	print_vec4 db "(%f; %f; %f; %f)",0
 	
 	vertex_data_vector:		;imitates a vector
 	dd 120
@@ -143,6 +158,7 @@ section .bss use32
 	camera resb 36
 	pv_matrix resb 64
 	
+	hyperplane resb 64
 	pplayer resb 4
 	
 	image_renderable resb 4
@@ -186,6 +202,9 @@ section .text use32
 	extern camera_viewProjection
 	
 	extern my_printf
+	extern my_sprintf
+	
+	extern my_memcpy
 	
 	extern glfwSwapBuffers
 	extern glfwPollEvents
@@ -216,6 +235,8 @@ section .text use32
 	extern player_update
 	extern player_updatePhysics
 	
+	extern hyperPlane_create
+	
 	extern renderable_init
 	extern renderable_deinit
 	extern renderable_create
@@ -237,7 +258,13 @@ section .text use32
 	extern textRenderer_drawText
 	extern textRenderer_setScreenSize	
 	extern TEXT_ORIGIN_BOTTOM_CENTER
+	extern TEXT_ORIGIN_TOP_LEFT
+	extern TEXT_ORIGIN_BOTTOM_RIGHT
+	extern TEXT_ORIGIN_TOP_RIGHT
 	extern TEXT_PIVOT_BOTTOM_CENTER
+	extern TEXT_PIVOT_BOTTOM_RIGHT
+	extern TEXT_PIVOT_TOP_LEFT
+	extern TEXT_PIVOT_TOP_RIGHT
 	
 	extern textureHandler_init
 	extern textureHandler_deinit
@@ -352,11 +379,17 @@ game_loop:
 	;init texture handler
 	call textureHandler_init
 	
+	;create hyperplane
+	push hyperplane
+	call hyperPlane_create
+	add esp, 4
+	
 	;create player
+	push hyperplane
 	push camera
 	call player_init
 	mov dword[pplayer], eax
-	add esp, 4
+	add esp, 8
 	
 	;create morbius poster and the plain renderable
 	push dword[RENDERABLE_ATTRIB_P3UV2]
@@ -469,14 +502,8 @@ game_loop:
 		add esp, 8
 		
 		
-		;draw text
-		push 0
-		push 0
-		push dword[TEXT_PIVOT_BOTTOM_CENTER]
-		push dword[TEXT_ORIGIN_BOTTOM_CENTER]
-		push test_text
-		call textRenderer_drawText
-		add esp, 20
+		;draw hyperplane data
+		call gameLoop_drawHyperplaneData
 		
 		;swap buffers
 		push dword[current_window]
@@ -715,3 +742,66 @@ gameLoop_handleWindowResize:
 	pop ebp
 	ret
 	
+	
+gameLoop_drawHyperplaneData:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 100				;char buffer[100]
+	
+	;draw point
+	mov eax, hyperplane
+	push dword[eax+12]
+	push dword[eax+8]
+	push dword[eax+4]
+	push dword[eax]
+	push print_vec4
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 24
+	
+	render_text text_point, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 30
+	lea eax, [ebp-100]
+	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 50
+	
+	;draw based vectors
+	render_text text_based_vectors, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 80
+	
+	mov eax, hyperplane
+	add eax, 16
+	sub esp, 48
+	mov ecx, esp
+	push 48
+	push eax
+	push ecx
+	call my_memcpy
+	add esp, 12
+	
+	push print_vec4
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 24
+	lea eax, [ebp-100]
+	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 100
+	
+	push print_vec4
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 24
+	lea eax, [ebp-100]
+	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 120
+	
+	push print_vec4
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 24
+	lea eax, [ebp-100]
+	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 140
+	
+	mov esp, ebp
+	pop ebp
+	ret

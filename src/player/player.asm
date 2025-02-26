@@ -2,11 +2,14 @@
 
 ;layout:
 ;struct player{
-;	camera* cum;			0
-;	vec3 position;			4 (unused)
-;	float pitch, yaw;		16
-;	Collider* collider;		24
-;}		28 bytes
+;	camera* cum;					0
+;	vec3 position;					4 (unused)
+;	float pitch, yaw;				16
+;	Collider* collider;				24
+;	HyperPlane* hyperPlane;			28
+;	Mutex* hyperPlaneMutex;			32
+;	vec3 previousColliderPos; 		36
+;}		48 bytes
 
 section .rodata use32
 	ZERO dd 0.0
@@ -35,7 +38,7 @@ section .rodata use32
 
 section .text use32
 
-	global player_init				;player* player_init(camera* cum)
+	global player_init				;player* player_init(camera* cum, HyperPlane* hyperPlane)
 	global player_destroy			;void player_destroy(player* player)
 	global player_update 			;void player_update(player* player, float deltaTime)
 	global player_updatePhysics		;void player_updatePhysics(player* player, float deltaTime)
@@ -64,8 +67,16 @@ section .text use32
 	
 	extern collider_createCylinder
 	extern collider_destroy
+	extern collider_getPosition
 	extern physics_registerNonkinematic
 	extern physics_unregisterNonkinematic
+	
+	extern mutex_create
+	extern mutex_destroy
+	extern mutex_lock
+	extern mutex_unlock
+	
+	extern hyperPlane_moveInsideOfPlane
 	
 player_init:
 	push ebp
@@ -73,12 +84,12 @@ player_init:
 	
 	sub esp, 4		;player*
 	
-	push 28
+	push 48
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
 	
-	;initialize it
+	;initialize camera and orientation
 	mov ecx, dword[ebp+8]
 	mov dword[eax], ecx
 	
@@ -98,18 +109,35 @@ player_init:
 	push eax
 	call physics_registerNonkinematic
 	
-	;init start position
+	;init collider start position and previous collider position
 	mov eax, dword[ebp-4]
-	mov eax, dword[eax+24]
+	mov edx, eax							;player in edx
+	mov eax, dword[eax+24]					;collider* in eax
+	
 	
 	mov ecx, dword[START_POSITION]
 	mov dword[eax], ecx
+	mov dword[edx+36], ecx
+	
 	mov ecx, START_POSITION
 	mov ecx, dword[ecx+4]
 	mov dword[eax+4], ecx
+	mov dword[edx+40], ecx
+	
 	mov ecx, START_POSITION
 	mov ecx, dword[ecx+8]
 	mov dword[eax+8], ecx
+	mov dword[edx+44], ecx
+	
+	;initialize hyperPlane stuff
+	mov eax, dword[ebp-4]
+	mov ecx, dword[ebp+12]
+	mov dword[eax+28], ecx			;HyperPlane*
+	
+	call mutex_create
+	mov ecx, dword[ebp-4]
+	mov dword[ecx+32], eax
+	
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -122,6 +150,11 @@ player_init:
 player_destroy:
 	push ebp
 	mov ebp, esp
+	
+	;destroy mutex
+	mov eax, dword[ebp+8]
+	push dword[eax+32]
+	call mutex_destroy
 	
 	;unregister and destroy collider
 	mov eax, dword[ebp+8]
@@ -165,9 +198,9 @@ player_updatePhysics:
 	call player_applyGravity
 	add esp, 8
 	
-	mov eax, dword[ebp+8]
-	push dword[eax+24]
-	;call vec3_print
+	push dword[ebp+8]
+	call player_moveInsideOfPlane
+	add esp, 4
 	
 	mov esp, ebp
 	pop ebp
@@ -410,6 +443,60 @@ player_look:		;void player_look(player* pplayer, float deltaTime)
 	mov dword[eax+16], ecx
 	
 	player_look_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;looks at the previous collider position and looks at the current one
+;the difference will give us how much the player moved inside of the plane since the last physics update
+;i can't do it based on just the movement via player input, as then the collision detection will not be accounted for
+;void player_moveInsideOfPlane(Player* player)
+player_moveInsideOfPlane:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 12				;player.collider.position-player.previousColliderPosition
+	
+	;calculate the delta position
+	mov eax, dword[ebp+8]
+	lea ecx, [eax+36]
+	push ecx
+	push dword[eax+24]
+	call collider_getPosition
+	mov dword[esp], eax
+	lea ecx, [ebp-12]
+	push ecx
+	call vec3_sub
+	
+	;lock mutex and move inside of plane
+	mov eax, dword[ebp+8]
+	push -1
+	push dword[eax+32]
+	call mutex_lock
+	
+	lea eax, [ebp-12]
+	push eax
+	mov eax, dword[ebp+8]
+	push dword[eax+28]
+	call hyperPlane_moveInsideOfPlane
+	add esp, 8
+	
+	call mutex_unlock
+	
+	;update the previous collider position
+	mov eax, dword[ebp+8]
+	push dword[eax+24]
+	call collider_getPosition
+	mov ecx, dword[ebp+8]
+	
+	mov edx, dword[eax]
+	mov dword[ecx+36], edx
+	mov edx, dword[eax+4]
+	mov dword[ecx+40], edx
+	mov edx, dword[eax+8]
+	mov dword[ecx+44], edx
+	
 	mov esp, ebp
 	pop ebp
 	ret

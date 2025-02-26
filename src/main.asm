@@ -4,8 +4,6 @@ section .rodata use32
 	
 section .bss use32
 	pwindow resb 4		;GLFWwindow*
-	
-
 
 section .text use32
 	
@@ -18,6 +16,7 @@ section .text use32
 	extern window_destroy
 	
 	extern game_loop
+	
 	
 	..start:
 		push ebp

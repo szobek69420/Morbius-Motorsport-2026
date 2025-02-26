@@ -13,10 +13,16 @@ section .data use32
 	
 	epsilon dd 0.0001
 	zero dd 0.0
+	
+	deg2rad dd 0.01745329252
+	
+	test_text db "fuxos kondenzator",10,0
 
 section .text use32
 	extern my_printf
 	extern my_memcpy
+	
+	extern mat3_det
 	
 	global vec4_print		;void vec4_print(vec4*)
 	global vec4_init		;void vec4_init(vec4* buffer, float a, float b, float c, float d)
@@ -25,10 +31,14 @@ section .text use32
 	global vec4_sub			;void vec4_sub(vec4* buffer, vec4* a, vec4*b)		//buffer may point to a or b
 	global vec4_scale		;void vec4_scale(vec4* buffer, vec4* vec, float value)	//buffer may point to vec
 	global vec4_dot			;float vec4_dot(vec4* a, vec4* b)		//pushes the result onto the FPU stack
+	global vec4_cross		;void vec4_cross(vec4* buffer, vec4* a, vec4* b, vec4* c)	//technically it isn't a cross product, but returns a vector that is orthogonal to a, b and c
 	global vec4_sqrMagnitude	;float vec4_sqrMagnitude(vec4* vec)		//pushes the result onto the FPU stack
 	global vec4_magnitude		;float vec4_magnitude(vec4* vec)		//pushes the result onto the FPU stack
 	global vec4_normalize		;void vec4_normalize(vec4* vec)
 	global vec4_mulWithMat		;void vec4_mulWithMat(vec4* vec, mat4* mat)
+	
+	;planeDir1 and planeDir2 shall be orthogoonal
+	global vec4_rotateAroundPlane	;void vec4_rotateAroundPlane(vec4* vec, vec4* planeDir1, vec4* planeDir2, float angleInDegrees)
 	
 vec4_print:
 	push ebp
@@ -216,4 +226,290 @@ vec4_mulWithMat:
 	haddps xmm1, xmm1
 	movss dword[eax+12], xmm1
 	
+	ret
+
+
+vec4_cross:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 36				;temp mat3				;36
+	
+	;calculate x
+	;x=det(mat3(a.y,a.z,a.w; b.y,b.z,b.w; c.y,c.z,c.w))
+	mov eax, dword[ebp+12]			;a in eax
+	mov ecx, dword[eax+4]
+	mov dword[ebp-36], ecx
+	mov ecx, dword[eax+8]
+	mov dword[ebp-32], ecx
+	mov ecx, dword[eax+12]
+	mov dword[ebp-28], ecx
+	
+	mov eax, dword[ebp+16]			;b in eax
+	mov ecx, dword[eax+4]
+	mov dword[ebp-24], ecx
+	mov ecx, dword[eax+8]
+	mov dword[ebp-20], ecx
+	mov ecx, dword[eax+12]
+	mov dword[ebp-16], ecx
+	
+	mov eax, dword[ebp+20]			;c in eax
+	mov ecx, dword[eax+4]
+	mov dword[ebp-12], ecx
+	mov ecx, dword[eax+8]
+	mov dword[ebp-8], ecx
+	mov ecx, dword[eax+12]
+	mov dword[ebp-4], ecx
+	
+	lea eax, [ebp-36]
+	push eax
+	call mat3_det
+	mov edx, dword[ebp+8]
+	fstp dword[edx]
+	
+	;calculate y
+	;y=-det(mat3(a.x,a.z,a.w; b.x,b.z,b.w; c.x,c.z,c.w))
+	mov eax, dword[ebp+12]			;a in eax
+	mov ecx, dword[eax]
+	mov dword[ebp-36], ecx
+	mov ecx, dword[eax+8]
+	mov dword[ebp-32], ecx
+	mov ecx, dword[eax+12]
+	mov dword[ebp-28], ecx
+	
+	mov eax, dword[ebp+16]			;b in eax
+	mov ecx, dword[eax]
+	mov dword[ebp-24], ecx
+	mov ecx, dword[eax+8]
+	mov dword[ebp-20], ecx
+	mov ecx, dword[eax+12]
+	mov dword[ebp-16], ecx
+	
+	mov eax, dword[ebp+20]			;c in eax
+	mov ecx, dword[eax]
+	mov dword[ebp-12], ecx
+	mov ecx, dword[eax+8]
+	mov dword[ebp-8], ecx
+	mov ecx, dword[eax+12]
+	mov dword[ebp-4], ecx
+	
+	lea eax, [ebp-36]
+	push eax
+	call mat3_det
+	mov edx, dword[ebp+8]
+	fstp dword[edx+4]
+	xor dword[edx+4], 0x80000000
+	
+	;calculate z
+	;z=det(mat3(a.x,a.y,a.w; b.x,b.y,b.w; c.x,c.y,c.w))
+	mov eax, dword[ebp+12]			;a in eax
+	mov ecx, dword[eax]
+	mov dword[ebp-36], ecx
+	mov ecx, dword[eax+4]
+	mov dword[ebp-32], ecx
+	mov ecx, dword[eax+12]
+	mov dword[ebp-28], ecx
+	
+	mov eax, dword[ebp+16]			;b in eax
+	mov ecx, dword[eax]
+	mov dword[ebp-24], ecx
+	mov ecx, dword[eax+4]
+	mov dword[ebp-20], ecx
+	mov ecx, dword[eax+12]
+	mov dword[ebp-16], ecx
+	
+	mov eax, dword[ebp+20]			;c in eax
+	mov ecx, dword[eax]
+	mov dword[ebp-12], ecx
+	mov ecx, dword[eax+4]
+	mov dword[ebp-8], ecx
+	mov ecx, dword[eax+12]
+	mov dword[ebp-4], ecx
+	
+	lea eax, [ebp-36]
+	push eax
+	call mat3_det
+	mov edx, dword[ebp+8]
+	fstp dword[edx+8]
+	
+	
+	;calculate w
+	;w=-det(mat3(a.x,a.y,a.z; b.x,b.y,b.z; c.x,c.y,c.z))
+	mov eax, dword[ebp+12]			;a in eax
+	mov ecx, dword[eax]
+	mov dword[ebp-36], ecx
+	mov ecx, dword[eax+4]
+	mov dword[ebp-32], ecx
+	mov ecx, dword[eax+8]
+	mov dword[ebp-28], ecx
+	
+	mov eax, dword[ebp+16]			;b in eax
+	mov ecx, dword[eax]
+	mov dword[ebp-24], ecx
+	mov ecx, dword[eax+4]
+	mov dword[ebp-20], ecx
+	mov ecx, dword[eax+8]
+	mov dword[ebp-16], ecx
+	
+	mov eax, dword[ebp+20]			;c in eax
+	mov ecx, dword[eax]
+	mov dword[ebp-12], ecx
+	mov ecx, dword[eax+4]
+	mov dword[ebp-8], ecx
+	mov ecx, dword[eax+8]
+	mov dword[ebp-4], ecx
+	
+	lea eax, [ebp-36]
+	push eax
+	call mat3_det
+	mov edx, dword[ebp+8]
+	fstp dword[edx+12]
+	xor dword[edx+12], 0x80000000
+	
+	;normalize the results
+	push dword[ebp+8]
+	call vec4_normalize
+	
+	mov esp, ebp
+	pop ebp
+	ret
+
+vec4_rotateAroundPlane:
+	push ebp
+	mov ebp, esp
+
+	sub esp, 16				;normalized planeDir1								;16
+	sub esp, 16				;normalized planeDir2								;32
+	sub esp, 4				;<var16; vec>										;36
+	sub esp, 4				;<var32; vec>										;40
+	sub esp, 16				;part of vec that is invariant to the rotation		;56
+	sub esp, 16				;helper vec4										;72
+	sub esp, 4				;cos(angle)*var36-sin(angle)*var40					;76
+	sub esp, 4				;sin(angle)*var36+cos(angle)*var40					;80
+	
+	;normalize planeDir1
+	mov eax, dword[ebp+12]
+	mov ecx, dword[eax]
+	mov dword[ebp-16], ecx
+	mov ecx, dword[eax+4]
+	mov dword[ebp-12], ecx
+	mov ecx, dword[eax+8]
+	mov dword[ebp-8], ecx
+	mov ecx, dword[eax+12]
+	mov dword[ebp-4], ecx
+	lea eax, [ebp-16]
+	push eax
+	call vec4_normalize
+	
+	;normalize planeDir2
+	mov eax, dword[ebp+16]
+	mov ecx, dword[eax]
+	mov dword[ebp-32], ecx
+	mov ecx, dword[eax+4]
+	mov dword[ebp-28], ecx
+	mov ecx, dword[eax+8]
+	mov dword[ebp-24], ecx
+	mov ecx, dword[eax+12]
+	mov dword[ebp-20], ecx
+	lea eax, [ebp-32]
+	push eax
+	call vec4_normalize
+	
+	;get the dot products (var36 and var40)
+	push dword[ebp+8]
+	lea eax, [ebp-16]
+	push eax
+	call vec4_dot
+	fstp dword[ebp-36]
+	lea eax, [ebp-32]
+	mov dword[esp], eax
+	call vec4_dot
+	fstp dword[ebp-40]
+	
+	
+	;calculate the invariant part of the vec
+	;invariant part = vec - <normPlaneDir1; vec>*normPlaneDir1 - <normPlaneDir2; vec>*normPlaneDir2
+	push dword[ebp-36]
+	lea eax, [ebp-16]
+	push eax
+	lea eax, [ebp-56]
+	push eax
+	call vec4_scale
+	
+	push dword[ebp-40]
+	lea eax, [ebp-32]
+	push eax
+	lea eax, [ebp-72]
+	push eax
+	call vec4_scale
+	
+	lea eax, [ebp-56]
+	push eax
+	push eax
+	call vec4_add
+	
+	lea eax, [ebp-56]
+	push eax
+	push dword[ebp+8]
+	push eax
+	call vec4_sub			;invariant part in var56
+	
+	;calculate the rotated vector
+	;rotated vector = 
+	;	invariant part + 
+	;	+ (cos(angle)*var36-sin(angle)*var40)*normPlaneDir1 + 
+	;	+ (sin(angle)*var36+cos(angle)*var40)*normPlaneDir2
+	
+	fld dword[ebp+20]
+	fld dword[deg2rad]
+	fmulp
+	fsincos					;st0=cos(angle), st1=sin(angle)
+	
+	fld dword[ebp-36]
+	fmul st0, st1			;cos(angle)*var36
+	fld dword[ebp-40]
+	fmul st0, st3			;sin(angle)*var40
+	fsubp
+	fstp dword[ebp-76]		;cos(angle)*var36-sin(angle)*var40
+	
+	fld dword[ebp-36]
+	fmul st0, st2			;sin(angle)*var36
+	fld dword[ebp-40]
+	fmul st0, st2			;cos(angle)*var40
+	faddp
+	fstp dword[ebp-80]		;sin(angle)*var36+cos(angle)*var40
+	
+	fstp st0
+	fstp st0
+	
+	
+	push dword[ebp-76]
+	lea eax, [ebp-16]
+	push eax
+	push eax
+	call vec4_scale			;(cos(angle)*var36-sin(angle)*var40)*normPlaneDir1
+	
+	push dword[ebp-80]
+	lea eax, [ebp-32]
+	push eax
+	push eax
+	call vec4_scale			;(sin(angle)*var36+cos(angle)*var40)*normPlaneDir2
+	
+	lea eax, [ebp-16]
+	push eax
+	lea eax, [ebp-56]
+	push eax
+	push eax
+	call vec4_add
+	
+	lea eax, [ebp-32]
+	mov dword[esp+8], eax
+	mov eax, dword[ebp+8]
+	mov dword[esp], eax
+	call vec4_add			;invariant part + (cos(angle)*var36-sin(angle)*var40)*normPlaneDir1 + (sin(angle)*var36+cos(angle)*var40)*normPlaneDir2
+	
+	
+	
+	mov esp, ebp
+	pop ebp
 	ret

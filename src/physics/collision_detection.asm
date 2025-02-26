@@ -1326,7 +1326,7 @@ collisionDetection_rcmVerticalTriangle:
 	mov esp, ebp
 	pop ebp
 	ret
-	
+     	
 	
 ;calculates the closest point on a line to a point ( (0,0,0) ) as if they were projected onto the XZ plane (y component is ignore)
 ;and then returns the point as a vec3 with the correct y coordinate
@@ -1448,9 +1448,7 @@ collisionDetection_closestPointOnLineOrigo2d:
 	fld dword[ebp-4]
 	fdiv st0, st1
 	fstp dword[ebp-32]					;normalize(dir)
-	sub esp, 4
-	fstp dword[esp]
-	add esp, 4
+	fstp st0
 	
 	
 	fld dword[ecx]						;line1 is still in ecx!!!

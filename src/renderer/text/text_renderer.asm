@@ -181,10 +181,10 @@ textRenderer_init:
 	
 	;set font size
 	mov eax, dword[FONT_CHAR_HEIGHT]
-	shl eax, 2
+	shl eax, 1
 	push eax
 	mov eax, dword[FONT_CHAR_WIDTH]
-	shl eax, 2
+	shl eax, 1
 	push eax
 	call textRenderer_setFontSize
 	add esp, 8
@@ -422,13 +422,13 @@ textRenderer_drawText:
 	mov ecx, eax
 	and ecx, 0b000001
 	test ecx, ecx
-	jnz textRenderer_drawText_horigin_bottom
+	jnz textRenderer_drawText_horigin_right
 	mov ecx, eax
 	and ecx, 0b000010
 	test ecx, ecx
 	jnz textRenderer_drawText_horigin_center
-	jmp textRenderer_drawText_horigin_top
-	textRenderer_drawText_horigin_top:
+	jmp textRenderer_drawText_horigin_left
+	textRenderer_drawText_horigin_left:
 		fild dword[ebp+28]
 		fstp dword[ebp-8]
 		jmp textRenderer_drawText_horigin_done
@@ -442,8 +442,8 @@ textRenderer_drawText:
 		fstp dword[ebp-8]
 		jmp textRenderer_drawText_horigin_done
 	
-	textRenderer_drawText_horigin_bottom:
-		mov eax, dword[WINDOW_SIZE_Y]
+	textRenderer_drawText_horigin_right:
+		mov eax, dword[WINDOW_SIZE_X]
 		sub eax, dword[ebp+28]
 		mov dword[ebp-8], eax
 		fild dword[ebp-8]
@@ -498,13 +498,13 @@ textRenderer_drawText:
 	mov ecx, eax
 	and ecx, 0b000001
 	test ecx, ecx
-	jnz textRenderer_drawText_hpivot_bottom
+	jnz textRenderer_drawText_hpivot_right
 	mov ecx, eax
 	and ecx, 0b000010
 	test ecx, ecx
 	jnz textRenderer_drawText_hpivot_center
-	jmp textRenderer_drawText_hpivot_top
-	textRenderer_drawText_hpivot_top:
+	jmp textRenderer_drawText_hpivot_left
+	textRenderer_drawText_hpivot_left:
 		jmp textRenderer_drawText_hpivot_done
 		
 	textRenderer_drawText_hpivot_center:
@@ -519,7 +519,7 @@ textRenderer_drawText:
 		add esp, 4
 		jmp textRenderer_drawText_hpivot_done
 	
-	textRenderer_drawText_hpivot_bottom:
+	textRenderer_drawText_hpivot_right:
 		push dword[ebp+16]
 		call textRenderer_getTextWidth
 		mov dword[esp], eax
