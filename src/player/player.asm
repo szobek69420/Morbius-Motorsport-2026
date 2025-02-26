@@ -33,6 +33,10 @@ section .rodata use32
 	
 	MOVEMENT_SPEED dd 5.0
 	
+	HYPERPLANE_ROTATION_VECTOR_1 dd 0.466323, 0.0, 0.768061, 0.438892
+	HYPERPLANE_ROTATION_VECTOR_2 dd 0.5833265, 0.0, -0.639972, 0.5001663
+	HYPERPLANE_ROTATION_ANGLE dd 2.0
+	
 	print_two_floats db "%f %f",10,0
 	test_text db "big chungus",10,0
 
@@ -58,6 +62,7 @@ section .text use32
 	
 	extern input_keyHeld
 	extern input_mouseDeltaPosition
+	extern input_mouseScrollDelta
 	extern GLFW_KEY_W
 	extern GLFW_KEY_A
 	extern GLFW_KEY_S
@@ -77,6 +82,7 @@ section .text use32
 	extern mutex_unlock
 	
 	extern hyperPlane_moveInsideOfPlane
+	extern hyperPlane_rotate
 	
 player_init:
 	push ebp
@@ -179,6 +185,10 @@ player_update:
 	push dword[ebp+8]
 	call player_look
 	add esp, 8
+	
+	push dword[ebp+8]
+	call player_rotatePlane
+	add esp, 4
 	
 	mov esp, ebp
 	pop ebp
@@ -497,6 +507,66 @@ player_moveInsideOfPlane:
 	mov edx, dword[eax+8]
 	mov dword[ecx+44], edx
 	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+	
+;void player_rotatePlane(Player* player)
+player_rotatePlane:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;delta scroll x
+	sub esp, 4			;delta scroll y
+	
+	sub esp, 4			;rotation angle
+	
+	
+	;obtain scroll delta
+	lea eax, [ebp-8]
+	push eax
+	lea eax, [ebp-4]
+	push eax
+	call input_mouseScrollDelta
+	
+	;is the delta scroll 0?
+	cmp dword[ebp-8], 0
+	je player_rotatePlane_end
+	
+	;calculate rotation angle
+	fild dword[ebp-8]
+	fld dword[HYPERPLANE_ROTATION_ANGLE]
+	fmulp
+	fstp dword[ebp-12]
+	
+	;lock hyperplane mutex
+	mov eax, dword[ebp+8]
+	push -1
+	push dword[eax+32]
+	call mutex_lock
+	add esp, 8
+	
+	
+	;rotate plane
+	push dword[ebp-12]
+	push HYPERPLANE_ROTATION_VECTOR_2
+	push HYPERPLANE_ROTATION_VECTOR_1
+	mov eax, dword[ebp+8]
+	push dword[eax+28]
+	call hyperPlane_rotate
+	add esp, 16
+	
+	
+	;unlock hyperplane mutex
+	mov eax, dword[ebp+8]
+	push dword[eax+32]
+	call mutex_unlock
+	add esp, 4
+	
+	
+	player_rotatePlane_end:
 	mov esp, ebp
 	pop ebp
 	ret
