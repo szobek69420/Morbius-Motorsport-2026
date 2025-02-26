@@ -1,7 +1,7 @@
 # Morbius-Motorsport-2026
 A 4D clone of Minecraft written entirely in x86 assembly
 
-After 11k LoC, I present you this:
+The current state is, there is no other word for it, gorgeous:
 
-![image](https://github.com/user-attachments/assets/545fed4e-ee31-41fd-9f5a-0ae6b8443bc3)
+![image](https://github.com/user-attachments/assets/96c0d49f-84a0-4879-94e8-14df66795b6d)
 
