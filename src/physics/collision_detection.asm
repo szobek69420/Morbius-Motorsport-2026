@@ -1204,7 +1204,7 @@ collisionDetection_rcmVerticalTriangle:
 			
 		jmp collisionDetection_rcmVerticalTriangle_end
 	
-	collisionDetection_rcmVerticalTriangle_line_end:
+	collisionDetection_rcmVerticalTriangle_line_end:	
 		;if the triangle is at the same height as the cylinder and the distance from the closest point is < cylinder.radius
 		;and if the cylinder.position.xz is towards the backside of the triangle
 		;then the resolution direction is normalize(closestPoint.xz-(cylinder.position.xz))
@@ -1216,7 +1216,8 @@ collisionDetection_rcmVerticalTriangle:
 		jae collisionDetection_rcmVerticalTriangle_line_end_not_same_height
 		mov eax, dword[ebp-4]
 		xor eax, 0x80000000
-		sub esp, 4					;-cylinder.height
+		sub esp, 4					
+		mov dword[esp], eax			;-cylinder.height
 		movss xmm0, dword[ebp-20]
 		ucomiss xmm0, dword[esp]
 		jbe collisionDetection_rcmVerticalTriangle_line_end_not_same_height
@@ -1227,6 +1228,7 @@ collisionDetection_rcmVerticalTriangle:
 			xor eax, eax
 			jmp collisionDetection_rcmVerticalTriangle_end
 		collisionDetection_rcmVerticalTriangle_line_end_same_height:
+
 		
 		;get the closest point
 		fld dword[ebp-24]
@@ -1250,14 +1252,21 @@ collisionDetection_rcmVerticalTriangle:
 		sub esp, 4
 		fstp dword[esp]				;distance from the lowest point
 		movss xmm0, dword[esp]
-		add esp, 4
 		ucomiss xmm0, dword[ebp-72]
 		jae collisionDetection_rcmVerticalTriangle_line_end_highest_is_closest
+			;set the lowest as closestPoint.xz
 			mov ecx, dword[ebp-36]
 			mov dword[ebp-68], ecx
 			mov ecx, dword[ebp-28]
 			mov dword[ebp-64], ecx
+			
+			;set the distanceFromClosestPoint
+			mov ecx, dword[esp]
+			mov dword[ebp-72], ecx
+			
 		collisionDetection_rcmVerticalTriangle_line_end_highest_is_closest:
+		add esp, 4
+	
 		
 		;check if the closest point is further than cylinder.radius
 		mov eax, dword[ebp-72]
@@ -1306,6 +1315,9 @@ collisionDetection_rcmVerticalTriangle:
 		mov ecx, dword[ebp-64]
 		xor ecx, 0x80000000
 		mov dword[eax+8], ecx
+		
+		push eax
+		call vec3_normalize
 	
 		mov eax, 69
 		jmp collisionDetection_rcmVerticalTriangle_end
