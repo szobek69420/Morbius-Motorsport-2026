@@ -5,6 +5,8 @@ section .rodata use32
 	float_not_a_number db "NaN",0
 	
 	THOUSAND dd 1000.0
+	
+	char_0 db 48
 
 section .text use32
 	
@@ -453,13 +455,14 @@ my_sprintf_print_float:	;void my_sprintf_print_float(char** currentPositionInBuf
 	mov dword[ebp-8], edx		;the decimals behind the decimal point
 	
 	
-	;print
+	;print upper part
 	lea eax, [ebp-12]
 	push eax
 	push dword[ebp+28]
 	call my_sprintf_print_int
 	add esp, 8
 	
+	;print decimal point
 	mov eax, dword[ebp+28]
 	mov ecx, eax
 	mov eax, dword[eax]
@@ -467,6 +470,24 @@ my_sprintf_print_float:	;void my_sprintf_print_float(char** currentPositionInBuf
 	inc eax
 	mov dword[ecx], eax
 	
+	;print extra zeroes for the lower part if necessary
+	cmp dword[ebp-8], 100
+	jge my_sprintf_print_float_not_less_than_100
+		push char_0
+		push dword[ebp+28]
+		call my_sprintf_print_char
+		add esp, 8
+	my_sprintf_print_float_not_less_than_100:
+	
+	cmp dword[ebp-8], 10
+	jge my_sprintf_print_float_not_less_than_10
+		push char_0
+		push dword[ebp+28]
+		call my_sprintf_print_char
+		add esp, 8
+	my_sprintf_print_float_not_less_than_10:
+	
+	;print lower part
 	lea eax, [ebp-8]
 	push eax
 	push dword[ebp+28]

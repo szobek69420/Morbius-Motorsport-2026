@@ -38,8 +38,8 @@ section .rodata use32
 	test_text_main db "main",10,0
 	test_text_physics db "physics",10,0
 	
-	text_point db "HYPERPLANE POINT",0
-	text_based_vectors db "HYPERPLANE BASED VECTORS",0
+	text_point db "Hyperplane point",0
+	text_based_vectors db "Hyperplane based vectors",0
 	print_vec4 db "(%f; %f; %f; %f)",0
 	
 	vertex_data_vector:		;imitates a vector

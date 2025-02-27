@@ -8,6 +8,11 @@
 ;	vec4 directionVector3;	48
 ;}		64 bytes overall
 
+;A, B, C, D and E are scalars so that A*x+B*y+C*z+D*w+E=distance of (x,y,z,w) from the plane
+;struct HyperPlaneEquation{
+;	float A, B, C, D, E;
+;};		20 bytes overall
+
 section .rodata use32
 	ZERO dd 0.0
 	ONE dd 1.0
@@ -25,10 +30,17 @@ section .text use32
 	;moves the point of the hyperplane along the based vectors of the hyperplane
 	global hyperPlane_moveInsideOfPlane	;void hyperPlane_moveInsideOfPlane(HyperPlane* hp, vec3* movement)
 	
+	global hyperPlane_getEquation		;void hyperPlane_getEquation(HyperPlane* hp, HyperPlaneEquation* buffer)
+	
+	;pushes the return value onto the FPU stack
+	global hyperPlane_signedDistance	;float hyperPlane_signedDistance(HyperPlaneEquation* hpe, vec4* point)
+	
+	
 	extern my_memset
 	
 	extern vec4_add
 	extern vec4_scale
+	extern vec4_dot
 	extern vec4_cross
 	extern vec4_rotateAroundPlane
 	
@@ -159,4 +171,58 @@ hyperPlane_moveInsideOfPlane:
 	
 	mov esp, ebp
 	pop ebp
+	ret
+	
+	
+	
+hyperPlane_getEquation:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 16					;hyperplane normal
+	
+	;get the normal vector of the hyperplane
+	lea eax, [ebp-16]
+	push eax
+	push dword[ebp+8]
+	call hyperPlane_getNormal
+	
+	;do things
+	mov eax, dword[ebp+8]
+	mov ecx, dword[ebp+12]
+	
+	mov edx, dword[ebp-16]
+	mov dword[ecx], edx				;A
+	mov edx, dword[ebp-12]
+	mov dword[ecx+4], edx			;B
+	mov edx, dword[ebp-8]
+	mov dword[ecx+8], edx			;C
+	mov edx, dword[ebp-4]
+	mov dword[ecx+12], edx			;D
+	
+	lea ecx, [ebp-16]
+	push ecx
+	push eax
+	call vec4_dot
+	
+	mov ecx, dword[ebp+12]
+	fstp dword[ecx+16]
+	xor dword[ecx+16], 0x80000000	;E
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+	
+hyperPlane_signedDistance:
+	mov eax, dword[esp+4]
+	mov ecx, dword[esp+8]
+	fld dword[eax+16]				;E
+	sub esp, 8
+	mov dword[esp], ecx
+	mov dword[esp+4], eax
+	call vec4_dot
+	add esp, 8
+	faddp
 	ret
