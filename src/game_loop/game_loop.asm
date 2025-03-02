@@ -168,6 +168,8 @@ section .bss use32
 	mesh resb 4
 	mesh2 resb 4
 	
+	test_chunk resb 4
+	
 section .data use32
 	last_frame_milliseconds dd 0		;int, the GetTickCount of the last frame
 	delta_time_milliseconds dd 0		;int
@@ -293,6 +295,8 @@ section .text use32
 	extern tsValue_set
 	extern tsValue_isEqual
 	
+	extern chunk_generate
+	
 game_loop:
 	push ebp
 	mov ebp, esp
@@ -390,6 +394,15 @@ game_loop:
 	call player_init
 	mov dword[pplayer], eax
 	add esp, 8
+	
+	;create chunk
+	push hyperplane
+	push 0
+	push 0
+	push 0
+	call chunk_generate
+	mov dword[test_chunk], eax
+	add esp, 16
 	
 	;create morbius poster and the plain renderable
 	push dword[RENDERABLE_ATTRIB_P3UV2]
@@ -498,6 +511,13 @@ game_loop:
 		
 		push pv_matrix
 		push dword[plain_renderable]
+		call renderable_render
+		add esp, 8
+		
+		;render chunk
+		push pv_matrix
+		mov eax, dword[test_chunk]
+		push dword[eax+12]
 		call renderable_render
 		add esp, 8
 		

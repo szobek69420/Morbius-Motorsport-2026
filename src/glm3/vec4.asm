@@ -135,10 +135,10 @@ vec4_dot:
 	haddps xmm0, xmm0
 	haddps xmm0, xmm0
 	
-	add esp, 4
+	sub esp, 4
 	movss dword[esp], xmm0
 	fld dword[esp]
-	sub esp, 4
+	add esp, 4
 	
 	ret
 	

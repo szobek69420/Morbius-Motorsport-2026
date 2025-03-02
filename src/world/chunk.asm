@@ -10,6 +10,8 @@
 ;}		52 bytes overall
 section .rodata use32
 
+	EPSILON dd 0.00001
+
 	CHUNK_WIDTH dd 16					;1<<4
 	CHUNK_HEIGHT dd 150
 	
@@ -30,6 +32,7 @@ section .rodata use32
 	
 	print_int_nl db "%d",10,0
 	print_float_nl db "%f",10,0
+	print_two_floats_nl db "%f %f",10,0
 	
 	test_text db "rizzler",10,0
 	
@@ -38,6 +41,7 @@ section .text use32
 	global chunk_generate			;Chunk* chunk_generate(int chunkX, int chunkZ, int chunkW, HyperPlane* plane)
 
 	extern hyperPlane_getNormal
+	extern hyperPlane_signedDistance
 
 	extern my_printf
 	extern my_malloc
@@ -54,6 +58,9 @@ section .text use32
 	extern vec4_add
 	extern vec4_sub
 	extern vec4_scale
+	extern vec4_print
+	
+	extern vec3_print
 	
 	extern CHUNK_TESSERACT_CELL_EDGE_COUNT
 	extern CHUNK_TESSERACT_POS_X
@@ -64,6 +71,9 @@ section .text use32
 	extern CHUNK_TESSERACT_NEG_Z
 	extern CHUNK_TESSERACT_POS_W
 	extern CHUNK_TESSERACT_NEG_W
+	
+	extern RENDERABLE_ATTRIB_P3UV2
+	extern renderable_create
 
 chunk_generate:
 	push ebp
@@ -178,7 +188,7 @@ chunk_generate:
 	add esp, 8
 	
 	;init vertex and index vectors
-	push 20
+	push 4
 	lea eax, [ebp-48]
 	push eax
 	call vector_init
@@ -220,19 +230,23 @@ chunk_generate:
 					mov eax, dword[ebp+20]	;chunkX
 					shl eax, 4
 					add eax, dword[esp+20]	;x index
+					dec eax					;an x index of 1 corresponds to an x position of 0
 					mov dword[esp], eax
 					
 					mov eax, dword[esp+24]	;y index
+					dec eax
 					mov dword[esp+4], eax
 					
 					mov eax, dword[ebp+24]	;chunkZ
 					shl eax, 4
 					add eax, dword[esp+16]	;z index
+					dec eax
 					mov dword[esp+8], eax
 					
 					mov eax, dword[ebp+28]	;chunkW
 					shl eax, 4
 					add eax, edi			;w index
+					dec eax
 					mov dword[esp+12], eax
 					
 					
@@ -269,56 +283,60 @@ chunk_generate:
 					fstp dword[ebp-16]
 					xor dword[ebp-16], 0x80000000
 					
-					add esp, 16				;release the vec4 from the stack
-					
 					;calculate the intersections, if necessary
 					cmp byte[esi+1], 0
 					jne chunk_generate_mesh_not_pos_w
-						sub esp, 20
+						mov ecx, esp
+						sub esp, 24
 						lea eax, [ebp-64]
-						mov dword[esp+16], eax							;index vector
+						mov dword[esp+20], eax							;index vector
 						lea eax, [ebp-48]
-						mov dword[esp+12], eax							;vertex vector
-						mov dword[esp+8], CHUNK_TESSERACT_POS_W		;tesseract cell edges
+						mov dword[esp+16], eax							;vertex vector
+						mov dword[esp+12], CHUNK_TESSERACT_POS_W		;tesseract cell edges
+						mov dword[esp+8], ecx							;block local plane point
 						lea eax, [ebp-32]
 						mov dword[esp+4], eax							;local hyperplane equation
 						mov eax, dword[ebp+32]
 						mov dword[esp], eax								;hyperplane
 						call chunk_tesseractCell
-						add esp, 20
+						add esp, 24
 					chunk_generate_mesh_not_pos_w:
 					
 					cmp byte[esi-1], 0
 					jne chunk_generate_mesh_not_neg_w
-						sub esp, 20
+						mov ecx, esp
+						sub esp, 24
 						lea eax, [ebp-64]
-						mov dword[esp+16], eax							;index vector
+						mov dword[esp+20], eax							;index vector
 						lea eax, [ebp-48]
-						mov dword[esp+12], eax							;vertex vector
-						mov dword[esp+8], CHUNK_TESSERACT_NEG_W		;tesseract cell edges
+						mov dword[esp+16], eax							;vertex vector
+						mov dword[esp+12], CHUNK_TESSERACT_NEG_W		;tesseract cell edges
+						mov dword[esp+8], ecx							;block local plane point
 						lea eax, [ebp-32]
 						mov dword[esp+4], eax							;local hyperplane equation
 						mov eax, dword[ebp+32]
 						mov dword[esp], eax								;hyperplane
 						call chunk_tesseractCell
-						add esp, 20
+						add esp, 24
 					chunk_generate_mesh_not_neg_w:
 					
 					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH]
 					cmp byte[esi+eax], 0
 					jne chunk_generate_mesh_not_pos_z
-						sub esp, 20
+						mov ecx, esp
+						sub esp, 24
 						lea eax, [ebp-64]
-						mov dword[esp+16], eax							;index vector
+						mov dword[esp+20], eax							;index vector
 						lea eax, [ebp-48]
-						mov dword[esp+12], eax							;vertex vector
-						mov dword[esp+8], CHUNK_TESSERACT_POS_Z		;tesseract cell edges
+						mov dword[esp+16], eax							;vertex vector
+						mov dword[esp+12], CHUNK_TESSERACT_POS_Z		;tesseract cell edges
+						mov dword[esp+8], ecx							;block local plane point
 						lea eax, [ebp-32]
 						mov dword[esp+4], eax							;local hyperplane equation
 						mov eax, dword[ebp+32]
 						mov dword[esp], eax								;hyperplane
 						call chunk_tesseractCell
-						add esp, 20
+						add esp, 24
 					chunk_generate_mesh_not_pos_z:
 					
 					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH]
@@ -326,35 +344,39 @@ chunk_generate:
 					inc eax
 					cmp byte[esi+eax], 0
 					jne chunk_generate_mesh_not_neg_z
-						sub esp, 20
+						mov ecx, esp
+						sub esp, 24
 						lea eax, [ebp-64]
-						mov dword[esp+16], eax							;index vector
+						mov dword[esp+20], eax							;index vector
 						lea eax, [ebp-48]
-						mov dword[esp+12], eax							;vertex vector
-						mov dword[esp+8], CHUNK_TESSERACT_NEG_Z		;tesseract cell edges
+						mov dword[esp+16], eax							;vertex vector
+						mov dword[esp+12], CHUNK_TESSERACT_NEG_Z		;tesseract cell edges
+						mov dword[esp+8], ecx							;block local plane point
 						lea eax, [ebp-32]
 						mov dword[esp+4], eax							;local hyperplane equation
 						mov eax, dword[ebp+32]
 						mov dword[esp], eax								;hyperplane
 						call chunk_tesseractCell
-						add esp, 20
+						add esp, 24
 					chunk_generate_mesh_not_neg_z:
 					
 					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH_SQUARED]
 					cmp byte[esi+eax], 0
 					jne chunk_generate_mesh_not_pos_x
-						sub esp, 20
+						mov ecx, esp
+						sub esp, 24
 						lea eax, [ebp-64]
-						mov dword[esp+16], eax							;index vector
+						mov dword[esp+20], eax							;index vector
 						lea eax, [ebp-48]
-						mov dword[esp+12], eax							;vertex vector
-						mov dword[esp+8], CHUNK_TESSERACT_POS_X		;tesseract cell edges
+						mov dword[esp+16], eax							;vertex vector
+						mov dword[esp+12], CHUNK_TESSERACT_POS_Y		;tesseract cell edges
+						mov dword[esp+8], ecx							;block local plane point
 						lea eax, [ebp-32]
 						mov dword[esp+4], eax							;local hyperplane equation
 						mov eax, dword[ebp+32]
 						mov dword[esp], eax								;hyperplane
 						call chunk_tesseractCell
-						add esp, 20
+						add esp, 24
 					chunk_generate_mesh_not_pos_x:
 					
 					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH_SQUARED]
@@ -362,35 +384,39 @@ chunk_generate:
 					inc eax
 					cmp byte[esi+eax], 0
 					jne chunk_generate_mesh_not_neg_x
-						sub esp, 20
+						mov ecx, esp
+						sub esp, 24
 						lea eax, [ebp-64]
-						mov dword[esp+16], eax							;index vector
+						mov dword[esp+20], eax							;index vector
 						lea eax, [ebp-48]
-						mov dword[esp+12], eax							;vertex vector
-						mov dword[esp+8], CHUNK_TESSERACT_NEG_X		;tesseract cell edges
+						mov dword[esp+16], eax							;vertex vector
+						mov dword[esp+12], CHUNK_TESSERACT_NEG_X		;tesseract cell edges
+						mov dword[esp+8], ecx							;block local plane point
 						lea eax, [ebp-32]
 						mov dword[esp+4], eax							;local hyperplane equation
 						mov eax, dword[ebp+32]
 						mov dword[esp], eax								;hyperplane
 						call chunk_tesseractCell
-						add esp, 20
+						add esp, 24
 					chunk_generate_mesh_not_neg_x:
 					
 					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH_CUBED]
 					cmp byte[esi+eax], 0
 					jne chunk_generate_mesh_not_pos_y
-						sub esp, 20
+						mov ecx, esp
+						sub esp, 24
 						lea eax, [ebp-64]
-						mov dword[esp+16], eax							;index vector
+						mov dword[esp+20], eax							;index vector
 						lea eax, [ebp-48]
-						mov dword[esp+12], eax							;vertex vector
-						mov dword[esp+8], CHUNK_TESSERACT_POS_Y		;tesseract cell edges
+						mov dword[esp+16], eax							;vertex vector
+						mov dword[esp+12], CHUNK_TESSERACT_POS_Y		;tesseract cell edges
+						mov dword[esp+8], ecx							;block local plane point
 						lea eax, [ebp-32]
 						mov dword[esp+4], eax							;local hyperplane equation
 						mov eax, dword[ebp+32]
 						mov dword[esp], eax								;hyperplane
 						call chunk_tesseractCell
-						add esp, 20
+						add esp, 24
 					chunk_generate_mesh_not_pos_y:
 					
 					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH_CUBED]
@@ -398,19 +424,23 @@ chunk_generate:
 					inc eax
 					cmp byte[esi+eax], 0
 					jne chunk_generate_mesh_not_neg_y
-						sub esp, 20
+						mov ecx, esp
+						sub esp, 24
 						lea eax, [ebp-64]
-						mov dword[esp+16], eax							;index vector
+						mov dword[esp+20], eax							;index vector
 						lea eax, [ebp-48]
-						mov dword[esp+12], eax							;vertex vector
-						mov dword[esp+8], CHUNK_TESSERACT_NEG_Y		;tesseract cell edges
+						mov dword[esp+16], eax							;vertex vector
+						mov dword[esp+12], CHUNK_TESSERACT_NEG_Y		;tesseract cell edges
+						mov dword[esp+8], ecx							;block local plane point
 						lea eax, [ebp-32]
 						mov dword[esp+4], eax							;local hyperplane equation
 						mov eax, dword[ebp+32]
 						mov dword[esp], eax								;hyperplane
 						call chunk_tesseractCell
-						add esp, 20
+						add esp, 24
 					chunk_generate_mesh_not_neg_y:
+					
+					add esp, 16				;release hyperplane.point-block pos from the stack
 					
 					chunk_generate_mesh_w_loop_continue:
 					dec esi
@@ -442,6 +472,16 @@ chunk_generate:
 		dec edi
 		test edi, edi
 		jnz chunk_generate_mesh_y_loop_start
+	
+	;create renderable
+	push dword[RENDERABLE_ATTRIB_P3UV2]
+	lea eax, [ebp-64]
+	push eax
+	lea eax, [ebp-48]
+	push eax
+	call renderable_create
+	mov ecx, dword[ebp-4]
+	mov dword[ecx+12], eax
 	
 	;destroy vertex and index vectors
 	lea eax, [ebp-48]
@@ -603,8 +643,9 @@ chunk_generateHeightMap:
 ;void chunk_tesseractCell(
 ;	HyperPlane* plane,
 ;	HyperPlaneEquation* blockLocalEquation,
+;	vec4* blockLocalPlanePoint,
 ;	vec6* tesseractCellEdges,
-;	vector<vec5>* meshVertices,
+;	vector<float>* meshVertices,
 ;	vector<int>* meshIndices
 ;)
 chunk_tesseractCell:
@@ -613,7 +654,226 @@ chunk_tesseractCell:
 	push edi
 	mov ebp, esp
 	
+	sub esp, 144				;6 vec6 for the intersection points				144
+	sub esp, 4					;intersection point count						148
+	sub esp, 4					;edge[0].distance								152
+	sub esp, 4					;edge[1].distance								156
+	sub esp, 4					;vertex vector length beginning					160
+	sub esp, 120				;5 vec5 for the 3d intersection points			280
 	
+	mov dword[ebp-148], 0
+	
+	;calculate the intersection points
+	mov esi, dword[ebp+28]			;current tesseract cell edge in esi
+	mov edi, dword[CHUNK_TESSERACT_CELL_EDGE_COUNT]
+	chunk_tesseractCell_intersect_loop_start:
+		;calculate the distances
+		push esi
+		push dword[ebp+20]
+		call hyperPlane_signedDistance
+		fstp dword[ebp-152]
+		add dword[esp+4], 24
+		call hyperPlane_signedDistance
+		fstp dword[ebp-156]
+		add esp, 8
+		
+		;check if the distances are based
+		mov eax, dword[ebp-152]
+		mov edx, eax
+		and edx, 0x7fffffff
+		cmp edx, dword[EPSILON]
+		jl chunk_tesseractCell_intersect_loop_continue		;|edge[0]|<EPSILON
+		mov ecx, dword[ebp-156]
+		mov edx, ecx
+		and edx, 0x7fffffff
+		cmp edx, dword[EPSILON]
+		jl chunk_tesseractCell_intersect_loop_continue		;|edge[1]|<EPSILON
+		
+		and eax, 0x80000000
+		and ecx, 0x80000000
+		xor eax, ecx
+		test eax, eax
+		jz chunk_tesseractCell_intersect_loop_continue		;the signs of edge[0] and edge[1] are the same, meaning they are on the same side of the hyperplane
+		
+		;calculate the intersection point
+		mov eax, dword[ebp-148]
+		imul eax, 24
+		lea eax, [ebp+eax-144]		;current vec6 in intersection point array in eax
+		
+		and dword[ebp-152], 0x7fffffff	;the sign of the distance is unnecessary now
+		and dword[ebp-156], 0x7fffffff
+		movss xmm2, dword[ebp-152]
+		movss xmm0, dword[ebp-156]
+		addss xmm0, xmm2
+		divss xmm2, xmm0
+		
+		movss xmm0, dword[esi]			;edge[0].x
+		movss xmm1, dword[esi+24]		;edge[1].x
+		subss xmm1, xmm0				;edge[1].x-edge[0].x
+		mulss xmm1, xmm2				;(edge[1].x-edge[0].x)*distanceFromPlaneEdge0
+		addss xmm1, xmm0				;(edge[1].x-edge[0].x)*distanceFromPlaneEdge0 + edge[0].x
+		movss dword[eax], xmm1
+		
+		movss xmm0, dword[esi+4]
+		movss xmm1, dword[esi+28]
+		subss xmm1, xmm0
+		mulss xmm1, xmm2
+		addss xmm1, xmm0
+		movss dword[eax+4], xmm1
+		
+		movss xmm0, dword[esi+8]
+		movss xmm1, dword[esi+32]
+		subss xmm1, xmm0
+		mulss xmm1, xmm2
+		addss xmm1, xmm0
+		movss dword[eax+8], xmm1
+		
+		movss xmm0, dword[esi+12]
+		movss xmm1, dword[esi+36]
+		subss xmm1, xmm0
+		mulss xmm1, xmm2
+		addss xmm1, xmm0
+		movss dword[eax+12], xmm1
+		
+		movss xmm0, dword[esi+16]
+		movss xmm1, dword[esi+40]
+		subss xmm1, xmm0
+		mulss xmm1, xmm2
+		addss xmm1, xmm0
+		movss dword[eax+16], xmm1
+		
+		movss xmm0, dword[esi+20]
+		movss xmm1, dword[esi+44]
+		subss xmm1, xmm0
+		mulss xmm1, xmm2
+		addss xmm1, xmm0
+		movss dword[eax+20], xmm1
+		
+		inc dword[ebp-148]
+		
+		chunk_tesseractCell_intersect_loop_continue:
+		add esi, 48				;edge=2*vec6
+		dec edi
+		test edi, edi
+		jnz chunk_tesseractCell_intersect_loop_start
+		
+		
+	;are there enough intersection points?
+	cmp dword[ebp-148], 3
+	jl chunk_tesseractCell_end
+		
+	;convert the intersection points to 3d
+	lea esi, [ebp-144]		;current intersection point in esi
+	lea edi, [ebp-280]		;current 3d intersection point in edi
+	mov edx, dword[ebp-148]		;index in edx
+	chunk_tesseractCell_convert_loop_start:
+		push edx		;save index
+		
+		push dword[ebp+24]
+		push esi
+		push esi
+		call vec4_sub		;current intersection point -= block local hyperplane point
+		add esp, 12
+		
+		;3d positions
+		mov eax, dword[ebp+16]
+		add eax, 16				;&hyperplane.dir1
+		push eax
+		push esi
+		call vec4_dot
+		fstp dword[edi]
+		add dword[esp+4], 16
+		call vec4_dot
+		fstp dword[edi+4]
+		add dword[esp+4], 16
+		call vec4_dot
+		fstp dword[edi+8]
+		add esp, 8
+		
+		;uv
+		mov eax, dword[esi+16]
+		mov dword[edi+12], eax
+		mov eax, dword[esi+20]
+		mov dword[edi+16], eax
+		
+		pop edx			;restore index
+
+		add esi, 24
+		add edi, 20
+		dec edx
+		test edx, edx
+		jnz chunk_tesseractCell_convert_loop_start
+	
+	;save base vertex count
+	mov eax, dword[ebp+32]		;vertex vector in eax
+	mov eax, dword[eax]
+	xor edx, edx
+	mov ecx, 5
+	idiv ecx
+	mov dword[ebp-160], eax
+	
+	;save vertices
+	lea esi, [ebp-280]				;current intersection point in esi
+	mov edi, dword[ebp-148]		;index in edi
+	chunk_tesseractCell_vertex_save_loop_start:
+	
+		sub esp, 8
+		mov eax, dword[ebp+32]
+		mov dword[esp], eax
+		
+		mov eax, dword[esi]
+		mov dword[esp+4], eax
+		call vector_push_back
+		mov eax, dword[esi+4]
+		mov dword[esp+4], eax
+		call vector_push_back
+		mov eax, dword[esi+8]
+		mov dword[esp+4], eax
+		call vector_push_back
+		mov eax, dword[esi+12]
+		mov dword[esp+4], eax
+		call vector_push_back
+		mov eax, dword[esi+16]
+		mov dword[esp+4], eax
+		call vector_push_back
+		
+		add esp, 8
+	
+		add esi, 20
+		dec edi
+		test edi, edi
+		jnz chunk_tesseractCell_vertex_save_loop_start
+	
+	;indices (triangulates the side in a GL_TRIANGLE_FAN-like layout, except that the first index is repeated every triangle)
+	mov esi, 2			;index in esi
+	chunk_tesseractCell_indices_loop_start:
+		sub esp, 8
+		
+		mov eax, dword[ebp+36]
+		mov dword[esp], eax
+		
+		
+		mov eax, dword[ebp-160]
+		mov dword[esp+4], eax
+		call vector_push_back
+		
+		mov eax, dword[ebp-160]
+		lea eax, [eax+esi-1]
+		mov dword[esp+4], eax
+		call vector_push_back
+		
+		mov eax, dword[ebp-160]
+		add eax, esi
+		mov dword[esp+4], eax
+		call vector_push_back
+		
+		add esp, 8
+	
+		inc esi
+		cmp esi, dword[ebp-148]
+		jl chunk_tesseractCell_indices_loop_start
+		
+	chunk_tesseractCell_end:
 	mov esp, ebp
 	pop edi
 	pop esi
