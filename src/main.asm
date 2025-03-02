@@ -17,13 +17,11 @@ section .text use32
 	
 	extern game_loop
 	
-	
 	..start:
 		push ebp
 		mov ebp, esp
 		
 		finit
-		
 		
 		;create window and opengl context
 		push window_name
