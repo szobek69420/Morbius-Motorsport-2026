@@ -4,17 +4,21 @@
 ;
 ;struct Chunk{
 ;	int chunkX, chunkZ, chunkW;					;0
-;	GLuint vao, vbo, ebo;						;12
-;	MeshCollider* collider;						;24
-;	vec4 lowerBound, upperBound;				;28
-;}		60 bytes overall
+;	Renderable* renderable;						;12
+;	MeshCollider* collider;						;16
+;	vec4 lowerBound, upperBound;				;20
+;}		52 bytes overall
 
 section .rodata use32
 
 	CHUNK_WIDTH dd 16					;1<<4
 	CHUNK_HEIGHT dd 150
-	CHUNK_BLOCK_COUNT dd 614400			;CHUNK_WIDTH^3 * CHUNK_HEIGHT
-	CHUNK_HEIGHT_MAP_LENGTH dd 5832		;(CHUNK_WIDTH+2)^3
+	
+	;the height map is a (CHUNK_WIDTH+2)*(CHUNK_WIDTH+2)*(CHUNK_WIDTH+2) array that tells us how high the surface is at the possible (x,z,w) coordinates of the chunk and the chunk borders
+	CHUNK_HEIGHT_MAP_WIDTH dd 18		;CHUNK_WIDTH+2
+	CHUNK_HEIGHT_MAP_LENGTH dd 5832		;CHUNK_HEIGHT_MAP_WIDTH^3
+	
+	CHUNK_BLOCK_COUNT dd 886464			;CHUNK_HEIGHT_MAP_WIDTH^3 * (CHUNK_HEIGHT+2)
 	
 	CHUNK_HEIGHT_MAP_FACTOR_X dd 0.013
 	CHUNK_HEIGHT_MAP_FACTOR_Z dd 0.017
@@ -27,9 +31,131 @@ section .rodata use32
 	print_float_nl db "%f",10,0
 	
 section .text use32
-	global chunk_generateHeightMap
+
+	global chunk_generate			;Chunk* chunk_generate(int chunkX, int chunkZ, int chunkW, HyperPlaneEquation equation)
 
 	extern my_printf
+	extern my_malloc
+	extern my_free
+	
+	extern BLOCK_AIR
+	extern BLOCK_STONE
+
+chunk_generate:
+	push ebp
+	push ebx
+	push esi
+	push edi
+	mov ebp, esp
+	
+	sub esp, 4				;chunk*
+	sub esp, 4				;heightmap
+	sub esp, 4				;blocks (char array with the length of CHUNK_BLOCK_COUNT, the indexing looks like y*CHUNK_HEIGHT_MAP_WIDTH^3+x*CHUNK_HEIGHT_MAP_WIDTH^2+z*CHUNK_HEIGHT_MAP_WIDTH+w )
+	
+	;alloc space for chunk
+	push 52
+	call my_malloc
+	mov dword[ebp-4], eax
+	add esp, 4
+	
+	;alloc space for heightmap
+	push dword[CHUNK_HEIGHT_MAP_LENGTH]
+	call my_malloc
+	mov dword[ebp-8], eax
+	add esp, 4
+	
+	;generate height map
+	push dword[ebp+28]
+	push dword[ebp+24]
+	push dword[ebp+20]
+	push dword[ebp-8]
+	call chunk_generateHeightMap
+	add esp, 16
+	
+	;alloc blocks array
+	push dword[CHUNK_BLOCK_COUNT]
+	call my_malloc
+	mov dword[ebp-12], eax
+	add esp, 4
+	
+	
+	;set the block types
+	mov esi, dword[ebp-12]			;current block in esi
+	mov edi, dword[CHUNK_HEIGHT]
+	add edi,2						;y index in edi
+	chunk_generate_block_types_y_loop_start:
+		mov ebx, dword[ebp-8]					;current height map pos in ebx
+	
+		push edi								;save y index
+		mov edi, dword[CHUNK_HEIGHT_MAP_WIDTH]	;x index in edi
+		chunk_generate_block_types_x_loop_start:
+			push edi								;save x index
+			mov edi, dword[CHUNK_HEIGHT_MAP_WIDTH]	;z index in edi
+			chunk_generate_block_types_z_loop_start:
+				push edi								;save z index
+				mov edi, dword[CHUNK_HEIGHT_MAP_WIDTH]	;w index in edi
+				chunk_generate_block_types_w_loop_start:
+					
+					mov eax, dword[esp+8]					;y index in eax
+					cmp al, byte[ebx]
+					jbe chunk_generate_block_types_loop_stone
+						;air
+						mov cl, byte[BLOCK_AIR]
+						mov byte[esi], cl
+						jmp chunk_generate_block_types_loop_block_chosen
+						
+					chunk_generate_block_types_loop_stone:
+						;stone
+						mov cl, byte[BLOCK_STONE]
+						mov byte[esi], cl
+						jmp chunk_generate_block_types_loop_block_chosen
+					
+					chunk_generate_block_types_loop_block_chosen:
+					
+					inc esi
+					inc ebx
+					
+					dec edi
+					test edi, edi
+					jnz chunk_generate_block_types_w_loop_start
+				pop edi									;restore z index
+				
+				dec edi
+				test edi, edi
+				jnz chunk_generate_block_types_z_loop_start
+			pop edi									;restore x index
+			
+			dec edi
+			test edi, edi
+			jnz chunk_generate_block_types_x_loop_start
+		pop edi									;restore y index
+		
+		
+		dec edi
+		test edi, edi
+		jnz chunk_generate_block_types_y_loop_start
+		
+		
+	;dealloc height map
+	push dword[ebp-8]
+	call my_free
+	add esp, 4
+	
+	;dealloc blocks
+	push dword[ebp-12]
+	call my_free
+	add esp, 4
+	
+	;set return value
+	mov eax, dword[ebp-4]
+	
+	chunk_generate_end:
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebx
+	pop ebp
+	ret
 
 ;generates a height map for the chunk depending on its chunk id
 ;heightMap is a char array with the length of (CHUNK_WIDTH+2)^3

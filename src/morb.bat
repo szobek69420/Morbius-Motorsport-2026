@@ -3,6 +3,7 @@ mkdir build
 nasm -fobj main.asm -o build/main.o
 nasm -fobj window/window.asm -o build/window.o
 nasm -fobj game_loop/game_loop.asm -o build/game_loop.o
+nasm -fobj world/chunk_tesseract.asm -o build/chunk_tesseract.o
 nasm -fobj world/chunk.asm -o build/chunk.o
 nasm -fobj world/block.asm -o build/block.o
 nasm -fobj camera/camera.asm -o build/camera.o
@@ -40,6 +41,7 @@ build/main.o ^
 build/window.o ^
 build/player.o ^
 build/game_loop.o ^
+build/chunk_tesseract.o ^
 build/chunk.o ^
 build/block.o ^
 build/camera.o ^

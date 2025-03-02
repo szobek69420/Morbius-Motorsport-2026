@@ -17,11 +17,19 @@ section .text use32
 	
 	extern game_loop
 	
+	extern chunk_generate
+	
 	..start:
 		push ebp
 		mov ebp, esp
 		
 		finit
+		
+		push 0
+		push 0
+		push 0
+		call chunk_generate
+		add esp, 12
 		
 		;create window and opengl context
 		push window_name
