@@ -8,15 +8,16 @@
 ;	MeshCollider* collider;						;16
 ;	vec4 lowerBound, upperBound;				;20
 ;}		52 bytes overall
-
 section .rodata use32
 
 	CHUNK_WIDTH dd 16					;1<<4
 	CHUNK_HEIGHT dd 150
 	
 	;the height map is a (CHUNK_WIDTH+2)*(CHUNK_WIDTH+2)*(CHUNK_WIDTH+2) array that tells us how high the surface is at the possible (x,z,w) coordinates of the chunk and the chunk borders
-	CHUNK_HEIGHT_MAP_WIDTH dd 18		;CHUNK_WIDTH+2
 	CHUNK_HEIGHT_MAP_LENGTH dd 5832		;CHUNK_HEIGHT_MAP_WIDTH^3
+	CHUNK_HEIGHT_MAP_WIDTH dd 18		;CHUNK_WIDTH+2
+	CHUNK_HEIGHT_MAP_WIDTH_SQUARED dd 324
+	CHUNK_HEIGHT_MAP_WIDTH_CUBED dd 5832
 	
 	CHUNK_BLOCK_COUNT dd 886464			;CHUNK_HEIGHT_MAP_WIDTH^3 * (CHUNK_HEIGHT+2)
 	
@@ -30,9 +31,13 @@ section .rodata use32
 	print_int_nl db "%d",10,0
 	print_float_nl db "%f",10,0
 	
+	test_text db "rizzler",10,0
+	
 section .text use32
 
-	global chunk_generate			;Chunk* chunk_generate(int chunkX, int chunkZ, int chunkW, HyperPlaneEquation equation)
+	global chunk_generate			;Chunk* chunk_generate(int chunkX, int chunkZ, int chunkW, HyperPlane* plane)
+
+	extern hyperPlane_getNormal
 
 	extern my_printf
 	extern my_malloc
@@ -40,6 +45,25 @@ section .text use32
 	
 	extern BLOCK_AIR
 	extern BLOCK_STONE
+	
+	extern vector_init
+	extern vector_destroy
+	extern vector_push_back
+	
+	extern vec4_dot
+	extern vec4_add
+	extern vec4_sub
+	extern vec4_scale
+	
+	extern CHUNK_TESSERACT_CELL_EDGE_COUNT
+	extern CHUNK_TESSERACT_POS_X
+	extern CHUNK_TESSERACT_NEG_X
+	extern CHUNK_TESSERACT_POS_Y
+	extern CHUNK_TESSERACT_NEG_Y
+	extern CHUNK_TESSERACT_POS_Z
+	extern CHUNK_TESSERACT_NEG_Z
+	extern CHUNK_TESSERACT_POS_W
+	extern CHUNK_TESSERACT_NEG_W
 
 chunk_generate:
 	push ebp
@@ -48,9 +72,19 @@ chunk_generate:
 	push edi
 	mov ebp, esp
 	
-	sub esp, 4				;chunk*
-	sub esp, 4				;heightmap
-	sub esp, 4				;blocks (char array with the length of CHUNK_BLOCK_COUNT, the indexing looks like y*CHUNK_HEIGHT_MAP_WIDTH^3+x*CHUNK_HEIGHT_MAP_WIDTH^2+z*CHUNK_HEIGHT_MAP_WIDTH+w )
+	sub esp, 4				;chunk*								4
+	sub esp, 4				;heightmap							8
+	
+	;"blocks" is a char array with the length of CHUNK_BLOCK_COUNT, the indexing looks like y*CHUNK_HEIGHT_MAP_WIDTH^3+x*CHUNK_HEIGHT_MAP_WIDTH^2+z*CHUNK_HEIGHT_MAP_WIDTH+w 
+	;it is the blocks of the chunk and the blocks on the edge of the neighbouring chunks
+	sub esp, 4				;blocks								12
+	
+	;in this configuration the next two variables is exactly a hyperplane equation
+	sub esp, 4				;current hyperplane equation E		16
+	sub esp, 16				;hyperplane normal					32	
+
+	sub esp, 16				;vertex vector						48
+	sub esp, 16				;index vector						64
 	
 	;alloc space for chunk
 	push 52
@@ -136,6 +170,288 @@ chunk_generate:
 		jnz chunk_generate_block_types_y_loop_start
 		
 		
+	;get hyperplane normal
+	lea eax, [ebp-32]
+	push eax
+	push dword[ebp+32]
+	call hyperPlane_getNormal
+	add esp, 8
+	
+	;init vertex and index vectors
+	push 20
+	lea eax, [ebp-48]
+	push eax
+	call vector_init
+	add esp, 8
+	
+	push 4
+	lea eax, [ebp-64]
+	push eax
+	call vector_init
+	add esp, 8
+	
+	;calculate mesh
+	mov esi, dword[ebp-12]
+	add esi, dword[CHUNK_BLOCK_COUNT]
+	dec esi
+	sub esi, dword[CHUNK_HEIGHT_MAP_WIDTH_CUBED]
+	sub esi, dword[CHUNK_HEIGHT_MAP_WIDTH_SQUARED]
+	sub esi, dword[CHUNK_HEIGHT_MAP_WIDTH]
+	sub esi, 1							;current block pos in esi, it will be iterated backwards
+	mov edi, dword[CHUNK_HEIGHT]		;y index in edi
+	chunk_generate_mesh_y_loop_start:
+		push edi							;save y index
+		mov edi, dword[CHUNK_WIDTH]			;x index in edi
+		chunk_generate_mesh_x_loop_start:
+			push edi							;save x index
+			mov edi, dword[CHUNK_WIDTH]			;z index in edi
+			chunk_generate_mesh_z_loop_start:
+				push edi							;save z index
+				mov edi, dword[CHUNK_WIDTH]			;w index in edi
+				chunk_generate_mesh_w_loop_start:
+					;is the block air?
+					cmp byte[esi], 0
+					je chunk_generate_mesh_w_loop_continue
+				
+					;calculate hyperplane.position-block position
+					sub esp, 16				;hyperplane.position-block position
+					
+					
+					mov eax, dword[ebp+20]	;chunkX
+					shl eax, 4
+					add eax, dword[esp+20]	;x index
+					mov dword[esp], eax
+					
+					mov eax, dword[esp+24]	;y index
+					mov dword[esp+4], eax
+					
+					mov eax, dword[ebp+24]	;chunkZ
+					shl eax, 4
+					add eax, dword[esp+16]	;z index
+					mov dword[esp+8], eax
+					
+					mov eax, dword[ebp+28]	;chunkW
+					shl eax, 4
+					add eax, edi			;w index
+					mov dword[esp+12], eax
+					
+					
+					mov eax, dword[ebp+32]	;hyperplane
+					fld dword[eax]
+					fild dword[esp]
+					fsubp
+					fstp dword[esp]
+					
+					fld dword[eax+4]
+					fild dword[esp+4]
+					fsubp
+					fstp dword[esp+4]
+					
+					fld dword[eax+8]
+					fild dword[esp+8]
+					fsubp
+					fstp dword[esp+8]
+					
+					fld dword[eax+12]
+					fild dword[esp+12]
+					fsubp
+					fstp dword[esp+12]
+					
+					;calculate the current hyperplane equation E
+					;-<hyperplane.position-block pos; hyperplane normal>
+					mov eax, esp
+					lea ecx, [ebp-32]
+					push eax
+					push ecx
+					call vec4_dot
+					add esp, 8
+					
+					fstp dword[ebp-16]
+					xor dword[ebp-16], 0x80000000
+					
+					add esp, 16				;release the vec4 from the stack
+					
+					;calculate the intersections, if necessary
+					cmp byte[esi+1], 0
+					jne chunk_generate_mesh_not_pos_w
+						sub esp, 20
+						lea eax, [ebp-64]
+						mov dword[esp+16], eax							;index vector
+						lea eax, [ebp-48]
+						mov dword[esp+12], eax							;vertex vector
+						mov dword[esp+8], CHUNK_TESSERACT_POS_W		;tesseract cell edges
+						lea eax, [ebp-32]
+						mov dword[esp+4], eax							;local hyperplane equation
+						mov eax, dword[ebp+32]
+						mov dword[esp], eax								;hyperplane
+						call chunk_tesseractCell
+						add esp, 20
+					chunk_generate_mesh_not_pos_w:
+					
+					cmp byte[esi-1], 0
+					jne chunk_generate_mesh_not_neg_w
+						sub esp, 20
+						lea eax, [ebp-64]
+						mov dword[esp+16], eax							;index vector
+						lea eax, [ebp-48]
+						mov dword[esp+12], eax							;vertex vector
+						mov dword[esp+8], CHUNK_TESSERACT_NEG_W		;tesseract cell edges
+						lea eax, [ebp-32]
+						mov dword[esp+4], eax							;local hyperplane equation
+						mov eax, dword[ebp+32]
+						mov dword[esp], eax								;hyperplane
+						call chunk_tesseractCell
+						add esp, 20
+					chunk_generate_mesh_not_neg_w:
+					
+					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH]
+					cmp byte[esi+eax], 0
+					jne chunk_generate_mesh_not_pos_z
+						sub esp, 20
+						lea eax, [ebp-64]
+						mov dword[esp+16], eax							;index vector
+						lea eax, [ebp-48]
+						mov dword[esp+12], eax							;vertex vector
+						mov dword[esp+8], CHUNK_TESSERACT_POS_Z		;tesseract cell edges
+						lea eax, [ebp-32]
+						mov dword[esp+4], eax							;local hyperplane equation
+						mov eax, dword[ebp+32]
+						mov dword[esp], eax								;hyperplane
+						call chunk_tesseractCell
+						add esp, 20
+					chunk_generate_mesh_not_pos_z:
+					
+					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH]
+					not eax
+					inc eax
+					cmp byte[esi+eax], 0
+					jne chunk_generate_mesh_not_neg_z
+						sub esp, 20
+						lea eax, [ebp-64]
+						mov dword[esp+16], eax							;index vector
+						lea eax, [ebp-48]
+						mov dword[esp+12], eax							;vertex vector
+						mov dword[esp+8], CHUNK_TESSERACT_NEG_Z		;tesseract cell edges
+						lea eax, [ebp-32]
+						mov dword[esp+4], eax							;local hyperplane equation
+						mov eax, dword[ebp+32]
+						mov dword[esp], eax								;hyperplane
+						call chunk_tesseractCell
+						add esp, 20
+					chunk_generate_mesh_not_neg_z:
+					
+					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH_SQUARED]
+					cmp byte[esi+eax], 0
+					jne chunk_generate_mesh_not_pos_x
+						sub esp, 20
+						lea eax, [ebp-64]
+						mov dword[esp+16], eax							;index vector
+						lea eax, [ebp-48]
+						mov dword[esp+12], eax							;vertex vector
+						mov dword[esp+8], CHUNK_TESSERACT_POS_X		;tesseract cell edges
+						lea eax, [ebp-32]
+						mov dword[esp+4], eax							;local hyperplane equation
+						mov eax, dword[ebp+32]
+						mov dword[esp], eax								;hyperplane
+						call chunk_tesseractCell
+						add esp, 20
+					chunk_generate_mesh_not_pos_x:
+					
+					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH_SQUARED]
+					not eax
+					inc eax
+					cmp byte[esi+eax], 0
+					jne chunk_generate_mesh_not_neg_x
+						sub esp, 20
+						lea eax, [ebp-64]
+						mov dword[esp+16], eax							;index vector
+						lea eax, [ebp-48]
+						mov dword[esp+12], eax							;vertex vector
+						mov dword[esp+8], CHUNK_TESSERACT_NEG_X		;tesseract cell edges
+						lea eax, [ebp-32]
+						mov dword[esp+4], eax							;local hyperplane equation
+						mov eax, dword[ebp+32]
+						mov dword[esp], eax								;hyperplane
+						call chunk_tesseractCell
+						add esp, 20
+					chunk_generate_mesh_not_neg_x:
+					
+					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH_CUBED]
+					cmp byte[esi+eax], 0
+					jne chunk_generate_mesh_not_pos_y
+						sub esp, 20
+						lea eax, [ebp-64]
+						mov dword[esp+16], eax							;index vector
+						lea eax, [ebp-48]
+						mov dword[esp+12], eax							;vertex vector
+						mov dword[esp+8], CHUNK_TESSERACT_POS_Y		;tesseract cell edges
+						lea eax, [ebp-32]
+						mov dword[esp+4], eax							;local hyperplane equation
+						mov eax, dword[ebp+32]
+						mov dword[esp], eax								;hyperplane
+						call chunk_tesseractCell
+						add esp, 20
+					chunk_generate_mesh_not_pos_y:
+					
+					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH_CUBED]
+					not eax
+					inc eax
+					cmp byte[esi+eax], 0
+					jne chunk_generate_mesh_not_neg_y
+						sub esp, 20
+						lea eax, [ebp-64]
+						mov dword[esp+16], eax							;index vector
+						lea eax, [ebp-48]
+						mov dword[esp+12], eax							;vertex vector
+						mov dword[esp+8], CHUNK_TESSERACT_NEG_Y		;tesseract cell edges
+						lea eax, [ebp-32]
+						mov dword[esp+4], eax							;local hyperplane equation
+						mov eax, dword[ebp+32]
+						mov dword[esp], eax								;hyperplane
+						call chunk_tesseractCell
+						add esp, 20
+					chunk_generate_mesh_not_neg_y:
+					
+					chunk_generate_mesh_w_loop_continue:
+					dec esi
+					dec edi
+					test edi, edi
+					jnz chunk_generate_mesh_w_loop_start
+				pop edi								;restore z index
+				
+				sub esi, 2
+			
+				dec edi
+				test edi, edi
+				jnz chunk_generate_mesh_z_loop_start
+			pop edi								;restore x index
+			
+			mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH]
+			shl eax, 1
+			sub esi, eax
+			
+			dec edi
+			test edi, edi
+			jnz chunk_generate_mesh_x_loop_start
+		pop edi								;restore y index
+	
+		mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH_SQUARED]
+		shl eax, 1
+		sub esi, eax
+		
+		dec edi
+		test edi, edi
+		jnz chunk_generate_mesh_y_loop_start
+	
+	;destroy vertex and index vectors
+	lea eax, [ebp-48]
+	push eax
+	call vector_destroy
+	lea eax, [ebp-64]
+	push eax
+	call vector_destroy
+	add esp, 8
+	
 	;dealloc height map
 	push dword[ebp-8]
 	call my_free
@@ -273,6 +589,30 @@ chunk_generateHeightMap:
 		dec edi
 		test edi, edi
 		jnz chunk_generateHeightMap_loop_x_start
+	
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+	
+;a helper function for chunk_generate
+;calculates the intersection of the given tesseract cell with the hyperplane and adds its vertices to the vectors
+;void chunk_tesseractCell(
+;	HyperPlane* plane,
+;	HyperPlaneEquation* blockLocalEquation,
+;	vec6* tesseractCellEdges,
+;	vector<vec5>* meshVertices,
+;	vector<int>* meshIndices
+;)
+chunk_tesseractCell:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
 	
 	mov esp, ebp
 	pop edi

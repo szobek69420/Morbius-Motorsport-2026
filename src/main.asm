@@ -4,6 +4,8 @@ section .rodata use32
 	
 section .bss use32
 	pwindow resb 4		;GLFWwindow*
+	
+	hyperplane resb 64
 
 section .text use32
 	
@@ -18,6 +20,7 @@ section .text use32
 	extern game_loop
 	
 	extern chunk_generate
+	extern hyperPlane_create
 	
 	..start:
 		push ebp
@@ -25,6 +28,8 @@ section .text use32
 		
 		finit
 		
+		push hyperplane
+		call hyperPlane_create
 		push 0
 		push 0
 		push 0

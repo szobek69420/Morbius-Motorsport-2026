@@ -1,6 +1,20 @@
 [BITS 32]
 
 section .rodata use32
+	global CHUNK_TESSERACT_CELL_EDGE_COUNT
+	
+	global CHUNK_TESSERACT_POS_X
+	global CHUNK_TESSERACT_NEG_X
+	global CHUNK_TESSERACT_POS_Y
+	global CHUNK_TESSERACT_NEG_Y
+	global CHUNK_TESSERACT_POS_Z
+	global CHUNK_TESSERACT_NEG_Z
+	global CHUNK_TESSERACT_POS_W
+	global CHUNK_TESSERACT_NEG_W
+	
+
+	CHUNK_TESSERACT_CELL_EDGE_COUNT dd 12
+
 	;each pair of vec6 is the two endpoints of a side, where the first 4 floats are positions and the last 2 are uv coords
 	
 	;the cell towards the positive x side of a hyperkuba
