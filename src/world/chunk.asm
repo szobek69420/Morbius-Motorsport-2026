@@ -20,6 +20,7 @@ section .rodata use32
 	CHUNK_HEIGHT_MAP_WIDTH dd 18		;CHUNK_WIDTH+2
 	CHUNK_HEIGHT_MAP_WIDTH_SQUARED dd 324
 	CHUNK_HEIGHT_MAP_WIDTH_CUBED dd 5832
+	CHUNK_HEIGHT_PLUS_TWO dd 152
 	
 	CHUNK_BLOCK_COUNT dd 886464			;CHUNK_HEIGHT_MAP_WIDTH^3 * (CHUNK_HEIGHT+2)
 	
@@ -125,19 +126,18 @@ chunk_generate:
 	
 	;set the block types
 	mov esi, dword[ebp-12]			;current block in esi
-	mov edi, dword[CHUNK_HEIGHT]
-	add edi,2						;y index in edi
+	mov edi, 0						;y index in edi
 	chunk_generate_block_types_y_loop_start:
 		mov ebx, dword[ebp-8]					;current height map pos in ebx
 	
 		push edi								;save y index
-		mov edi, dword[CHUNK_HEIGHT_MAP_WIDTH]	;x index in edi
+		mov edi, 0								;x index in edi
 		chunk_generate_block_types_x_loop_start:
 			push edi								;save x index
-			mov edi, dword[CHUNK_HEIGHT_MAP_WIDTH]	;z index in edi
+			mov edi, 0								;z index in edi
 			chunk_generate_block_types_z_loop_start:
 				push edi								;save z index
-				mov edi, dword[CHUNK_HEIGHT_MAP_WIDTH]	;w index in edi
+				mov edi, 0								;w index in edi
 				chunk_generate_block_types_w_loop_start:
 					
 					mov eax, dword[esp+8]					;y index in eax
@@ -159,26 +159,36 @@ chunk_generate:
 					inc esi
 					inc ebx
 					
-					dec edi
-					test edi, edi
-					jnz chunk_generate_block_types_w_loop_start
+					inc edi
+					cmp edi, dword[CHUNK_HEIGHT_MAP_WIDTH]
+					jl chunk_generate_block_types_w_loop_start
 				pop edi									;restore z index
 				
-				dec edi
-				test edi, edi
-				jnz chunk_generate_block_types_z_loop_start
+				inc edi
+				cmp edi, dword[CHUNK_HEIGHT_MAP_WIDTH]
+				jl chunk_generate_block_types_z_loop_start
 			pop edi									;restore x index
 			
-			dec edi
-			test edi, edi
-			jnz chunk_generate_block_types_x_loop_start
+			inc edi
+			cmp edi, dword[CHUNK_HEIGHT_MAP_WIDTH]
+			jl chunk_generate_block_types_x_loop_start
 		pop edi									;restore y index
 		
 		
-		dec edi
-		test edi, edi
-		jnz chunk_generate_block_types_y_loop_start
+		inc edi
+		cmp edi, dword[CHUNK_HEIGHT_PLUS_TWO]
+		jl chunk_generate_block_types_y_loop_start
 		
+	mov eax, dword[ebp-12]
+	mov ecx, dword[CHUNK_HEIGHT_MAP_WIDTH_CUBED]
+	imul ecx, 100
+	add eax, ecx
+	xor ecx, ecx
+	mov cl, byte[eax]
+	push ecx
+	push print_int_nl
+	call my_printf
+	add esp, 8
 		
 	;get hyperplane normal
 	lea eax, [ebp-32]

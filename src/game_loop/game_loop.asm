@@ -404,6 +404,11 @@ game_loop:
 	mov dword[test_chunk], eax
 	add esp, 16
 	
+	push image_path
+	push dword[eax+12]
+	call renderable_setAlbedo
+	add esp, 8
+	
 	;create morbius poster and the plain renderable
 	push dword[RENDERABLE_ATTRIB_P3UV2]
 	push indices_vector
