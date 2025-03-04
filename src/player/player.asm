@@ -144,6 +144,12 @@ player_init:
 	mov ecx, dword[ebp-4]
 	mov dword[ecx+32], eax
 	
+	push 0x43340000
+	push HYPERPLANE_ROTATION_VECTOR_2
+	push HYPERPLANE_ROTATION_VECTOR_1
+	push dword[ebp+12]
+	call hyperPlane_rotate
+	add esp, 16
 	
 	;set return value
 	mov eax, dword[ebp-4]

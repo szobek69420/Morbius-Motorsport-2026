@@ -11,6 +11,7 @@
 section .rodata use32
 
 	EPSILON dd 0.00001
+	VERY_BIG_NUMBER dd 69420.69420
 
 	CHUNK_WIDTH dd 16					;1<<4
 	CHUNK_HEIGHT dd 150
@@ -28,14 +29,16 @@ section .rodata use32
 	CHUNK_HEIGHT_MAP_FACTOR_Z dd 0.017
 	CHUNK_HEIGHT_MAP_FACTOR_W dd 0.019
 	
-	CHUNK_HEIGHT_MAP_SCALE dd 20.0
-	CHUNK_HEIGHT_MAP_BASE dd 85.0
+	CHUNK_HEIGHT_MAP_SCALE dd 10.0
+	CHUNK_HEIGHT_MAP_BASE dd 35.0
 	
+	print_nl db 10,0
+	print_int_space db "%d ",0
 	print_int_nl db "%d",10,0
 	print_float_nl db "%f",10,0
 	print_two_floats_nl db "%f %f",10,0
 	
-	test_text db "rizzler",10,0
+	test_text db "the rizzler",10,0
 	
 section .text use32
 
@@ -62,6 +65,11 @@ section .text use32
 	extern vec4_print
 	
 	extern vec3_print
+	extern vec3_cross
+	extern vec3_dot
+	extern vec3_sub
+	extern vec3_normalize
+	extern vec3_magnitude
 	
 	extern CHUNK_TESSERACT_CELL_EDGE_COUNT
 	extern CHUNK_TESSERACT_POS_X
@@ -72,6 +80,15 @@ section .text use32
 	extern CHUNK_TESSERACT_NEG_Z
 	extern CHUNK_TESSERACT_POS_W
 	extern CHUNK_TESSERACT_NEG_W
+	
+	extern CHUNK_TESSERACT_POS_X_NORMAL
+	extern CHUNK_TESSERACT_NEG_X_NORMAL
+	extern CHUNK_TESSERACT_POS_Y_NORMAL
+	extern CHUNK_TESSERACT_NEG_Y_NORMAL
+	extern CHUNK_TESSERACT_POS_Z_NORMAL
+	extern CHUNK_TESSERACT_NEG_Z_NORMAL
+	extern CHUNK_TESSERACT_POS_W_NORMAL
+	extern CHUNK_TESSERACT_NEG_W_NORMAL
 	
 	extern RENDERABLE_ATTRIB_P3UV2
 	extern renderable_create
@@ -297,7 +314,8 @@ chunk_generate:
 					cmp byte[esi+1], 0
 					jne chunk_generate_mesh_not_pos_w
 						mov ecx, esp
-						sub esp, 24
+						sub esp, 28
+						mov dword[esp+24], CHUNK_TESSERACT_POS_W_NORMAL
 						lea eax, [ebp-64]
 						mov dword[esp+20], eax							;index vector
 						lea eax, [ebp-48]
@@ -309,13 +327,14 @@ chunk_generate:
 						mov eax, dword[ebp+32]
 						mov dword[esp], eax								;hyperplane
 						call chunk_tesseractCell
-						add esp, 24
+						add esp, 28
 					chunk_generate_mesh_not_pos_w:
 					
 					cmp byte[esi-1], 0
 					jne chunk_generate_mesh_not_neg_w
 						mov ecx, esp
-						sub esp, 24
+						sub esp, 28
+						mov dword[esp+24], CHUNK_TESSERACT_NEG_W_NORMAL
 						lea eax, [ebp-64]
 						mov dword[esp+20], eax							;index vector
 						lea eax, [ebp-48]
@@ -327,14 +346,15 @@ chunk_generate:
 						mov eax, dword[ebp+32]
 						mov dword[esp], eax								;hyperplane
 						call chunk_tesseractCell
-						add esp, 24
+						add esp, 28
 					chunk_generate_mesh_not_neg_w:
 					
 					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH]
 					cmp byte[esi+eax], 0
 					jne chunk_generate_mesh_not_pos_z
 						mov ecx, esp
-						sub esp, 24
+						sub esp, 28
+						mov dword[esp+24], CHUNK_TESSERACT_POS_Z_NORMAL
 						lea eax, [ebp-64]
 						mov dword[esp+20], eax							;index vector
 						lea eax, [ebp-48]
@@ -346,7 +366,7 @@ chunk_generate:
 						mov eax, dword[ebp+32]
 						mov dword[esp], eax								;hyperplane
 						call chunk_tesseractCell
-						add esp, 24
+						add esp, 28
 					chunk_generate_mesh_not_pos_z:
 					
 					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH]
@@ -355,7 +375,8 @@ chunk_generate:
 					cmp byte[esi+eax], 0
 					jne chunk_generate_mesh_not_neg_z
 						mov ecx, esp
-						sub esp, 24
+						sub esp, 28
+						mov dword[esp+24], CHUNK_TESSERACT_NEG_Z_NORMAL
 						lea eax, [ebp-64]
 						mov dword[esp+20], eax							;index vector
 						lea eax, [ebp-48]
@@ -367,14 +388,15 @@ chunk_generate:
 						mov eax, dword[ebp+32]
 						mov dword[esp], eax								;hyperplane
 						call chunk_tesseractCell
-						add esp, 24
+						add esp, 28
 					chunk_generate_mesh_not_neg_z:
 					
 					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH_SQUARED]
 					cmp byte[esi+eax], 0
 					jne chunk_generate_mesh_not_pos_x
 						mov ecx, esp
-						sub esp, 24
+						sub esp, 28
+						mov dword[esp+24], CHUNK_TESSERACT_POS_X_NORMAL
 						lea eax, [ebp-64]
 						mov dword[esp+20], eax							;index vector
 						lea eax, [ebp-48]
@@ -386,7 +408,7 @@ chunk_generate:
 						mov eax, dword[ebp+32]
 						mov dword[esp], eax								;hyperplane
 						call chunk_tesseractCell
-						add esp, 24
+						add esp, 28
 					chunk_generate_mesh_not_pos_x:
 					
 					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH_SQUARED]
@@ -395,7 +417,8 @@ chunk_generate:
 					cmp byte[esi+eax], 0
 					jne chunk_generate_mesh_not_neg_x
 						mov ecx, esp
-						sub esp, 24
+						sub esp, 28
+						mov dword[esp+24], CHUNK_TESSERACT_NEG_X_NORMAL
 						lea eax, [ebp-64]
 						mov dword[esp+20], eax							;index vector
 						lea eax, [ebp-48]
@@ -407,14 +430,15 @@ chunk_generate:
 						mov eax, dword[ebp+32]
 						mov dword[esp], eax								;hyperplane
 						call chunk_tesseractCell
-						add esp, 24
+						add esp, 28
 					chunk_generate_mesh_not_neg_x:
 					
 					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH_CUBED]
 					cmp byte[esi+eax], 0
 					jne chunk_generate_mesh_not_pos_y
 						mov ecx, esp
-						sub esp, 24
+						sub esp, 28
+						mov dword[esp+24], CHUNK_TESSERACT_POS_Y_NORMAL
 						lea eax, [ebp-64]
 						mov dword[esp+20], eax							;index vector
 						lea eax, [ebp-48]
@@ -426,7 +450,7 @@ chunk_generate:
 						mov eax, dword[ebp+32]
 						mov dword[esp], eax								;hyperplane
 						call chunk_tesseractCell
-						add esp, 24
+						add esp, 28
 					chunk_generate_mesh_not_pos_y:
 					
 					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH_CUBED]
@@ -435,7 +459,8 @@ chunk_generate:
 					cmp byte[esi+eax], 0
 					jne chunk_generate_mesh_not_neg_y
 						mov ecx, esp
-						sub esp, 24
+						sub esp, 28
+						mov dword[esp+24], CHUNK_TESSERACT_NEG_Y_NORMAL
 						lea eax, [ebp-64]
 						mov dword[esp+20], eax							;index vector
 						lea eax, [ebp-48]
@@ -447,7 +472,7 @@ chunk_generate:
 						mov eax, dword[ebp+32]
 						mov dword[esp], eax								;hyperplane
 						call chunk_tesseractCell
-						add esp, 24
+						add esp, 28
 					chunk_generate_mesh_not_neg_y:
 					
 					add esp, 16				;release hyperplane.point-block pos from the stack
@@ -657,6 +682,7 @@ chunk_generateHeightMap:
 ;	vec6* tesseractCellEdges,
 ;	vector<float>* meshVertices,
 ;	vector<int>* meshIndices
+;	vec4* cellNormal
 ;)
 chunk_tesseractCell:
 	push ebp
@@ -669,7 +695,14 @@ chunk_tesseractCell:
 	sub esp, 4					;edge[0].distance								152
 	sub esp, 4					;edge[1].distance								156
 	sub esp, 4					;vertex vector length beginning					160
-	sub esp, 120				;5 vec5 for the 3d intersection points			280
+	sub esp, 120				;6 vec5 for the 3d intersection points			280
+	sub esp, 24					;6 indices										304
+	sub esp, 12					;cellNormal's projection to the hyperplane		316
+	sub esp, 12					;side normal in 3d								328
+	sub esp, 12					;helper vec3									340
+	sub esp, 12					;helper vec3 2									352
+	sub esp, 4					;second index lowest- and remaining index highest dot product	356
+	sub esp, 4					;highest dot product index						360
 	
 	mov dword[ebp-148], 0
 	
@@ -694,10 +727,10 @@ chunk_tesseractCell:
 		cmp edx, dword[EPSILON]
 		jl chunk_tesseractCell_intersect_loop_continue		;|edge[0]|<EPSILON
 		mov ecx, dword[ebp-156]
-		mov edx, ecx
-		and edx, 0x7fffffff
-		cmp edx, dword[EPSILON]
-		jl chunk_tesseractCell_intersect_loop_continue		;|edge[1]|<EPSILON
+		;mov edx, ecx
+		;and edx, 0x7fffffff
+		;cmp edx, dword[EPSILON]
+		;jl chunk_tesseractCell_intersect_loop_continue		;|edge[1]|<EPSILON
 		
 		and eax, 0x80000000
 		and ecx, 0x80000000
@@ -853,10 +886,251 @@ chunk_tesseractCell:
 		dec edi
 		test edi, edi
 		jnz chunk_tesseractCell_vertex_save_loop_start
+		
+	;calculate the cellnormal's projection
+	mov eax, dword[ebp+16]
+	add eax, 16					;&hyperplane.dir1 in eax
+	mov ecx, dword[ebp+40]		;cellnormal in ecx
+	push ecx
+	push eax
+	call vec4_dot
+	fstp dword[ebp-316]
+	add dword[esp], 16
+	call vec4_dot
+	fstp dword[ebp-312]
+	add dword[esp], 16
+	call vec4_dot
+	fstp dword[ebp-308]
+	add esp, 8
 	
-	;indices (triangulates the side in a GL_TRIANGLE_FAN-like layout, except that the first index is repeated every triangle)
+	;calculate the side's normal in 3d
+	;it is be basically normalize(vertex3D[2]-vertex3D[0] x vertex3D[1]-vertex3D[0])
+	;but if its dot product with the cellnormals projection is negative, then it will be negated
+	lea eax, [ebp-280]		;vertex3D[0]
+	lea ecx, [ebp-240]		;vertex3D[2]
+	push eax
+	push ecx
+	lea edx, [ebp-328]
+	push edx
+	call vec3_sub
+	lea ecx, [ebp-260]		;vertex3D[1]
+	mov dword[esp+4], ecx
+	lea edx, [ebp-340]
+	mov dword[esp], edx
+	call vec3_sub
+	add esp, 12
+	
+	lea eax, [ebp-340]
+	lea ecx, [ebp-328]
+	push eax
+	push ecx
+	push ecx
+	call vec3_cross
+	add esp, 12
+	
+	lea eax, [ebp-316]		;cellnormal projection
+	lea ecx, [ebp-328]		;wannabe normal
+	push eax
+	push ecx
+	call vec3_dot
+	fstp dword[esp]
+	mov eax, dword[esp]
+	add esp, 8
+	and eax, 0x80000000
+	test eax, eax
+	jz chunk_tesseractCell_normal_is_gut
+		xor dword[ebp-328], 0x80000000
+		xor dword[ebp-324], 0x80000000
+		xor dword[ebp-320], 0x80000000
+	chunk_tesseractCell_normal_is_gut:
+	
+	lea eax, [ebp-328]
+	push eax
+	call vec3_magnitude
+	fstp dword[esp]
+	mov eax, dword[esp]
+	add esp, 4
+	and eax, 0x7fffffff
+	cmp eax, dword[EPSILON]
+	jl chunk_tesseractCell_end			;the side is parallel to the hyperplane
+	
+	lea eax, [ebp-328]
+	push eax
+	call vec3_normalize
+	add esp, 4
+	
+	;init indices array
+	mov dword[ebp-304], 0
+	mov dword[ebp-300], 1
+	mov dword[ebp-296], 2
+	mov dword[ebp-292], 3
+	mov dword[ebp-288], 4
+	mov dword[ebp-284], 5
+	
+	;get the first two indices
+	;the first one will be 0
+	;the second one will be determined in the following way:
+	;the second index is initially 1
+	;if for an index <normalize(vertex3D[testedIndex]-vertex3D[0]); normalize( sideNormal x (vertex3D[currentSecondIndex]-vertex3D[0]) )> is negative
+	;then it is the new second index
+	;this is iterated as long as a new second index is found
+	chunk_tesseractCell_second_index_outer_loop_start:
+		lea eax, [ebp-280]
+		push eax
+		mov ecx, dword[ebp-300]
+		imul ecx, 20
+		lea eax, [ebp-280+ecx]
+		push eax
+		lea eax, [ebp-340]
+		push eax
+		call vec3_sub
+		add esp, 12
+		
+		lea eax, [ebp-340]
+		lea ecx, [ebp-328]
+		push eax
+		push ecx
+		push eax
+		call vec3_cross
+		call vec3_normalize		;normalize( sideNormal x (vertex3D[currentSecondIndex]-vertex3D[0]) ) in ebp-340
+		add esp, 12
+		
+		mov esi, 2				;tested indices index (0 and 1 must not be tested)
+		chunk_tesseractCell_second_index_inner_loop_start:
+			;calculate normalize(vertex3D[testedIndex]-vertex3D[0])
+			mov eax, dword[ebp-304+4*esi]
+			imul eax, 20
+			
+			lea ecx, [ebp-280]
+			push ecx
+			lea eax, [ebp-280+eax]
+			push eax
+			lea eax, [ebp-352]
+			push eax
+			call vec3_sub
+			call vec3_normalize
+			add esp, 12
+			
+			;check if the dot product is negative
+			lea eax, [ebp-340]
+			lea ecx, [ebp-352]
+			push eax
+			push ecx
+			call vec3_dot
+			fstp dword[esp]
+			mov eax, dword[esp]
+			add esp, 8
+			
+			mov ecx, eax
+			test ecx, 0x80000000
+			jz chunk_tesseractCell_second_index_inner_loop_continue
+				;new second index found, swap indices[1] and indices[tested]
+				mov eax, dword[ebp-300]
+				mov ecx, dword[ebp-304+4*esi]
+				mov dword[ebp-300], ecx
+				mov dword[ebp-304+4*esi], eax
+				jmp chunk_tesseractCell_second_index_inner_loop_end
+			
+			chunk_tesseractCell_second_index_inner_loop_continue:
+			inc esi
+			cmp esi, dword[ebp-148]
+			jl chunk_tesseractCell_second_index_inner_loop_start
+			
+		chunk_tesseractCell_second_index_inner_loop_end:
+		
+		;did we find a new second index?
+		cmp esi, dword[ebp-148]
+		jl chunk_tesseractCell_second_index_outer_loop_start
+		
+	;sort the remaining indices
+	;< normalize( (vertex3D[lastIndex]-vertex3D[lastIndex-1]) x sideNormal); normalize(vertex3D[currentIndex]-vertex3D[lastIndex]) > shall be maximized
+	mov esi, 1
+	chunk_tesseractCell_remaining_indices_outer_loop_start:
+		mov eax, dword[VERY_BIG_NUMBER]
+		xor eax, 0x80000000					;-VERY_BIG_NUMBER
+		mov dword[ebp-356], eax
+	
+		;calculate normalize( (vertex3D[lastIndex]-vertex3D[lastIndex-1]) x sideNormal), goes into ebp-340
+		mov eax, dword[ebp-304+4*esi]
+		mov ecx, dword[ebp-308+4*esi]		;direkt 308!!!
+		imul eax, 20
+		imul ecx, 20
+		lea eax, [ebp-280+eax]
+		lea ecx, [ebp-280+ecx]
+		
+		push ecx
+		push eax
+		lea edx, [ebp-340]
+		push edx
+		call vec3_sub
+		add esp, 12
+		
+		lea eax, [ebp-328]
+		lea ecx, [ebp-340]
+		push eax
+		push ecx
+		push ecx
+		call vec3_cross
+		call vec3_normalize
+		add esp, 12
+		
+		lea edi, [esi+1]
+		chunk_tesseractCell_remaining_indices_inner_loop_start:
+			;calculate normalize(vertex3D[currentIndex]-vertex3D[lastIndex])
+			mov eax, esi
+			imul eax, 20
+			lea eax, [ebp-280+eax]
+			push eax					;vertex3D[lastIndex]
+			mov eax, edi
+			imul eax, 20
+			lea eax, [ebp-280+eax]
+			push eax					;vertex3D[currentIndex]
+			lea eax, [ebp-352]
+			push eax
+			call vec3_sub
+			call vec3_normalize
+			add esp, 12
+			
+			;calculate the dot product
+			lea eax, [ebp-340]
+			push eax
+			lea eax, [ebp-352]
+			push eax
+			call vec3_dot
+			fstp dword[esp]
+			movss xmm0, dword[esp]
+			add esp, 8
+			
+			;is this vertex better?
+			ucomiss xmm0, dword[ebp-356]
+			jb chunk_tesseractCell_remaining_indices_inner_loop_continue
+				;new highest dot
+				movss dword[ebp-356], xmm0
+				mov dword[ebp-360], edi
+		
+			chunk_tesseractCell_remaining_indices_inner_loop_continue:
+			inc edi
+			cmp edi, dword[ebp-148]
+			jl chunk_tesseractCell_remaining_indices_inner_loop_start
+		
+		;swap the indices
+		mov eax, dword[ebp-360]
+		
+		mov ecx, dword[ebp-304+4*eax]
+		mov edx, dword[ebp-300+4*esi]			;direkt 300, mert indices[lastIndex+1]
+		mov dword[ebp-304+4*eax], edx
+		mov dword[ebp-300+4*esi], ecx
+	
+	
+		inc esi
+		mov eax, esi
+		inc eax
+		cmp eax, dword[ebp-148]
+		jl chunk_tesseractCell_remaining_indices_outer_loop_start 	;i<vertexCount-1
+	
+	;save indices (triangulates the side in a GL_TRIANGLE_FAN-like layout, except that the first index is repeated every triangle)
 	mov esi, 2			;index in esi
-	chunk_tesseractCell_indices_loop_start:
+	chunk_tesseractCell_save_indices_loop_start:
 		sub esp, 8
 		
 		mov eax, dword[ebp+36]
@@ -864,16 +1138,17 @@ chunk_tesseractCell:
 		
 		
 		mov eax, dword[ebp-160]
+		add eax, dword[ebp-304]
 		mov dword[esp+4], eax
 		call vector_push_back
 		
 		mov eax, dword[ebp-160]
-		lea eax, [eax+esi-1]
+		add eax, dword[ebp-308+4*esi]			;direkt 308, mert indices[esi-1]
 		mov dword[esp+4], eax
 		call vector_push_back
 		
 		mov eax, dword[ebp-160]
-		add eax, esi
+		add eax, dword[ebp-304+4*esi]
 		mov dword[esp+4], eax
 		call vector_push_back
 		
@@ -881,7 +1156,25 @@ chunk_tesseractCell:
 	
 		inc esi
 		cmp esi, dword[ebp-148]
-		jl chunk_tesseractCell_indices_loop_start
+		jl chunk_tesseractCell_save_indices_loop_start
+		
+	;print indices
+	lea esi, [ebp-304]
+	mov edi, dword[ebp-148]
+	chunk_tesseractCell_print_indices_loop_start:
+		push dword[esi]
+		push print_int_space
+		call my_printf
+		add esp, 8
+	
+		add esi, 4
+		dec edi
+		test edi, edi
+		jnz chunk_tesseractCell_print_indices_loop_start
+		
+	push print_nl
+	call my_printf
+	add esp, 4
 		
 	chunk_tesseractCell_end:
 	mov esp, ebp
