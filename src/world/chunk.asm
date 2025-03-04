@@ -196,16 +196,6 @@ chunk_generate:
 		cmp edi, dword[CHUNK_HEIGHT_PLUS_TWO]
 		jl chunk_generate_block_types_y_loop_start
 		
-	mov eax, dword[ebp-12]
-	mov ecx, dword[CHUNK_HEIGHT_MAP_WIDTH_CUBED]
-	imul ecx, 100
-	add eax, ecx
-	xor ecx, ecx
-	mov cl, byte[eax]
-	push ecx
-	push print_int_nl
-	call my_printf
-	add esp, 8
 		
 	;get hyperplane normal
 	lea eax, [ebp-32]
@@ -701,8 +691,9 @@ chunk_tesseractCell:
 	sub esp, 12					;side normal in 3d								328
 	sub esp, 12					;helper vec3									340
 	sub esp, 12					;helper vec3 2									352
-	sub esp, 4					;second index lowest- and remaining index highest dot product	356
+	sub esp, 4					;highest dot product							356
 	sub esp, 4					;highest dot product index						360
+	sub esp, 12					;helper vec3 3									372
 	
 	mov dword[ebp-148], 0
 	
@@ -904,45 +895,14 @@ chunk_tesseractCell:
 	add esp, 8
 	
 	;calculate the side's normal in 3d
-	;it is be basically normalize(vertex3D[2]-vertex3D[0] x vertex3D[1]-vertex3D[0])
-	;but if its dot product with the cellnormals projection is negative, then it will be negated
-	lea eax, [ebp-280]		;vertex3D[0]
-	lea ecx, [ebp-240]		;vertex3D[2]
-	push eax
-	push ecx
-	lea edx, [ebp-328]
-	push edx
-	call vec3_sub
-	lea ecx, [ebp-260]		;vertex3D[1]
-	mov dword[esp+4], ecx
-	lea edx, [ebp-340]
-	mov dword[esp], edx
-	call vec3_sub
-	add esp, 12
+	;it is literally the cell normals projection, but ebp-328 is left in because of legacy stuff
 	
-	lea eax, [ebp-340]
-	lea ecx, [ebp-328]
-	push eax
-	push ecx
-	push ecx
-	call vec3_cross
-	add esp, 12
-	
-	lea eax, [ebp-316]		;cellnormal projection
-	lea ecx, [ebp-328]		;wannabe normal
-	push eax
-	push ecx
-	call vec3_dot
-	fstp dword[esp]
-	mov eax, dword[esp]
-	add esp, 8
-	and eax, 0x80000000
-	test eax, eax
-	jz chunk_tesseractCell_normal_is_gut
-		xor dword[ebp-328], 0x80000000
-		xor dword[ebp-324], 0x80000000
-		xor dword[ebp-320], 0x80000000
-	chunk_tesseractCell_normal_is_gut:
+	mov eax, dword[ebp-316]
+	mov dword[ebp-328], eax
+	mov eax, dword[ebp-312]
+	mov dword[ebp-324], eax
+	mov eax, dword[ebp-308]
+	mov dword[ebp-320], eax
 	
 	lea eax, [ebp-328]
 	push eax
@@ -954,227 +914,142 @@ chunk_tesseractCell:
 	cmp eax, dword[EPSILON]
 	jl chunk_tesseractCell_end			;the side is parallel to the hyperplane
 	
-	lea eax, [ebp-328]
-	push eax
-	call vec3_normalize
-	add esp, 4
+	;lea eax, [ebp-328]
+	;push eax
+	;call vec3_normalize
+	;add esp, 4
 	
-	;init indices array
-	mov dword[ebp-304], 0
-	mov dword[ebp-300], 1
-	mov dword[ebp-296], 2
-	mov dword[ebp-292], 3
-	mov dword[ebp-288], 4
-	mov dword[ebp-284], 5
+	;triangulate the face
 	
-	;get the first two indices
-	;the first one will be 0
-	;the second one will be determined in the following way:
-	;the second index is initially 1
-	;if for an index <normalize(vertex3D[testedIndex]-vertex3D[0]); normalize( sideNormal x (vertex3D[currentSecondIndex]-vertex3D[0]) )> is negative
-	;then it is the new second index
-	;this is iterated as long as a new second index is found
-	chunk_tesseractCell_second_index_outer_loop_start:
-		lea eax, [ebp-280]
-		push eax
-		mov ecx, dword[ebp-300]
-		imul ecx, 20
-		lea eax, [ebp-280+ecx]
-		push eax
-		lea eax, [ebp-340]
-		push eax
-		call vec3_sub
-		add esp, 12
-		
-		lea eax, [ebp-340]
-		lea ecx, [ebp-328]
-		push eax
-		push ecx
-		push eax
-		call vec3_cross
-		call vec3_normalize		;normalize( sideNormal x (vertex3D[currentSecondIndex]-vertex3D[0]) ) in ebp-340
-		add esp, 12
-		
-		mov esi, 2				;tested indices index (0 and 1 must not be tested)
-		chunk_tesseractCell_second_index_inner_loop_start:
-			;calculate normalize(vertex3D[testedIndex]-vertex3D[0])
-			mov eax, dword[ebp-304+4*esi]
-			imul eax, 20
-			
-			lea ecx, [ebp-280]
-			push ecx
-			lea eax, [ebp-280+eax]
-			push eax
-			lea eax, [ebp-352]
-			push eax
-			call vec3_sub
-			call vec3_normalize
-			add esp, 12
-			
-			;check if the dot product is negative
-			lea eax, [ebp-340]
-			lea ecx, [ebp-352]
-			push eax
-			push ecx
-			call vec3_dot
-			fstp dword[esp]
-			mov eax, dword[esp]
-			add esp, 8
-			
-			mov ecx, eax
-			test ecx, 0x80000000
-			jz chunk_tesseractCell_second_index_inner_loop_continue
-				;new second index found, swap indices[1] and indices[tested]
-				mov eax, dword[ebp-300]
-				mov ecx, dword[ebp-304+4*esi]
-				mov dword[ebp-300], ecx
-				mov dword[ebp-304+4*esi], eax
-				jmp chunk_tesseractCell_second_index_inner_loop_end
-			
-			chunk_tesseractCell_second_index_inner_loop_continue:
-			inc esi
-			cmp esi, dword[ebp-148]
-			jl chunk_tesseractCell_second_index_inner_loop_start
-			
-		chunk_tesseractCell_second_index_inner_loop_end:
-		
-		;did we find a new second index?
-		cmp esi, dword[ebp-148]
-		jl chunk_tesseractCell_second_index_outer_loop_start
-		
-	;sort the remaining indices
-	;< normalize( (vertex3D[lastIndex]-vertex3D[lastIndex-1]) x sideNormal); normalize(vertex3D[currentIndex]-vertex3D[lastIndex]) > shall be maximized
-	mov esi, 1
-	chunk_tesseractCell_remaining_indices_outer_loop_start:
-		mov eax, dword[VERY_BIG_NUMBER]
-		xor eax, 0x80000000					;-VERY_BIG_NUMBER
-		mov dword[ebp-356], eax
+	;based on my cringe C# code:
+	;Vector3 faceNormal = Vector3.Normalize(Vector3.Cross(pointsOnPlane[1] - pointsOnPlane[0], pointsOnPlane[2] - pointsOnPlane[0]));
+	;for(int i=1;i<pointCount;i++) {
+	;    Vector3 helper = Vector3.Normalize(pointsOnPlane[i] - pointsOnPlane[0]);
+	;    Vector3 helper2 = Vector3.Cross(faceNormal, helper); //the arguments have to be swapped as unity uses a linksystem
+	;    int closestIndex = -1;
+	;    float closestValue = 0;
+	;    for(int j=1;j<pointCount;j++) {
+	;        if (i == j)
+	;            continue;
+	;        float temp = Vector3.Dot(Vector3.Normalize(pointsOnPlane[j] - pointsOnPlane[0]), helper2);
+	;        if (temp <= 0)
+	;            continue;
+	;        float temp2= Vector3.Dot(Vector3.Normalize(pointsOnPlane[j] - pointsOnPlane[0]), helper);
+	;        if (closestIndex==-1||temp2>closestValue) {
+	;            closestIndex = j;
+	;            closestValue = temp2;
+	;        }
+	;    }
+	;    if(closestIndex!=-1) {
+	;        indices.Add(baseIndex);
+	;        indices.Add(baseIndex + i);
+	;        indices.Add(baseIndex + closestIndex);
+	;    }
+	;}
 	
-		;calculate normalize( (vertex3D[lastIndex]-vertex3D[lastIndex-1]) x sideNormal), goes into ebp-340
-		mov eax, dword[ebp-304+4*esi]
-		mov ecx, dword[ebp-308+4*esi]		;direkt 308!!!
+	mov esi, 1				;i in esi
+	chunk_tesseractCell_triangulate_outer_loop_start:
+		mov eax, esi
 		imul eax, 20
-		imul ecx, 20
-		lea eax, [ebp-280+eax]
-		lea ecx, [ebp-280+ecx]
-		
+		lea ecx, [ebp-280]
 		push ecx
+		add ecx, eax
+		push ecx
+		lea eax, [ebp-340]
 		push eax
-		lea edx, [ebp-340]
-		push edx
 		call vec3_sub
+		call vec3_normalize			;helper
 		add esp, 12
 		
 		lea eax, [ebp-328]
 		lea ecx, [ebp-340]
+		lea edx, [ebp-352]
 		push eax
 		push ecx
-		push ecx
+		push edx
 		call vec3_cross
-		call vec3_normalize
+		call vec3_normalize			;helper2
 		add esp, 12
 		
-		lea edi, [esi+1]
-		chunk_tesseractCell_remaining_indices_inner_loop_start:
-			;calculate normalize(vertex3D[currentIndex]-vertex3D[lastIndex])
-			mov eax, esi
-			imul eax, 20
-			lea eax, [ebp-280+eax]
-			push eax					;vertex3D[lastIndex]
+		mov eax, dword[VERY_BIG_NUMBER]
+		xor eax, 0x80000000
+		mov dword[ebp-356], eax	;closestValue=-VERY_BIG_NUMBER
+		mov dword[ebp-360], -1		;closestIndex=-1
+		mov edi, 1					;j in edi
+		chunk_tesseractCell_triangulate_inner_loop_start:
+			cmp esi, edi
+			je chunk_tesseractCell_triangulate_inner_loop_continue
+		
 			mov eax, edi
 			imul eax, 20
-			lea eax, [ebp-280+eax]
-			push eax					;vertex3D[currentIndex]
-			lea eax, [ebp-352]
+			lea ecx, [ebp-280]
+			push ecx
+			add ecx, eax
+			push ecx
+			lea eax, [ebp-372]
 			push eax
-			call vec3_sub
-			call vec3_normalize
+			call vec3_sub				;helper3 not normalized
 			add esp, 12
 			
-			;calculate the dot product
-			lea eax, [ebp-340]
-			push eax
 			lea eax, [ebp-352]
+			push eax
+			lea eax, [ebp-372]
 			push eax
 			call vec3_dot
 			fstp dword[esp]
 			movss xmm0, dword[esp]
 			add esp, 8
 			
-			;is this vertex better?
+			ucomiss xmm0, dword[EPSILON]
+			jb chunk_tesseractCell_triangulate_inner_loop_continue		;temp<=0
+		
+			lea eax, [ebp-340]
+			push eax
+			lea eax, [ebp-372]
+			push eax
+			call vec3_normalize
+			call vec3_dot
+			fstp dword[esp]
+			movss xmm0, dword[esp]
+			add esp, 8
+			
 			ucomiss xmm0, dword[ebp-356]
-			jb chunk_tesseractCell_remaining_indices_inner_loop_continue
-				;new highest dot
+			jbe chunk_tesseractCell_triangulate_inner_loop_continue
+				;temp2>closestValue
 				movss dword[ebp-356], xmm0
 				mov dword[ebp-360], edi
 		
-			chunk_tesseractCell_remaining_indices_inner_loop_continue:
+			chunk_tesseractCell_triangulate_inner_loop_continue:
 			inc edi
 			cmp edi, dword[ebp-148]
-			jl chunk_tesseractCell_remaining_indices_inner_loop_start
-		
-		;swap the indices
-		mov eax, dword[ebp-360]
-		
-		mov ecx, dword[ebp-304+4*eax]
-		mov edx, dword[ebp-300+4*esi]			;direkt 300, mert indices[lastIndex+1]
-		mov dword[ebp-304+4*eax], edx
-		mov dword[ebp-300+4*esi], ecx
+			jl chunk_tesseractCell_triangulate_inner_loop_start
 	
-	
-		inc esi
-		mov eax, esi
-		inc eax
-		cmp eax, dword[ebp-148]
-		jl chunk_tesseractCell_remaining_indices_outer_loop_start 	;i<vertexCount-1
-	
-	;save indices (triangulates the side in a GL_TRIANGLE_FAN-like layout, except that the first index is repeated every triangle)
-	mov esi, 2			;index in esi
-	chunk_tesseractCell_save_indices_loop_start:
-		sub esp, 8
+		;check if a vertex has been found
+		cmp dword[ebp-360], -1
+		je chunk_tesseractCell_triangulate_outer_loop_continue
+			;add side
+			mov eax, dword[ebp-360]
+			add eax, dword[ebp-160]
+			push eax
+			push dword[ebp+36]
+			call vector_push_back
+			
+			mov eax, esi
+			add eax, dword[ebp-160]
+			push eax
+			push dword[ebp+36]
+			call vector_push_back
+			
+			push dword[ebp-160]
+			push dword[ebp+36]
+			call vector_push_back
+			
+			add esp, 24
 		
-		mov eax, dword[ebp+36]
-		mov dword[esp], eax
-		
-		
-		mov eax, dword[ebp-160]
-		add eax, dword[ebp-304]
-		mov dword[esp+4], eax
-		call vector_push_back
-		
-		mov eax, dword[ebp-160]
-		add eax, dword[ebp-308+4*esi]			;direkt 308, mert indices[esi-1]
-		mov dword[esp+4], eax
-		call vector_push_back
-		
-		mov eax, dword[ebp-160]
-		add eax, dword[ebp-304+4*esi]
-		mov dword[esp+4], eax
-		call vector_push_back
-		
-		add esp, 8
-	
+		chunk_tesseractCell_triangulate_outer_loop_continue:
 		inc esi
 		cmp esi, dword[ebp-148]
-		jl chunk_tesseractCell_save_indices_loop_start
-		
-	;print indices
-	lea esi, [ebp-304]
-	mov edi, dword[ebp-148]
-	chunk_tesseractCell_print_indices_loop_start:
-		push dword[esi]
-		push print_int_space
-		call my_printf
-		add esp, 8
-	
-		add esi, 4
-		dec edi
-		test edi, edi
-		jnz chunk_tesseractCell_print_indices_loop_start
-		
-	push print_nl
-	call my_printf
-	add esp, 4
+		jl chunk_tesseractCell_triangulate_outer_loop_start
 		
 	chunk_tesseractCell_end:
 	mov esp, ebp
