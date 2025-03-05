@@ -8,7 +8,7 @@
 ;	Collider* collider;				24
 ;	HyperPlane* hyperPlane;			28
 ;	Mutex* hyperPlaneMutex;			32
-;	vec3 previousColliderPos; 		36
+;	vec3 previousColliderPos; 		36(unused)
 ;}		48 bytes
 
 section .rodata use32
@@ -169,10 +169,10 @@ player_destroy:
 	call mutex_destroy
 	
 	;unregister and destroy collider
+	push 69
 	mov eax, dword[ebp+8]
 	push dword[eax+24]
 	call physics_unregisterNonkinematic
-	call collider_destroy
 	
 	;dealloc
 	push dword[ebp+8]
@@ -213,10 +213,6 @@ player_updatePhysics:
 	push dword[ebp+8]
 	call player_applyGravity
 	add esp, 8
-	
-	push dword[ebp+8]
-	call player_moveInsideOfPlane
-	add esp, 4
 	
 	mov esp, ebp
 	pop ebp
@@ -464,60 +460,6 @@ player_look:		;void player_look(player* pplayer, float deltaTime)
 	ret
 	
 	
-;looks at the previous collider position and looks at the current one
-;the difference will give us how much the player moved inside of the plane since the last physics update
-;i can't do it based on just the movement via player input, as then the collision detection will not be accounted for
-;void player_moveInsideOfPlane(Player* player)
-player_moveInsideOfPlane:
-	push ebp
-	mov ebp, esp
-	
-	sub esp, 12				;player.collider.position-player.previousColliderPosition
-	
-	;calculate the delta position
-	mov eax, dword[ebp+8]
-	lea ecx, [eax+36]
-	push ecx
-	push dword[eax+24]
-	call collider_getPosition
-	mov dword[esp], eax
-	lea ecx, [ebp-12]
-	push ecx
-	call vec3_sub
-	
-	;lock mutex and move inside of plane
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax+32]
-	call mutex_lock
-	
-	lea eax, [ebp-12]
-	push eax
-	mov eax, dword[ebp+8]
-	push dword[eax+28]
-	call hyperPlane_moveInsideOfPlane
-	add esp, 8
-	
-	call mutex_unlock
-	
-	;update the previous collider position
-	mov eax, dword[ebp+8]
-	push dword[eax+24]
-	call collider_getPosition
-	mov ecx, dword[ebp+8]
-	
-	mov edx, dword[eax]
-	mov dword[ecx+36], edx
-	mov edx, dword[eax+4]
-	mov dword[ecx+40], edx
-	mov edx, dword[eax+8]
-	mov dword[ecx+44], edx
-	
-	mov esp, ebp
-	pop ebp
-	ret
-	
-	
 	
 ;void player_rotatePlane(Player* player)
 player_rotatePlane:
@@ -553,6 +495,32 @@ player_rotatePlane:
 	push dword[eax+32]
 	call mutex_lock
 	add esp, 8
+	
+	;update the hyperplane point
+	;the hyperplane's new center is the players position in 4d, which is the players movement since the last rotation event
+	mov eax, dword[ebp+8]
+	push dword[eax+24]
+	call collider_getPosition
+	add esp, 4
+	
+	mov ecx, dword[ebp+8]
+	mov ecx, dword[ecx+28]		;hyperplane
+	push eax
+	push ecx
+	call hyperPlane_moveInsideOfPlane
+	add esp, 4
+	pop eax
+	
+	;set the collider's and camera's position to 0, as the new center of the 3D space is the player
+	mov dword[eax], 0
+	mov dword[eax+4], 0
+	mov dword[eax+8], 0
+	
+	mov ecx, dword[ebp+8]
+	mov ecx, dword[ecx]
+	mov dword[ecx], 0
+	mov dword[ecx+4], 0
+	mov dword[ecx+8], 0
 	
 	
 	;rotate plane

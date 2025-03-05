@@ -7,7 +7,9 @@
 ;	Renderable* renderable;						;12
 ;	MeshCollider* collider;						;16
 ;	vec4 lowerBound, upperBound;				;20
-;}		52 bytes overall
+;	void* vertices, int vertexFloatCount		;52			;temporary, deleted as soon as the renderable is constructed
+;	void* indices, int indexCount				;60			;temporary, deleted as soon as the renderable is constructed
+;}		68 bytes overall
 section .rodata use32
 
 	EPSILON dd 0.00001
@@ -115,10 +117,28 @@ chunk_generate:
 	sub esp, 16				;index vector						64
 	
 	;alloc space for chunk
-	push 52
+	push 68
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
+	
+	;init the given chunk values
+	mov eax, dword[ebp-4]
+	
+	mov ecx, dword[ebp+20]
+	mov dword[eax], ecx				;chunkX
+	mov ecx, dword[ebp+24]
+	mov dword[eax+4], ecx			;chunkZ
+	mov ecx, dword[ebp+28]
+	mov dword[eax+8], ecx			;chunkW
+	
+	mov dword[eax+12], 0			;renderable
+	mov dword[eax+16], 0			;collider
+	
+	mov dword[eax+52], 0			;vertices
+	mov dword[eax+56], 0			;vertexFloatCount
+	mov dword[eax+60], 0			;indices
+	mov dword[eax+68], 0			;indexCount
 	
 	;alloc space for heightmap
 	push dword[CHUNK_HEIGHT_MAP_LENGTH]
@@ -498,24 +518,22 @@ chunk_generate:
 		test edi, edi
 		jnz chunk_generate_mesh_y_loop_start
 	
-	;create renderable
-	push dword[RENDERABLE_ATTRIB_P3UV2]
-	lea eax, [ebp-64]
-	push eax
-	lea eax, [ebp-48]
-	push eax
-	call renderable_create
-	mov ecx, dword[ebp-4]
-	mov dword[ecx+12], eax
-	
-	;destroy vertex and index vectors
-	lea eax, [ebp-48]
-	push eax
-	call vector_destroy
-	lea eax, [ebp-64]
-	push eax
-	call vector_destroy
-	add esp, 8
+	;does the mesh have any visible points?
+	cmp dword[ebp-48], 0
+	jle chunk_generate_no_mesh
+		;save the vertex and index data
+		mov eax, dword[ebp-4]
+		
+		mov ecx, dword[ebp-36]
+		mov dword[eax+52], ecx			;vertices
+		mov ecx, dword[ebp-48]
+		mov dword[eax+56], ecx			;vertexFloatCount
+		
+		mov ecx, dword[ebp-52]
+		mov dword[eax+60], ecx			;indices
+		mov ecx, dword[ebp-64]
+		mov dword[eax+64], ecx			;indexCount
+	chunk_generate_no_mesh:
 	
 	;dealloc height map
 	push dword[ebp-8]

@@ -38,7 +38,7 @@ section .text use32
 	global collider_deinit						;void collider_deinit()
 	
 	global collider_createCylinder				;Collider* collider_createCylinder(float height, float radius)
-	global collider_createMesh					;Collider* collider_createMesh(vec3* vertices, int* indices, int vertexCount, int indexCount)
+	global collider_createMesh					;Collider* collider_createMesh(vec3* vertices, int* indices, int vertexCount, int indexCount, int vertexStride)
 	
 	global collider_destroy						;void collider_destroy(Collider* collider)
 	
@@ -235,6 +235,7 @@ collider_createMesh:
 	
 	
 	;set info
+	push dword[ebp+24]
 	push dword[ebp+20]
 	push dword[ebp+16]
 	push dword[ebp+12]

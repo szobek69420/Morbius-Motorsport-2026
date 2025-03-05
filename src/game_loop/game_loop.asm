@@ -168,8 +168,6 @@ section .bss use32
 	mesh resb 4
 	mesh2 resb 4
 	
-	test_chunk resb 4
-	
 section .data use32
 	last_frame_milliseconds dd 0		;int, the GetTickCount of the last frame
 	delta_time_milliseconds dd 0		;int
@@ -295,8 +293,6 @@ section .text use32
 	extern tsValue_set
 	extern tsValue_isEqual
 	
-	extern chunk_generate
-	
 game_loop:
 	push ebp
 	mov ebp, esp
@@ -339,20 +335,22 @@ game_loop:
 	call physics_init
 	
 	;init the two mesh colliders
+	push 12
 	push dword[mesh_index_count]
 	push dword[mesh_vertex_count]
 	push mesh_indices
 	push mesh_vertices
 	call collider_createMesh
-	add esp, 16
+	add esp, 20
 	mov dword[mesh], eax
 	
+	push 12
 	push dword[indices_2_vector]
 	push dword[mesh_vertex_count_2]
 	push indices_2
 	push vertex_data_2
 	call collider_createMesh
-	add esp, 16
+	add esp, 20
 	mov dword[mesh2], eax
 	push position_2
 	push dword[mesh2]
@@ -393,20 +391,6 @@ game_loop:
 	push camera
 	call player_init
 	mov dword[pplayer], eax
-	add esp, 8
-	
-	;create chunk
-	push hyperplane
-	push 0
-	push 0
-	push 0
-	call chunk_generate
-	mov dword[test_chunk], eax
-	add esp, 16
-	
-	push image_path
-	push dword[eax+12]
-	call renderable_setAlbedo
 	add esp, 8
 	
 	;create morbius poster and the plain renderable
@@ -516,13 +500,6 @@ game_loop:
 		
 		push pv_matrix
 		push dword[plain_renderable]
-		call renderable_render
-		add esp, 8
-		
-		;render chunk
-		push pv_matrix
-		mov eax, dword[test_chunk]
-		push dword[eax+12]
 		call renderable_render
 		add esp, 8
 		

@@ -24,7 +24,8 @@ section .rodata use32
 	
 section .text use32
 	
-	global meshCollider_createInfo			;MeshColliderInfo* meshCollider_createInfo(vec3* vertices, int* indices, int vertexCount, int indexCount)
+	;stride is the distance between the starts of two neighbouring vec3 values (if the vertices are packed, then it is 12 bytes)
+	global meshCollider_createInfo			;MeshColliderInfo* meshCollider_createInfo(vec3* vertices, int* indices, int vertexCount, int indexCount, int vertexStride)
 	global meshCollider_destroyInfo			;void meshCollider_destroyInfo(MeshColliderInfo* mci)
 
 	global meshCollider_getBounds			;void meshCollider_getBounds(MeshColliderInfo* mci, vec3* lowerBoundBuffer, vec3* upperBoundBuffer)
@@ -82,13 +83,26 @@ meshCollider_createInfo:
 	
 	
 	;copy the vertices and indices
-	mov eax, dword[ebp+24]
-	imul eax, 12
-	push eax
-	push dword[ebp+16]
-	push dword[ebp-8]
-	call my_memcpy
-	add esp, 12
+	mov esi, dword[ebp+16]				;current source vertex in esi
+	mov edi, dword[ebp-8]				;current destination vertex in edi
+	mov eax, dword[ebp+24]				;index in eax
+	test eax, eax
+	jz meshCollider_createInfo_copy_vertices_loop_end
+	meshCollider_createInfo_copy_vertices_loop_start:
+		mov ecx, dword[esi]
+		mov dword[edi], ecx
+		mov ecx, dword[esi+4]
+		mov dword[edi+4], ecx
+		mov ecx, dword[esi+8]
+		mov dword[edi+8], ecx
+		
+		add esi, dword[ebp+32]			;add stride
+		add edi, 12
+		dec eax
+		test eax, eax
+		jnz meshCollider_createInfo_copy_vertices_loop_start
+	meshCollider_createInfo_copy_vertices_loop_end:
+	
 	
 	mov eax, dword[ebp+28]
 	shl eax, 2

@@ -4,7 +4,7 @@
 ;struct PhysicsRegisterOperation{
 ;	Collider* collider;
 ;	int isKinematic;
-;	int register;
+;	int operationInfo;		;0: register, 69: unregister, 420: unregister and destroy
 ;}		//overall 12 bytes
 
 section .rodata use32
@@ -33,11 +33,12 @@ section .text use32
 	;void physics_processPendingRegisterOperations()
 	global physics_registerNonkinematic		;void physics_registerNonkinematic(Collider* collider)
 	global physics_registerKinematic		;void physics_registerKinematic(Collider* collider)
-	global physics_unregisterNonkinematic	;void physics_unregisterNonkinematic(Collider* collider)
-	global physics_unregisterKinematic		;void physics_unregisterKinematic(Collider* collider)
+	global physics_unregisterNonkinematic	;void physics_unregisterNonkinematic(Collider* collider, int shouldDestroy)
+	global physics_unregisterKinematic		;void physics_unregisterKinematic(Collider* collider, int shouldDestroy)
 	
 	
 	extern collisionDetection_resolveKinematicNonkinematic
+	extern collider_destroy
 	
 	extern my_printf
 	
@@ -253,7 +254,7 @@ physics_processPendingRegisterOperations:
 			push registered_nonkinematic
 		physics_ppro_loop_isKinematic_done:
 		cmp dword[ebp-4], 0		;register
-		je physics_ppro_loop_register_false
+		jne physics_ppro_loop_register_false
 		physics_ppro_loop_register_true:
 			mov eax, vector_push_back
 			jmp physics_ppro_loop_register_done
@@ -262,6 +263,13 @@ physics_processPendingRegisterOperations:
 		physics_ppro_loop_register_done:
 		call eax
 		add esp, 8
+		
+		;check if the collider needs to be destroyed
+		cmp dword[ebp-4], 420
+		jne physics_ppro_loop_start
+			push dword[ebp-12]
+			call collider_destroy
+			add esp, 4
 		
 		jmp physics_ppro_loop_start
 		
@@ -290,15 +298,12 @@ physics_registerNonkinematic:
 	mov ecx, dword[ebp+8]
 	mov dword[ebp-12], ecx		;collider
 	mov dword[ebp-8], 0		;nonkinematic
-	mov dword[ebp-4], 69		;register
+	mov dword[ebp-4], 0		;register
 	lea eax, [ebp-12]
 	push eax
 	push register_operation_buffer
 	call tsQueue_pushBuffer
 	
-	;push dword[ebp+8]
-	;push registered_nonkinematic
-	;call vector_push_back
 	
 	physics_registerNonkinematic_end:
 	mov esp, ebp
@@ -324,15 +329,12 @@ physics_registerKinematic:
 	mov ecx, dword[ebp+8]
 	mov dword[ebp-12], ecx		;collider
 	mov dword[ebp-8], 69		;kinematic
-	mov dword[ebp-4], 69		;register
+	mov dword[ebp-4], 0		;register
 	lea eax, [ebp-12]
 	push eax
 	push register_operation_buffer
 	call tsQueue_pushBuffer
 	
-	;push dword[ebp+8]
-	;push registered_kinematic
-	;call vector_push_back
 	
 	physics_registerKinematic_end:
 	mov esp, ebp
@@ -346,18 +348,20 @@ physics_unregisterNonkinematic:
 	
 	sub esp, 12					;PhysicsRegisterOperation
 	
+	mov dword[ebp-4], 69		;unregister
+	cmp dword[ebp+12], 0
+	je physics_unregisterNonkinematic_no_destroy
+		mov dword[ebp-4], 420	;unregister and destroy
+	physics_unregisterNonkinematic_no_destroy:
+	
 	mov ecx, dword[ebp+8]
 	mov dword[ebp-12], ecx		;collider
 	mov dword[ebp-8], 0		;nonkinematic
-	mov dword[ebp-4], 0		;not register
 	lea eax, [ebp-12]
 	push eax
 	push register_operation_buffer
 	call tsQueue_pushBuffer
-	
-	;push dword[ebp+8]
-	;push registered_nonkinematic
-	;call vector_remove
+
 
 	mov esp, ebp
 	pop ebp
@@ -370,18 +374,20 @@ physics_unregisterKinematic:
 	
 	sub esp, 12					;PhysicsRegisterOperation
 	
+	mov dword[ebp-4], 69		;unregister
+	cmp dword[ebp+12], 0
+	je physics_unregisterKinematic_no_destroy
+		mov dword[ebp-4], 420	;unregister and destroy
+	physics_unregisterKinematic_no_destroy:
+	
 	mov ecx, dword[ebp+8]
 	mov dword[ebp-12], ecx		;collider
 	mov dword[ebp-8], 69		;kinematic
-	mov dword[ebp-4], 0		;not register
 	lea eax, [ebp-12]
 	push eax
 	push register_operation_buffer
 	call tsQueue_pushBuffer
-	
-	;push dword[ebp+8]
-	;push registered_kinematic
-	;call vector_remove
+
 
 	mov esp, ebp
 	pop ebp
