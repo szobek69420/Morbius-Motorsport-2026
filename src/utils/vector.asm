@@ -30,6 +30,10 @@ section .text use32
 	global vector_insert		;void vector_insert(vector*, int index, <element> element)
 	global vector_remove_at		;void vector_remove_at(vector*, int index)
 	global vector_remove		;int vector_remove(vector*, <element> element)	removes the first matching element. removes 0 if no removal took place, 69 else
+	
+	;returns the index of the first matching element, otherwise -1 is returned
+	;the comparator must return 0 if a match is found
+	global vector_search		;int vector_search(vector*, int (*comparator)(element*, void* searchKey), void* searchKey)
 
 vector_init: ;vector vector_init(element_size)
 	push ebp
@@ -425,4 +429,52 @@ vector_remove:		;int vector_remove(vector*, <element> element)
 	pop ebx
 	pop edi
 	pop esi
+	ret
+
+
+vector_search:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	sub esp, 4						;index
+	mov dword[ebp-4], -1
+	
+	xor esi, esi					;loop index in esi
+	mov edi, dword[ebp+16]
+	cmp dword[edi], 0
+	je vector_search_loop_end
+	mov edi, dword[edi+12]			;current element in edi
+	
+	push dword[ebp+24]
+	vector_search_loop_start:
+		;call the comparator
+		push edi
+		call dword[ebp+20]
+		add esp, 4
+		
+		;check for a match
+		test eax, eax
+		jnz vector_search_loop_continue
+			mov dword[ebp-4], esi
+			jmp vector_search_loop_end
+		
+		vector_search_loop_continue:
+		mov eax, dword[ebp+16]
+		add edi, dword[eax+8]
+		
+		inc esi
+		cmp esi, dword[eax]
+		jl vector_search_loop_start
+		
+	vector_search_loop_end:
+	
+	;set the return value
+	mov eax, dword[ebp-4]
+	
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
 	ret

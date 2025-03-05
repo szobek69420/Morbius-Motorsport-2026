@@ -44,7 +44,10 @@ section .rodata use32
 	
 section .text use32
 
+	;the collider and renderable is initialized by the chunk manager
 	global chunk_generate			;Chunk* chunk_generate(int chunkX, int chunkZ, int chunkW, HyperPlane* plane)
+	;the collider and the renderable is destroyed by the chunk manager
+	global chunk_destroy			;void chunk_destroy(Chunk* chunk)
 
 	extern hyperPlane_getNormal
 	extern hyperPlane_signedDistance
@@ -94,6 +97,17 @@ section .text use32
 	
 	extern RENDERABLE_ATTRIB_P3UV2
 	extern renderable_create
+	
+chunk_destroy:
+	push ebp
+	mov ebp, esp
+	
+	push dword[ebp+8]
+	call my_free
+	
+	mov esp, ebp
+	pop ebp
+	ret
 
 chunk_generate:
 	push ebp

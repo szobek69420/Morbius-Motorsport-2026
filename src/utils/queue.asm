@@ -39,6 +39,10 @@ section .text use32
 	
 	global queue_isEmpty		;int queue_isEmpty(queue* pqueue)
 	
+	;returns the index of the first matching element, otherwise -1 is returned
+	;the comparator must return 0 if a match is found
+	global queue_search			;int queue_search(queue* pqueue, int (*comparator)(element*, void* searchKey), void* searchKey)
+	
 	global queue_printInfo		;void queue_printInfo(queue* pqueue)
 	
 	
@@ -288,6 +292,62 @@ queue_isEmpty:
 		mov eax, 69
 	
 	queue_isEmpty_end:
+	ret
+	
+
+queue_search:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	sub esp, 4					;index
+	mov dword[ebp-4], -1
+	
+	xor esi, esi				;loop index in esi
+	mov edi, dword[ebp+16]
+	cmp dword[edi+4], 0
+	je queue_search_loop_end
+	mov eax, dword[edi]
+	imul eax, dword[edi+12]
+	mov edi, dword[edi+16]
+	add edi, eax				;current element in edi
+	queue_search_loop_start:
+		;call comparator
+		push dword[ebp+24]
+		push edi
+		call dword[ebp+20]
+		add esp, 8
+		
+		;check for match
+		test eax, eax
+		jnz queue_search_loop_continue
+			mov dword[ebp-4], esi
+			jmp queue_search_loop_end
+		
+		queue_search_loop_continue:
+		mov eax, dword[ebp+16]
+		add edi, dword[eax+12]
+		inc esi
+		cmp esi, dword[eax+4]
+		jge queue_search_loop_end
+		
+		;check for overflow
+		mov ecx, dword[eax+8]
+		imul ecx, dword[eax+12]
+		add ecx, dword[eax+16]			;queue.data+queue.max_size*queue.element_size
+		cmp edi, ecx
+		jl queue_search_loop_start
+		
+		mov edi, dword[eax+16]
+		jmp queue_search_loop_start
+		
+	queue_search_loop_end:
+	
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
 	ret
 	
 	
