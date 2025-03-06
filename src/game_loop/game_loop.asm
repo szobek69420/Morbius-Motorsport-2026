@@ -168,6 +168,8 @@ section .bss use32
 	mesh resb 4
 	mesh2 resb 4
 	
+	chunk_manager resb 4
+	
 section .data use32
 	last_frame_milliseconds dd 0		;int, the GetTickCount of the last frame
 	delta_time_milliseconds dd 0		;int
@@ -293,6 +295,13 @@ section .text use32
 	extern tsValue_set
 	extern tsValue_isEqual
 	
+	extern chunkManager_create
+	extern chunkManager_load
+	extern chunkManager_unload
+	extern chunkManager_processUpdate
+	extern chunkManager_processGraphicsUpdate
+	extern chunkManager_render
+	
 game_loop:
 	push ebp
 	mov ebp, esp
@@ -386,8 +395,12 @@ game_loop:
 	call hyperPlane_create
 	add esp, 4
 	
+	;create chunk manager
+	call chunkManager_create
+	mov dword[chunk_manager], eax
+	
 	;create player
-	push hyperplane
+	push dword[chunk_manager]
 	push camera
 	call player_init
 	mov dword[pplayer], eax
@@ -471,6 +484,15 @@ game_loop:
 		push dword[pplayer]
 		call player_update
 		add esp, 8
+		
+		;do chunk update things
+		mov eax, dword[pplayer]
+		mov eax, dword[eax]				;&player.camera.position
+		push 4
+		push eax
+		push dword[chunk_manager]
+		call chunkManager_load
+		add esp, 12
 	
 		;set clear color
 		push dword[ONE]
@@ -501,6 +523,12 @@ game_loop:
 		push pv_matrix
 		push dword[plain_renderable]
 		call renderable_render
+		add esp, 8
+		
+		;render chunks
+		push pv_matrix
+		push dword[chunk_manager]
+		call chunkManager_render
 		add esp, 8
 		
 		
@@ -745,6 +773,7 @@ gameLoop_handleWindowResize:
 	ret
 	
 	
+;void gameLoop_drawHyperplaneData()
 gameLoop_drawHyperplaneData:
 	push ebp
 	mov ebp, esp
@@ -752,7 +781,8 @@ gameLoop_drawHyperplaneData:
 	sub esp, 100				;char buffer[100]
 	
 	;draw point
-	mov eax, hyperplane
+	mov eax, dword[chunk_manager]
+	add eax, 32
 	push dword[eax+12]
 	push dword[eax+8]
 	push dword[eax+4]
@@ -770,8 +800,8 @@ gameLoop_drawHyperplaneData:
 	;draw based vectors
 	render_text text_based_vectors, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 80
 	
-	mov eax, hyperplane
-	add eax, 16
+	mov eax, dword[chunk_manager]
+	add eax, 48
 	sub esp, 48
 	mov ecx, esp
 	push 48

@@ -6,7 +6,7 @@
 ;	vec3 position;					4 (unused)
 ;	float pitch, yaw;				16
 ;	Collider* collider;				24
-;	HyperPlane* hyperPlane;			28
+;	ChunkManager* chunkManager;		28
 ;	Mutex* hyperPlaneMutex;			32
 ;	vec3 previousColliderPos; 		36(unused)
 ;}		48 bytes
@@ -42,7 +42,7 @@ section .rodata use32
 
 section .text use32
 
-	global player_init				;player* player_init(camera* cum, HyperPlane* hyperPlane)
+	global player_init				;player* player_init(camera* cum, ChunkManager* chunkManager)
 	global player_destroy			;void player_destroy(player* player)
 	global player_update 			;void player_update(player* player, float deltaTime)
 	global player_updatePhysics		;void player_updatePhysics(player* player, float deltaTime)
@@ -138,7 +138,7 @@ player_init:
 	;initialize hyperPlane stuff
 	mov eax, dword[ebp-4]
 	mov ecx, dword[ebp+12]
-	mov dword[eax+28], ecx			;HyperPlane*
+	mov dword[eax+28], ecx			;ChunkManager*
 	
 	call mutex_create
 	mov ecx, dword[ebp-4]
@@ -147,7 +147,9 @@ player_init:
 	push 0xc3190000
 	push HYPERPLANE_ROTATION_VECTOR_2
 	push HYPERPLANE_ROTATION_VECTOR_1
-	push dword[ebp+12]
+	mov eax, dword[ebp+12]
+	add eax, 32
+	push eax
 	call hyperPlane_rotate
 	add esp, 16
 	
@@ -504,7 +506,8 @@ player_rotatePlane:
 	add esp, 4
 	
 	mov ecx, dword[ebp+8]
-	mov ecx, dword[ecx+28]		;hyperplane
+	mov ecx, dword[ecx+28]
+	add ecx, 32					;hyperplane
 	push eax
 	push ecx
 	call hyperPlane_moveInsideOfPlane
@@ -528,7 +531,9 @@ player_rotatePlane:
 	push HYPERPLANE_ROTATION_VECTOR_2
 	push HYPERPLANE_ROTATION_VECTOR_1
 	mov eax, dword[ebp+8]
-	push dword[eax+28]
+	mov eax, dword[eax+28]
+	add eax, 32
+	push eax
 	call hyperPlane_rotate
 	add esp, 16
 	

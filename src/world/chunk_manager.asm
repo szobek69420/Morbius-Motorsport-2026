@@ -32,6 +32,10 @@
 ;the renderable of the chunk is generated
 ;the chunk is pushed into the loadedChunks vector
 
+section .rodata use32
+	print_three_ints_nl db "%d %d %d",10,0
+	
+	test_text db "robux",10,0
 
 section .text use32
 
@@ -40,8 +44,15 @@ section .text use32
 	global chunkManager_load					;void chunkManager_load(ChunkManager* manager, vec3* playerPos3D, int renderDistance)
 	global chunkManager_unload					;void chunkManager_unload(ChunkManager* manager, vec3* playerPos3D, int renderDistance)
 	
+	;immediately unloads all chunks
+	;should be called from the graphics thread
+	global chunkManager_unloadAll				;void chunkManager_unloadAll(ChunkManager* manager)
+	
 	global chunkManager_processUpdate			;void chunkManager_processUpdate(ChunkManager* manager)
+	;should be called from the graphics thread
 	global chunkManager_processGraphicsUpdate	;void chunkManager_processGraphicsUpdate(ChunkManager* manager)
+	
+	global chunkManager_render					;void chunkManager_render(ChunkManager* manager, mat4* pv)
 	
 	global chunkManager_getHyperPlane			;HyperPlane* chunkManager_getHyperPlane(ChunkManager* cm)
 	global chunkManager_setHyperPlane			;void chunkManager_setHyperPlane(ChunkManager* cm, HyperPlane* ph)
@@ -80,6 +91,7 @@ section .text use32
 	
 	extern renderable_create
 	extern renderable_destroy
+	extern renderable_render
 	extern RENDERABLE_ATTRIB_P3UV2
 	
 chunkManager_create:
@@ -136,6 +148,43 @@ chunkManager_create:
 	ret
 	
 	
+chunkManager_render:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	mov edi, dword[ebp+16]
+	mov esi, dword[edi]				;chunk count in esi
+	mov edi, dword[edi+12]			;current chunk in edi
+	test esi, esi
+	jz chunkManager_render_loop_end
+	chunkManager_render_loop_start:
+		;check if there is a renderable for the current chunk
+		mov eax, dword[edi]
+		cmp dword[eax+12], 0
+		je chunkManager_render_loop_continue
+		
+		;render chunk
+		push dword[ebp+20]
+		push dword[eax+12]
+		call renderable_render
+		add esp, 8
+	
+		chunkManager_render_loop_continue:
+		add edi, 4
+		dec esi
+		test esi, esi
+		jnz chunkManager_render_loop_start
+		
+	chunkManager_render_loop_end:
+	
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
 chunkManager_load:
 	push ebp
 	push esi
@@ -159,7 +208,6 @@ chunkManager_load:
 	sub esp, 4				;chunk update					44
 	
 	mov dword[ebp-28], 0
-	
 	
 	;calculate player chunk pos
 	lea eax, [ebp-12]
@@ -204,6 +252,7 @@ chunkManager_load:
 					cmp eax, -1
 					jne chunkManager_load_w_loop_continue
 					
+					
 					;pending updates
 					lea eax, [ebp-40]
 					mov ecx, dword[ebp+20]
@@ -217,6 +266,7 @@ chunkManager_load:
 					cmp eax, -1
 					jne chunkManager_load_w_loop_continue
 					
+					
 					;pending graphics updates
 					lea eax, [ebp-40]
 					mov ecx, dword[ebp+20]
@@ -229,6 +279,7 @@ chunkManager_load:
 					add esp, 12
 					cmp eax, -1
 					jne chunkManager_load_w_loop_continue
+					
 					
 					;the chunk is not loaded yet, mark it as loadable
 					mov dword[ebp-28], 69
@@ -290,6 +341,13 @@ chunkManager_load:
 	push ecx
 	call tsQueue_push
 	add esp, 8
+	
+	push dword[ebp-24]
+	push dword[ebp-20]
+	push dword[ebp-16]
+	push print_three_ints_nl
+	call my_printf
+	add esp, 16
 	
 	chunkManager_load_end:
 	mov esp, ebp
@@ -695,16 +753,15 @@ chunkManager_getPlayerChunk:
 	sub esp, 16				;helper vec4				32
 	
 	mov eax, dword[ebp+8]
-	add eax, 32				;hyperplane in eax
 	
 	;calculate player pos 4d
-	mov ecx, dword[eax]
+	mov ecx, dword[eax+32]
 	mov dword[ebp-16], ecx
-	mov ecx, dword[eax+4]
+	mov ecx, dword[eax+36]
 	mov dword[ebp-12], ecx
-	mov ecx, dword[eax+8]
+	mov ecx, dword[eax+40]
 	mov dword[ebp-8], ecx
-	mov ecx, dword[eax+12]
+	mov ecx, dword[eax+44]
 	mov dword[ebp-4], ecx
 	
 	mov eax, dword[ebp+8]
@@ -779,8 +836,9 @@ chunkManager_getPlayerChunk:
 
 ;it is a compare function for vector_search
 ;data is the address of a memory region in which the chunkX, chunkZ and chunkW int-triplet is stored
+;Chunk** because the comparator for vector_search expects an element* and a void* and the element is Chunk*
 ;returns 0 if there is a match
-;int chunkManager_loaded_chunks_search(Chunk* chunk, void* data)
+;int chunkManager_loaded_chunks_search(Chunk** chunk, void* data)
 chunkManager_loaded_chunks_search:
 	push ebp
 	mov ebp, esp
@@ -790,6 +848,7 @@ chunkManager_loaded_chunks_search:
 	mov dword[ebp-4], 69
 	
 	mov eax, dword[ebp+8]
+	mov eax, dword[eax]
 	mov ecx, dword[ebp+12]
 	
 	mov edx, dword[eax]
@@ -816,7 +875,7 @@ chunkManager_loaded_chunks_search:
 ;it is a compare function for tsQueue_search
 ;data is the address of a memory region in which the chunkX, chunkZ and chunkW int-triplet is stored
 ;returns 0 if there is a match
-;int chunkManager_pending_updates_search(ChunkUpdate* cu, void* data)
+;int chunkManager_pending_updates_search(ChunkUpdate** cu, void* data)
 chunkManager_pending_updates_search:
 	push ebp
 	mov ebp, esp
@@ -827,6 +886,7 @@ chunkManager_pending_updates_search:
 	
 	;decide what kind of an update it is
 	mov eax, dword[ebp+8]
+	mov eax, dword[eax]
 	cmp dword[eax], 0
 	je chunkManager_pending_updates_search_unload
 		;it is a load update
@@ -876,7 +936,7 @@ chunkManager_pending_updates_search:
 ;it is a compare function for tsQueue_search
 ;data is the address of a memory region in which the chunkX, chunkZ and chunkW int-triplet is stored
 ;returns 0 if there is a match
-;int chunkManager_pending_graphics_updates_search(ChunkGraphicsUpdate* cgu, void* data)
+;int chunkManager_pending_graphics_updates_search(ChunkGraphicsUpdate** cgu, void* data)
 chunkManager_pending_graphics_updates_search:
 	push ebp
 	mov ebp, esp
@@ -886,6 +946,7 @@ chunkManager_pending_graphics_updates_search:
 	
 	;check if it is a load update (unload is irrelevant)
 	mov eax, dword[ebp+8]
+	mov eax, dword[eax]
 	cmp dword[eax+4], 0
 	je chunkManager_pending_graphics_updates_search_end
 	

@@ -17,6 +17,8 @@ section .rodata use32
 	error_queue_is_full_2 db "queue_pushBuffer: queue is full",10,0
 	error_queue_is_empty db "queue_pop: queue is empty",10,0
 	error_invalid_index db "queue_at: % is invalid index, queue size is %d",10,0
+	
+	test_text db "feliz navidad",10,0
 
 section .text use32
 
@@ -378,6 +380,9 @@ queue_search:
 		jmp queue_search_loop_start
 		
 	queue_search_loop_end:
+	
+	;set return value
+	mov eax, dword[ebp-4]
 	
 	mov esp, ebp
 	pop edi
