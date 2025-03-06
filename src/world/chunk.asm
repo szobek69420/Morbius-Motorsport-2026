@@ -547,7 +547,20 @@ chunk_generate:
 		mov dword[eax+60], ecx			;indices
 		mov ecx, dword[ebp-64]
 		mov dword[eax+64], ecx			;indexCount
+		
+		jmp chunk_generate_mesh_done
+		
 	chunk_generate_no_mesh:
+		lea eax, [ebp-48]
+		push eax
+		call vector_destroy
+		lea eax, [ebp-64]
+		push eax
+		call vector_destroy
+		add esp, 8
+		jmp chunk_generate_mesh_done
+		
+	chunk_generate_mesh_done:
 	
 	;dealloc height map
 	push dword[ebp-8]

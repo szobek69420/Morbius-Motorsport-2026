@@ -19,6 +19,8 @@ section .text use32
 	global tsQueue_pushBuffer	;int tsQueue_pushBuffer(tsQueue* pqueue, element* bufferToPush)
 	;returns 0 if there were no problems
 	global tsQueue_pop			;int tsQueue_pop(tsQueue* pqueue, element* nullableBuffer)
+	;returns 0 if there were no problems
+	global tsQueue_peek			;int tsQueue_peek(tsQueue* pqueue, element* buffer)
 	
 	;index is calculated from the start of the queue, not the start of the allocated element array
 	global tsQueue_at			;element* tsQueue_at(tsQueue* pqueue, int index)
@@ -38,6 +40,7 @@ section .text use32
 	extern queue_destroy
 	extern queue_pushBuffer
 	extern queue_pop
+	extern queue_peek
 	extern queue_at
 	extern queue_clear
 	extern queue_isEmpty
@@ -199,6 +202,37 @@ tsQueue_pop:
 	ret
 	
 	
+tsQueue_peek:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;return value
+	
+	;lock mutex
+	mov eax, dword[ebp+8]
+	push -1
+	push dword[eax]
+	call mutex_lock
+	
+	;call peek
+	push dword[ebp+12]			;element*
+	mov eax, dword[ebp+8]
+	push dword[eax+4]			;queue*
+	call queue_peek
+	mov dword[ebp-4], eax
+	
+	;release mutex
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	call mutex_unlock
+	
+	;set return value
+	mov eax, dword[ebp-4]
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
 	
 tsQueue_at:
 	push ebp
@@ -294,6 +328,8 @@ tsQueue_search:
 	push ebp
 	mov ebp, esp
 	
+	sub esp, 4					;return value
+	
 	;lock mutex
 	mov eax, dword[ebp+8]
 	push -1
@@ -306,11 +342,15 @@ tsQueue_search:
 	mov eax, dword[ebp+8]
 	push dword[eax+4]			;queue*
 	call queue_search
+	mov dword[ebp-4], eax
 	
 	;release mutex
 	mov eax, dword[ebp+8]
 	push dword[eax]
 	call mutex_unlock
+	
+	;set return value
+	mov eax, dword[ebp-4]
 	
 	mov esp, ebp
 	pop ebp

@@ -35,17 +35,18 @@
 
 section .text use32
 
-	global chunkManager_create			;ChunkManager* chunkManager_create()
+	global chunkManager_create					;ChunkManager* chunkManager_create()
 	
-	global chunkManager_load			;void chunkManager_load(ChunkManager* manager, vec3* playerPos3D, int renderDistance)
-	global chunkManager_unload			;void chunkManager_unload(ChunkManager* manager, vec3* playerPos3D, int renderDistance)
+	global chunkManager_load					;void chunkManager_load(ChunkManager* manager, vec3* playerPos3D, int renderDistance)
+	global chunkManager_unload					;void chunkManager_unload(ChunkManager* manager, vec3* playerPos3D, int renderDistance)
 	
-	global chunkManager_processUpdate	;void chunkManager_processUpdate(ChunkManager* manager)
+	global chunkManager_processUpdate			;void chunkManager_processUpdate(ChunkManager* manager)
+	global chunkManager_processGraphicsUpdate	;void chunkManager_processGraphicsUpdate(ChunkManager* manager)
 	
-	global chunkManager_getHyperPlane	;HyperPlane* chunkManager_getHyperPlane(ChunkManager* cm)
-	global chunkManager_setHyperPlane	;void chunkManager_setHyperPlane(ChunkManager* cm, HyperPlane* ph)
+	global chunkManager_getHyperPlane			;HyperPlane* chunkManager_getHyperPlane(ChunkManager* cm)
+	global chunkManager_setHyperPlane			;void chunkManager_setHyperPlane(ChunkManager* cm, HyperPlane* ph)
 	
-	global chunkManager_getPlayerChunk	;void chunkManager_getPlayerChunk(ChunkManager* cm, vec3* playerPos3D, int* chunkX, int* chunkZ, int* chunkW)
+	global chunkManager_getPlayerChunk			;void chunkManager_getPlayerChunk(ChunkManager* cm, vec3* playerPos3D, int* chunkX, int* chunkZ, int* chunkW)
 	
 	extern my_printf
 	extern my_malloc
@@ -76,6 +77,10 @@ section .text use32
 	
 	extern vec4_add
 	extern vec4_scale
+	
+	extern renderable_create
+	extern renderable_destroy
+	extern RENDERABLE_ATTRIB_P3UV2
 	
 chunkManager_create:
 	push ebp
@@ -458,7 +463,7 @@ chunkManager_processUpdate:
 		mov dword[ebp-4], eax
 		add esp, 16
 		
-		;TODO: create and register collider
+		;TODO: create and register collider if there is a mesh
 		
 		;create graphics update
 		push 8
@@ -486,7 +491,7 @@ chunkManager_processUpdate:
 		mov ecx, dword[eax+4]
 		mov dword[ebp-4], ecx
 		
-		;TODO: unregister and yeet collider
+		;TODO: unregister and yeet collider if necessary
 		
 		;create graphics update and add it to the queue if there is a renderable
 		mov eax, dword[ebp-4]
@@ -542,6 +547,120 @@ chunkManager_processUpdate:
 	add esp, 4
 	
 	chunkManager_processUpdate_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+chunkManager_processGraphicsUpdate:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;graphics update				4
+	sub esp, 16			;imitated vertex vector			20
+	sub esp, 16			;imitated index vector			36
+	
+	;try to pop an update
+	lea eax, [ebp-4]
+	push eax
+	mov eax, dword[ebp+8]
+	add eax, 24
+	push eax
+	call tsQueue_pop
+	add esp, 8
+	test eax, eax
+	jnz chunkManager_processGraphicsUpdate_end
+	
+	;examine what kind of update it is
+	mov eax, dword[ebp-4]
+	cmp dword[eax+4], 0
+	je chunkManager_processGraphicsUpdate_unload
+		;it is a load update
+		mov eax, dword[ebp-4]
+		mov eax, dword[eax]				;chunk in eax
+		cmp dword[eax+56], 0
+		je chunkManager_processGraphicsUpdate_dealloc_update			;there is no mesh
+		
+		;create the imitated vectors
+		mov ecx, dword[eax+56]
+		mov dword[ebp-20], ecx
+		mov dword[ebp-16], ecx
+		mov dword[ebp-12], 4
+		mov ecx, dword[eax+52]
+		mov dword[ebp-8], ecx
+		
+		mov ecx, dword[eax+64]
+		mov dword[ebp-36], ecx
+		mov dword[ebp-32], ecx
+		mov dword[ebp-28], 4
+		mov ecx, dword[eax+60]
+		mov dword[ebp-24], ecx
+		
+		;create renderable
+		push dword[RENDERABLE_ATTRIB_P3UV2]
+		lea eax, [ebp-36]
+		push eax
+		lea eax, [ebp-20]
+		push eax
+		call renderable_create
+		add esp, 12
+		
+		mov ecx, dword[ebp-4]
+		mov ecx, dword[ecx]
+		mov dword[ecx+12], eax
+		
+		
+		;destroy the vertex and index data in the chunk
+		mov eax, dword[ebp-4]
+		mov eax, dword[eax]
+		push dword[eax+52]
+		push dword[eax+60]
+		mov dword[eax+52], 0
+		mov dword[eax+56], 0
+		mov dword[eax+60], 0
+		mov dword[eax+64], 0
+		call my_free
+		add esp, 4
+		call my_free
+		add esp, 4
+		
+		jmp chunkManager_processGraphicsUpdate_dealloc_update
+		
+	chunkManager_processGraphicsUpdate_unload:
+		;it is an unload update
+		
+		;destroy the renderable
+		mov eax, dword[ebp-4]
+		push dword[eax]
+		call renderable_destroy
+		add esp, 4
+		
+		jmp chunkManager_processGraphicsUpdate_dealloc_update
+		
+	chunkManager_processGraphicsUpdate_dealloc_update:
+	;add chunk to loaded chunks
+	mov eax, dword[ebp+8]
+	push -1
+	push dword[eax+96]
+	call mutex_lock
+	add esp, 8
+	
+	mov ecx, dword[ebp-4]
+	push dword[ecx]
+	push dword[ebp+8]
+	call vector_push_back
+	add esp, 8
+		
+	mov eax, dword[ebp+8]
+	push dword[eax+96]
+	call mutex_unlock
+	add esp, 4
+	
+	;dealloc update
+	push dword[ebp-4]
+	call my_free
+	
+	chunkManager_processGraphicsUpdate_end:
 	mov esp, ebp
 	pop ebp
 	ret

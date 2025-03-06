@@ -31,6 +31,8 @@ section .text use32
 	global queue_pushBuffer		;int queue_pushBuffer(queue* pqueue, element* bufferToPush)
 	;returns 0 if there were no problems
 	global queue_pop			;int queue_pop(queue* pqueue, element* nullableBuffer)
+	;returns 0 if there were no problems
+	global queue_peek			;int queue_peek(queue* pqueue, element* buffer)
 	
 	;index is calculated from the start of the queue, not the start of the allocated element array
 	global queue_at				;element* queue_at(queue* pqueue, int index)
@@ -234,6 +236,39 @@ queue_pop:
 	xor eax, eax
 	
 	queue_pop_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+queue_peek:
+	push ebp
+	mov ebp, esp
+	
+	;check if the queue is not empty
+	mov eax, dword[ebp+8]
+	cmp dword[eax+4], 0
+	jne queue_peek_not_empty
+		push error_queue_is_empty
+		call my_printf
+		mov eax, 69
+		jmp queue_peek_end
+	queue_peek_not_empty:
+	
+	;save the element
+	mov eax, dword[ebp+8]
+	mov ecx, dword[eax]
+	imul ecx, dword[eax+12]
+	add ecx, dword[eax+16]
+	
+	push dword[eax+12]
+	push ecx
+	push dword[ebp+12]
+	call my_memcpy
+	add esp, 12
+	
+	xor eax, eax
+	
+	queue_peek_end:
 	mov esp, ebp
 	pop ebp
 	ret
