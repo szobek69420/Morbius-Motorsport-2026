@@ -215,7 +215,7 @@ player_updatePhysics:
 	
 	push dword[ebp+12]
 	push dword[ebp+8]
-	call player_applyGravity
+	;call player_applyGravity
 	add esp, 8
 	
 	mov esp, ebp
@@ -339,14 +339,30 @@ player_move:		;void player_move(player* player, float deltaTime)
 		add esp, 12
 	player_move_not_a:
 	
+	mov dword[ebp-8], 0
+	
 	push dword[GLFW_KEY_SPACE]
 	call input_keyHeld
 	add esp, 4
 	test eax, eax
 	jz player_move_not_space
-		mov ecx, dword[MOVEMENT_SPEED]
-		mov dword[ebp-8], ecx
+		movss xmm0, dword[MOVEMENT_SPEED]
+		movss xmm1, dword[ebp-8]
+		addss xmm1, xmm0
+		movss dword[ebp-8], xmm1
 	player_move_not_space:
+	
+	
+	push dword[GLFW_KEY_LEFT_SHIFT]
+	call input_keyHeld
+	add esp, 4
+	test eax, eax
+	jz player_move_not_left_shift
+		movss xmm0, dword[MOVEMENT_SPEED]
+		movss xmm1, dword[ebp-8]
+		subss xmm1, xmm0
+		movss dword[ebp-8], xmm1
+	player_move_not_left_shift:
 	
 	
 	;copy back the values into player.collider.velocity

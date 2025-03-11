@@ -64,6 +64,8 @@ my_memcpy:
 			test edx, edx
 			jnz my_memcpy_copy_front_to_back_loop_start
 		pop ebx
+		
+		jmp my_memcpy_end
 	
 	my_memcpy_copy_back_to_front:
 		mov eax, dword[ebp+8]				;dst in eax

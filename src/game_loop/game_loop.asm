@@ -43,115 +43,7 @@ section .rodata use32
 	print_vec4 db "(%f; %f; %f; %f)",0
 	
 	print_loaded_chunk_count db "loaded chunks: %d",10,0
-	
-	vertex_data_vector:		;imitates a vector
-	dd 120
-	dd 120
-	dd 4
-	dd vertex_data
-	vertex_data:
-	dd -10.0, -1.0, 10.0, 0.0, 0.0,
-	dd -10.0, 1.0, 10.0, 0.0, 1.0,
-	dd 10.0, 1.0, 10.0, 1.0, 1.0,
-	dd 10.0, -1.0, 10.0, 1.0, 0.0,
-	dd -10.0, -1.0, 10.0, 0.0, 0.0,
-	dd -10.0, 1.0, 10.0, 0.0, 1.0,
-	dd -10.0, 1.0, -10.0, 1.0, 1.0,
-	dd -10.0, -1.0, -10.0, 1.0, 0.0,
-	dd 10.0, -1.0, -10.0, 1.0, 0.0,
-	dd 10.0, 1.0, -10.0, 1.0, 1.0,
-	dd -10.0, 1.0, -10.0, 0.0, 1.0,
-	dd -10.0, -1.0, -10.0, 0.0, 0.0,
-	dd 10.0, -1.0, -10.0, 1.0, 0.0,
-	dd 10.0, 1.0, -10.0, 1.0, 1.0,
-	dd 10.0, 1.0, 10.0, 0.0, 1.0,
-	dd 10.0, -1.0, 10.0, 0.0, 0.0,
-	dd -10.0, 1.0, 10.0, 0.0, 0.0,
-	dd -10.0, 1.0, -10.0, 0.0, 1.0,
-	dd 10.0, 1.0, -10.0, 1.0, 1.0,
-	dd 10.0, 1.0, 10.0, 1.0, 0.0,
-	dd 10.0, -1.0, 10.0, 1.0, 0.0,
-	dd 10.0, -1.0, -10.0, 1.0, 1.0,
-	dd -10.0, -1.0, -10.0, 0.0, 1.0,
-	dd -10.0, -1.0, 10.0, 0.0, 0.0
-	
-	indices_vector:
-	dd 36
-	dd 36
-	dd 4
-	dd indices
-	indices:
-	dd 1,0,2,3,2,0
-	dd 4,5,6,6,7,4
-	dd 9,8,10,11,10,8
-	dd 12,13,14,14,15,12
-	dd 17,16,18,19,18,16
-	dd 21,20,22,23,22,20
-	
-	mesh_vertex_count dd 24
-	mesh_vertices:
-	dd -10.0, -1.0, -10.0
-	dd -10.0, 1.0, -10.0
-	dd 10.0, 1.0, -10.0
-	dd 10.0, -1.0, -10.0
-	dd -10.0, -1.0, 10.0
-	dd -10.0, 1.0, 10.0
-	dd -10.0, 1.0, -10.0
-	dd -10.0, -1.0, -10.0
-	dd 10.0, -1.0, 10.0
-	dd 10.0, 1.0, 10.0
-	dd -10.0, 1.0, 10.0
-	dd -10.0, -1.0, 10.0
-	dd 10.0, -1.0, -10.0
-	dd 10.0, 1.0, -10.0
-	dd 10.0, 1.0, 10.0
-	dd 10.0, -1.0, 10.0
-	dd -10.0, 1.0, 10.0
-	dd -10.0, 1.0, -10.0
-	dd 10.0, 1.0, -10.0
-	dd 10.0, 1.0, 10.0
-	dd 10.0, -1.0, 10.0
-	dd 10.0, -1.0, -10.0
-	dd -10.0, -1.0, -10.0
-	dd -10.0, -1.0, 10.0
-	
-	mesh_index_count dd 36
-	mesh_indices:
-	dd 0,1,2,2,3,0
-	dd 4,5,6,6,7,4
-	dd 8,9,10,10,11,8
-	dd 12,13,14,14,15,12
-	dd 17,16,18,19,18,16
-	dd 21,20,22,23,22,20
-	
-	vertex_data_2_vector:
-	dd 18
-	dd 18
-	dd 4
-	dd vertex_data_2
-	vertex_data_2:
-	dd -1.0, 0.1, 1.0
-	dd 1.0, 0.1, 1.0
-	dd 0.0, 0.1, -1.0
-	dd -1.0, -0.1, 1.0
-	dd 1.0, -0.1, 1.0
-	dd 0.0, -0.1, -1.0
-	
-	mesh_vertex_count_2 dd 6
-	
-	indices_2_vector:
-	dd 24
-	dd 24
-	dd 4
-	dd indices_2
-	indices_2:
-	dd 0,1,2, 5,4,3
-	dd 0,3,4, 4,1,0
-	dd 1,4,5, 5,2,1
-	dd 2,5,3, 3,0,2
-	
-	position_2 dd 3.0, 1.5, 3.0
-	
+		
 	
 section .bss use32
 	should_close resb 4					;tsValue*
@@ -163,13 +55,6 @@ section .bss use32
 	
 	hyperplane resb 64
 	pplayer resb 4
-	
-	image_renderable resb 4
-	plain_renderable resb 4
-	
-	cylinder resb 4
-	mesh resb 4
-	mesh2 resb 4
 	
 	chunk_manager resb 4
 	
@@ -279,11 +164,6 @@ section .text use32
 	
 	extern collider_init
 	extern collider_deinit
-	extern collider_createCylinder
-	extern collider_createMesh
-	extern collider_destroy
-	extern collider_setPosition
-	extern collisionDetection_resolveKinematicNonkinematic
 	extern physics_init
 	extern physics_deinit
 	extern physics_update
@@ -346,38 +226,6 @@ game_loop:
 	call collider_init
 	call physics_init
 	
-	;init the two mesh colliders
-	push 12
-	push dword[mesh_index_count]
-	push dword[mesh_vertex_count]
-	push mesh_indices
-	push mesh_vertices
-	call collider_createMesh
-	add esp, 20
-	mov dword[mesh], eax
-	
-	push 12
-	push dword[indices_2_vector]
-	push dword[mesh_vertex_count_2]
-	push indices_2
-	push vertex_data_2
-	call collider_createMesh
-	add esp, 20
-	mov dword[mesh2], eax
-	push position_2
-	push dword[mesh2]
-	call collider_setPosition
-	add esp, 8
-	
-	
-	push dword[mesh]
-	call physics_registerKinematic
-	add esp, 4
-	push dword[mesh2]
-	call physics_registerKinematic
-	add esp, 4
-
-	
 	
 	;init camera
 	push camera
@@ -407,32 +255,6 @@ game_loop:
 	push camera
 	call player_init
 	mov dword[pplayer], eax
-	add esp, 8
-	
-	;create morbius poster and the plain renderable
-	push dword[RENDERABLE_ATTRIB_P3UV2]
-	push indices_vector
-	push vertex_data_vector
-	call renderable_create
-	add esp, 12
-	mov dword[image_renderable], eax
-	
-	push image_path
-	push dword[image_renderable]
-	call renderable_setAlbedo
-	add esp, 8
-	
-	
-	push dword[RENDERABLE_ATTRIB_P3]
-	push indices_2_vector
-	push vertex_data_2_vector
-	call renderable_create
-	add esp, 12
-	mov dword[plain_renderable], eax
-	
-	push position_2
-	push dword[plain_renderable]
-	call renderable_setPosition
 	add esp, 8
 	
 	
@@ -521,16 +343,6 @@ game_loop:
 		call camera_viewProjection
 		add esp, 8
 		
-		;render morbius poster and plain object thingy
-		push pv_matrix
-		push dword[image_renderable]
-		call renderable_render
-		add esp, 8
-		
-		push pv_matrix
-		push dword[plain_renderable]
-		call renderable_render
-		add esp, 8
 		
 		;render chunks
 		push pv_matrix
@@ -584,14 +396,6 @@ game_loop:
 	call thread_join
 	add esp, 8
 	
-		
-	;destroy morbius poster and plain object thingy
-	push dword[image_renderable]
-	call renderable_destroy
-	add esp, 4
-	push dword[plain_renderable]
-	call renderable_destroy
-	add esp, 4
 	
 	;destroy player
 	push dword[pplayer]
