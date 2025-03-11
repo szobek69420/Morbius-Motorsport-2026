@@ -156,6 +156,7 @@ section .rodata use32
 section .bss use32
 	should_close resb 4					;tsValue*
 	physics_thread resb 4				;thread*
+	chunkLoader_thread resb 4			;thread*
 
 	camera resb 36
 	pv_matrix resb 64
@@ -448,12 +449,20 @@ game_loop:
 	call [GetTickCount]
 	mov dword[last_frame_milliseconds], eax
 	
-	;start the pyhsics thread
+	;start the physics thread
 	push 69					;start immediately
 	push 0
 	push gameLoop_physics
 	call thread_create
 	mov dword[physics_thread], eax
+	add esp, 12
+	
+	;start the chunk loader thread
+	push 69
+	push 0
+	push gameLoop_chunkLoader
+	call thread_create
+	mov dword[chunkLoader_thread], eax
 	add esp, 12
 	
 	;the actual game loop
@@ -481,26 +490,16 @@ game_loop:
 		gameLoop_loop_no_resize:
 		
 		
+		;process a chunk graphics update
+		push dword[chunk_manager]
+		call chunkManager_processGraphicsUpdate
+		add esp, 4
+		
 		;update player
 		push dword[delta_time_seconds]
 		push dword[pplayer]
 		call player_update
 		add esp, 8
-		
-		;do chunk update things		
-		mov eax, dword[pplayer]
-		mov eax, dword[eax]				;&player.camera.position
-		push 4
-		push eax
-		push dword[chunk_manager]
-		call chunkManager_load
-		call chunkManager_unload
-		add esp, 12
-		
-		push dword[chunk_manager]
-		call chunkManager_processUpdate
-		call chunkManager_processGraphicsUpdate
-		add esp, 4
 	
 		;set clear color
 		push dword[ONE]
@@ -577,6 +576,11 @@ game_loop:
 	;wait for the other threads
 	push -1
 	push dword[physics_thread]
+	call thread_join
+	add esp, 8
+	
+	push -1
+	push dword[chunkLoader_thread]
 	call thread_join
 	add esp, 8
 	
@@ -683,6 +687,41 @@ gameLoop_physics:
 		add esp, 8
 		test eax, eax
 		jnz gameLoop_physics_loop_start
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+gameLoop_chunkLoader:
+	push ebp
+	mov ebp, esp
+	
+	finit
+
+	gameLoop_chunkLoader_loop_start:		
+		;do chunk update things		
+		mov eax, dword[pplayer]
+		mov eax, dword[eax]				;&player.camera.position
+		push 4
+		push eax
+		push dword[chunk_manager]
+		call chunkManager_load
+		call chunkManager_unload
+		add esp, 12
+		
+		push dword[chunk_manager]
+		call chunkManager_processUpdate
+		add esp, 4
+		
+		
+		;check if an exit is necessary
+		push 0
+		push dword[should_close]
+		call tsValue_isEqual
+		add esp, 8
+		test eax, eax
+		jnz gameLoop_chunkLoader_loop_start
 	
 	mov esp, ebp
 	pop ebp
