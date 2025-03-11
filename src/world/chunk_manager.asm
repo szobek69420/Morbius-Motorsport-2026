@@ -47,6 +47,7 @@ section .text use32
 	global chunkManager_create					;ChunkManager* chunkManager_create()
 	
 	global chunkManager_load					;void chunkManager_load(ChunkManager* manager, vec3* playerPos3D, int renderDistance)
+	;reloading is also registered in the chunkManager_unload
 	global chunkManager_unload					;void chunkManager_unload(ChunkManager* manager, vec3* playerPos3D, int renderDistance)
 	
 	;immediately unloads all chunks
@@ -91,6 +92,8 @@ section .text use32
 	extern tsQueue_pop
 	extern tsQueue_search
 	extern tsQueue_isEmpty
+	extern tsQueue_at
+	extern tsQueue_size
 	
 	extern vec4_add
 	extern vec4_scale
@@ -122,7 +125,7 @@ chunkManager_create:
 	
 	mov eax, dword[ebp-4]
 	add eax, 16
-	push 512
+	push 10000
 	push 4
 	push eax
 	call tsQueue_init
@@ -130,7 +133,7 @@ chunkManager_create:
 	
 	mov eax, dword[ebp-4]
 	add eax, 24
-	push 512
+	push 10000
 	push 4
 	push eax
 	call tsQueue_init
@@ -383,7 +386,10 @@ chunkManager_unload:
 	
 	sub esp, 4				;chunk update				32
 	
+	sub esp, 4				;reload necessary			36
+	
 	mov dword[ebp-16], 0
+	mov dword[ebp-36], 0
 	
 	;calculate player chunk
 	lea eax, [ebp-20]
@@ -443,6 +449,9 @@ chunkManager_unload:
 		cmp eax, dword[ebp+28]
 		jg chunkManager_unload_loop_should_unload			;w is further than the render distance
 		
+		;check if the chunk should be unloaded
+		cmp dword[ebx+68], 0
+		jne chunkManager_unload_loop_should_reload
 		
 		;the chunk is within render distance
 		jmp chunkManager_unload_loop_continue
@@ -460,6 +469,32 @@ chunkManager_unload:
 			jne chunkManager_unload_loop_continue
 		
 			;save info
+			mov dword[ebp-16], ebx
+			
+			mov ecx, dword[ebx]
+			mov dword[ebp-12], ecx
+			mov ecx, dword[ebx+4]
+			mov dword[ebp-8], ecx
+			mov ecx, dword[ebx+8]
+			mov dword[ebp-4], ecx
+			
+			jmp chunkManager_unload_loop_end
+			
+			
+		chunkManager_unload_loop_should_reload:
+			;check if the chunk is not already in the unload queue
+			push ebx
+			push chunkManager_pending_unloads_search
+			mov eax, dword[ebp+20]
+			add eax, 16
+			push eax
+			call tsQueue_search
+			add esp, 12
+			cmp eax, -1
+			jne chunkManager_unload_loop_continue
+			
+			;save info
+			mov dword[ebp-36], 69			;reload is necessary
 			mov dword[ebp-16], ebx
 			
 			mov ecx, dword[ebx]
@@ -489,26 +524,53 @@ chunkManager_unload:
 	cmp dword[ebp-16], 0
 	je chunkManager_unload_end
 	
-	;alloc chunk update
-	push 20
-	call my_malloc
-	mov dword[ebp-32], eax
-	add esp, 4
+		;alloc unload chunk update
+		push 20
+		call my_malloc
+		mov dword[ebp-32], eax
+		add esp, 4
+		
+		mov dword[eax], 0			;unload
+		mov ecx, dword[ebp-16]
+		mov dword[eax+4], ecx		;chunk
+		
+		;push unload chunk update onto pending chunks
+		mov eax, dword[ebp-32]
+		mov ecx, dword[ebp+20]
+		add ecx, 16
+		
+		push eax
+		push ecx
+		call tsQueue_push
+		add esp, 8
 	
-	mov dword[eax], 0			;unload
-	mov ecx, dword[ebp-16]
-	mov dword[eax+4], ecx		;chunk
+	;is a reload necessary?
+	cmp dword[ebp-36], 0
+	je chunkManager_unload_end
 	
-	;push chunk update onto pending chunks
-	mov eax, dword[ebp-32]
-	mov ecx, dword[ebp+20]
-	add ecx, 16
-	
-	push eax
-	push ecx
-	call tsQueue_push
-	add esp, 8
-	
+		;alloc load chunk update
+		push 20
+		call my_malloc
+		mov dword[ebp-32], eax
+		add esp, 4
+		
+		mov dword[eax], 69			;load
+		mov ecx, dword[ebp-12]
+		mov dword[eax+8], ecx		;chunkX
+		mov ecx, dword[ebp-8]
+		mov dword[eax+12], ecx		;chunkZ
+		mov ecx, dword[ebp-4]
+		mov dword[eax+16], ecx		;chunkW
+		
+		;push load chunk update onto pending chunks
+		mov eax, dword[ebp-32]
+		mov ecx, dword[ebp+20]
+		add ecx, 16
+		
+		push eax
+		push ecx
+		call tsQueue_push
+		add esp, 8
 	
 	chunkManager_unload_end:
 	mov esp, ebp
@@ -785,6 +847,152 @@ chunkManager_processGraphicsUpdate:
 	
 	chunkManager_processGraphicsUpdate_end:
 	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;clears the pending updates queue
+;overrides every graphics load update so that there will be no mesh
+;processes the pending graphics updates
+;marks every loaded chunk as shouldBeReloaded
+chunkManager_unloadAll:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 4				;pending updates queue
+	sub esp, 4				;pending graphics updates queue
+	sub esp, 4				;temp update
+	
+	mov eax, dword[ebp+20]
+	add eax, 16
+	mov dword[ebp-4], eax
+	add eax, 8
+	mov dword[ebp-8], eax
+	
+	;clear the pending update queue
+	chunkManager_unloadAll_clear_pending_loop_start:
+		;check if the queue is empty
+		push dword[ebp-4]
+		call tsQueue_isEmpty
+		add esp, 4
+		test eax, eax
+		jnz chunkManager_unloadAll_clear_pending_loop_end
+		
+		;pop update
+		lea eax, [ebp-12]
+		push eax
+		push dword[ebp-4]
+		call tsQueue_pop
+		add esp, 8
+		
+		;yeet update
+		push dword[ebp-12]
+		call my_free
+		add esp, 4
+		
+		jmp chunkManager_unloadAll_clear_pending_loop_start
+	
+	chunkManager_unloadAll_clear_pending_loop_end:
+	
+	;override graphics load updates
+	push dword[ebp-8]
+	call tsQueue_size
+	add esp, 4
+	mov esi, eax
+	test esi, esi
+	jz chunkManager_unloadAll_override_graphics_loop_end
+	chunkManager_unloadAll_override_graphics_loop_start:
+		;get the update
+		mov ecx, esi
+		dec ecx
+		push ecx
+		push dword[ebp-8]
+		call tsQueue_at
+		add esp, 8
+		
+		mov ecx, dword[eax]				;tsQueue_at returns a ChunkGraphicsUpdate**
+		mov dword[ebp-12], ecx
+		
+		;see if it is a load update
+		mov ecx, dword[ebp-12]
+		cmp dword[ecx+4], 0
+		je chunkManager_unloadAll_override_graphics_loop_continue
+		
+		;yeet the vertex data
+		mov ecx, dword[ecx]				;chunk in ecx
+		mov dword[ecx+56], 0
+		mov dword[ecx+64], 0
+		
+		push dword[ecx+52]
+		push dword[ecx+60]
+		call my_free
+		add esp, 4
+		call my_free
+		add esp, 4
+		
+		chunkManager_unloadAll_override_graphics_loop_continue:
+		dec esi
+		test esi, esi
+		jnz chunkManager_unloadAll_override_graphics_loop_start
+	chunkManager_unloadAll_override_graphics_loop_end:
+	
+	
+	;process graphics updates
+	chunkManager_unloadAll_process_graphics_updates_loop_start:
+		;check if the queue is empty
+		push dword[ebp-8]
+		call tsQueue_isEmpty
+		add esp, 4
+		test eax, eax
+		jnz chunkManager_unloadAll_process_graphics_updates_loop_end
+		
+		;process graphics update
+		push dword[ebp+20]
+		call chunkManager_processGraphicsUpdate
+		add esp, 4
+		
+		jmp chunkManager_unloadAll_process_graphics_updates_loop_start
+		
+	chunkManager_unloadAll_process_graphics_updates_loop_end:
+	
+	
+	;mark as reloadable
+	mov eax, dword[ebp+20]
+	push -1
+	push dword[eax+96]
+	call mutex_lock
+	add esp, 8
+	
+	mov eax, dword[ebp+20]
+	mov esi, dword[eax]					;index in esi
+	mov edi, dword[eax+12]				;current chunk** in edi
+	mov ebx, dword[eax+8]				;element size in ebx
+	test esi, esi
+	jz chunkManager_unloadAll_push_unload_updates_loop_end
+	chunkManager_unloadAll_push_unload_updates_loop_start:
+		mov ecx, dword[edi]
+		mov dword[ecx+68], 69
+		
+		add edi, ebx
+		dec esi
+		test esi, esi
+		jnz chunkManager_unloadAll_push_unload_updates_loop_start
+		
+	chunkManager_unloadAll_push_unload_updates_loop_end:
+	
+	mov eax, dword[ebp+20]
+	push dword[eax+96]
+	call mutex_unlock
+	add esp, 4
+	
+	chunkManager_unloadAll_end:
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
 	pop ebp
 	ret
 	

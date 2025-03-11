@@ -29,6 +29,8 @@ section .text use32
 	
 	global tsQueue_isEmpty		;int tsQueue_isEmpty(tsQueue* pqueue)
 	
+	global tsQueue_size			;int tsQueue_size(tsQueue* pqueue)
+	
 	;returns the index of the first matching element, otherwise -1 is returned
 	;the comparator must return 0 if a match is found
 	global tsQueue_search		;int tsQueue_search(tsQueue* pqueue, int (*comparator)(element*, void* searchKey), void* searchKey)
@@ -310,6 +312,37 @@ tsQueue_isEmpty:
 	push dword[eax+4]			;queue*
 	call queue_isEmpty
 	mov dword[ebp-4], eax		;save return value
+	
+	;release mutex
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	call mutex_unlock
+	
+	
+	mov eax, dword[ebp-4]
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+tsQueue_size:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4				;return value
+	
+	;lock mutex
+	mov eax, dword[ebp+8]
+	push -1
+	push dword[eax]
+	call mutex_lock
+	
+	;get size
+	mov eax, dword[ebp+8]
+	mov eax, dword[eax+4]
+	mov eax, dword[eax+4]
+	mov dword[ebp-4], eax
 	
 	;release mutex
 	mov eax, dword[ebp+8]

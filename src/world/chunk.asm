@@ -9,6 +9,7 @@
 ;	vec4 lowerBound, upperBound;				;20
 ;	void* vertices, int vertexFloatCount		;52			;temporary, deleted as soon as the renderable is constructed
 ;	void* indices, int indexCount				;60			;temporary, deleted as soon as the renderable is constructed
+;	int shouldBeReloaded						;64
 ;}		68 bytes overall
 section .rodata use32
 
@@ -131,7 +132,7 @@ chunk_generate:
 	sub esp, 16				;index vector						64
 	
 	;alloc space for chunk
-	push 68
+	push 72
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
@@ -152,7 +153,9 @@ chunk_generate:
 	mov dword[eax+52], 0			;vertices
 	mov dword[eax+56], 0			;vertexFloatCount
 	mov dword[eax+60], 0			;indices
-	mov dword[eax+68], 0			;indexCount
+	mov dword[eax+64], 0			;indexCount
+	
+	mov dword[eax+68], 0			;shouldBeReloaded
 	
 	;alloc space for heightmap
 	push dword[CHUNK_HEIGHT_MAP_LENGTH]

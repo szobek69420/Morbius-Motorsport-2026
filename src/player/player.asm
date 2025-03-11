@@ -84,6 +84,8 @@ section .text use32
 	extern hyperPlane_moveInsideOfPlane
 	extern hyperPlane_rotate
 	
+	extern chunkManager_unloadAll
+	
 player_init:
 	push ebp
 	mov ebp, esp
@@ -544,6 +546,11 @@ player_rotatePlane:
 	call mutex_unlock
 	add esp, 4
 	
+	;reload all chunks
+	mov eax, dword[ebp+8]
+	push dword[eax+28]
+	call chunkManager_unloadAll
+	add esp, 4
 	
 	player_rotatePlane_end:
 	mov esp, ebp
