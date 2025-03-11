@@ -12,6 +12,7 @@ section .data use32
 	format db "element size: %d",10,0
 	pop_error_message db "vector is empty bozo",10,0
 	at_error_message db "vector_at: %d is out of bounds",10,0
+	remove_at_error_message db "vector_remove_at: %d is out of bounds",10,0
 
 section .text use32
 	extern my_malloc
@@ -29,7 +30,7 @@ section .text use32
 	global vector_pop_back		;void vector_pop_back(vector*)
 	global vector_insert		;void vector_insert(vector*, int index, <element> element)
 	global vector_remove_at		;void vector_remove_at(vector*, int index)
-	global vector_remove		;int vector_remove(vector*, <element> element)	removes the first matching element. removes 0 if no removal took place, 69 else
+	global vector_remove		;int vector_remove(vector*, <element> element)	removes the first matching element. returns 0 if no removal took place, 69 else
 	
 	;returns the index of the first matching element, otherwise -1 is returned
 	;the comparator must return 0 if a match is found
@@ -310,71 +311,108 @@ vector_remove_at:		;void vector_remove_at(vector*, int index)
 	push ebp
 	mov ebp, esp
 	
-	mov eax, dword[ebp+8]	;vector* in eax
-	push eax					;vector* at ebp-4
+	sub esp, 4			;new array
+	sub esp, 4			;new capacity
 	
-	;check if index is valid
-	mov ecx, dword[ebp+12]
-	cmp ecx, dword[eax]
-	jge _remove_at_index_invalid
-	cmp ecx, 0
-	jl _remove_at_index_invalid	
-	jmp _remove_at_index_valid
-	_remove_at_index_invalid:
-		mov esp, ebp
-		pop ebp
-		ret
-	_remove_at_index_valid:
-
-	;calculate dst*
-	mov ecx, dword[ebp+12]		;index in ecx
-	imul ecx, dword[eax+8]
-	add ecx, dword[eax+12]
+	;check if the index is valid
+	cmp dword[ebp+12], 0
+	jl vector_remove_at_bad_index
+	mov eax, dword[ebp+8]
+	mov ecx, dword[eax]
+	cmp dword[ebp+12], ecx
+	jge vector_remove_at_bad_index
+	jmp vector_remove_at_based_index
+	vector_remove_at_bad_index:
+		push remove_at_error_message
+		call my_printf
+		jmp vector_remove_at_end
+	vector_remove_at_based_index:
 	
-	;calculate copy size
-	mov edx, dword[eax]
-	sub edx, dword[ebp+12]
-	dec edx
-	imul edx, dword[eax+8]
-	
-	;relocate things
-	push edx		;push copy size
-	sub esp, 4		;alloc space for src*
-	push ecx			;push dst*
-	add ecx, dword[eax+8]
-	mov dword[esp+4], ecx		;push the real src*
-	call my_memcpy
-	add esp, 12
-	
-	;decrement size
-	mov eax, dword[ebp-4]
+	;calculate the new capacity of the vector (newCapacity = max(1, oldSize-1) <= oldCapacity/2 ? oldCapacity/2 : oldCapacity;
+	mov eax, dword[ebp+8]
 	mov ecx, dword[eax]
 	dec ecx
-	mov dword[eax], ecx
+	test ecx, ecx
+	jnz vector_remove_at_new_size_is_not_zero
+		mov ecx, 1
+	vector_remove_at_new_size_is_not_zero:
+	mov edx, dword[eax+4]
+	shr edx, 1
+	cmp ecx, edx
+	jle vector_remove_at_capacity_reduced		;the capacity needs to be reduced
+		mov edx, dword[eax+4]
+	vector_remove_at_capacity_reduced:
 	
-	;check if realloc is necessary
-	mov ecx, dword[eax+4]
-	shr ecx, 1
-	cmp ecx, 0
-	je _remove_at_realloc_done
-	cmp ecx, dword[eax]
-	jl _remove_at_realloc_done
+	mov dword[ebp-8], edx						;save new capacity
 	
-	;calculate new size
-	mov dword[eax+4], ecx		;save new capacity
+	;alloc new data array
+	mov eax, dword[ebp+8]
+	mov ecx, dword[ebp-8]
 	imul ecx, dword[eax+8]
-	mov edx, dword[eax+12]
-	
-	push eax		;save vector*
 	push ecx
-	push edx
-	call my_realloc
-	add esp,8
-	pop ecx		;restore vector*
+	call my_malloc
+	mov dword[ebp-4], eax
+	add esp, 4
 	
-	mov dword[ecx+12],eax		;save new data*
+	;copy the data before the index
+	mov ecx, dword[ebp+12]
+	cmp ecx, 0
+	jle vector_remove_at_copy_before_index_done		;no copy is necessary
+		mov eax, dword[ebp+8]
+		imul ecx, dword[eax+8]
+		push ecx
+		push dword[eax+12]
+		push dword[ebp-4]
+		call my_memcpy
+		add esp, 12
 	
-	_remove_at_realloc_done:
+	vector_remove_at_copy_before_index_done:
+	
+	;copy the data after the index
+	mov eax, dword[ebp+8]
+	mov ecx, dword[ebp+12]
+	inc ecx
+	cmp ecx, dword[eax]
+	jge vector_remove_at_copy_after_index_done
+		mov edx, dword[eax]
+		sub edx, ecx
+		imul edx, dword[eax+8]
+		push edx					;elementSize*(size-(index+1))
+		
+		mov ecx, dword[ebp+12]
+		imul ecx, dword[eax+8]
+		
+		mov edx, dword[eax+12]
+		add edx, ecx
+		add edx, dword[eax+8]
+		push edx
+		
+		mov edx, dword[ebp-4]
+		add edx, ecx
+		push edx
+		
+		call my_memcpy
+		add esp, 12
+	
+	vector_remove_at_copy_after_index_done:
+	
+	;decrement the size and set the new capacity
+	mov eax, dword[ebp+8]
+	dec dword[eax]
+	mov ecx, dword[ebp-8]
+	mov dword[eax+4], ecx
+	
+	;yeet the previous data array and use the new one
+	mov eax, dword[ebp+8]
+	push dword[eax+12]
+	call my_free
+	add esp, 4
+	
+	mov eax, dword[ebp+8]
+	mov ecx, dword[ebp-4]
+	mov dword[eax+12], ecx
+	
+	vector_remove_at_end:
 	mov esp, ebp
 	pop ebp
 	ret
@@ -387,16 +425,23 @@ vector_remove:		;int vector_remove(vector*, <element> element)
 	push ebp
 	mov ebp, esp
 	
-	mov eax, dword[ebp+20]	;vector* in eax
-	push eax					;vector* at ebp-4
+	sub esp, 4				;vector*			4
+	sub esp, 4				;return value		8
 	
-	mov esi, dword[eax]		;size in esi
+	mov eax, dword[ebp+20]
+	mov dword[ebp-4], eax
+	
+	mov dword[ebp-8], 0
+	
+	
+	xor esi, esi
 	mov edi, dword[eax+12]	;data* in edi 
 	mov ebx, dword[eax+8]		;element size in ebx
 	
+	mov eax, dword[ebp+20]
+	cmp dword[eax], 0
+	je _remove_compare_loop_end		;is the vector empty?
 	_remove_compare_loop_start:
-		cmp esi, 0
-		jle _remove_compare_loop_end
 		
 		push ebx
 		push edi
@@ -407,22 +452,26 @@ vector_remove:		;int vector_remove(vector*, <element> element)
 		
 		;check if element is found
 		cmp eax, 0
-		jne _remove_compare_loop_condition_end
-		mov eax, dword[ebp-4]
-		mov ecx, dword[eax]			;size in ecx
-		sub ecx, esi				;index to delete in ecx
-		push ecx
-		push eax
-		call vector_remove_at
-		add esp, 8
-		jmp _remove_compare_loop_end
+		jne _remove_compare_loop_continue
+			mov dword[ebp-8], 69			;set return value
+		
+			push esi
+			push dword[ebp+20]
+			call vector_remove_at
+			add esp, 8
+			jmp _remove_compare_loop_end
 		
 		
-		_remove_compare_loop_condition_end:
-		dec esi
+		_remove_compare_loop_continue:
 		add edi, ebx
-		jmp _remove_compare_loop_start
+		inc esi
+		mov eax, dword[ebp+20]
+		cmp esi, dword[eax]
+		jl _remove_compare_loop_start
 	_remove_compare_loop_end:
+	
+	
+	mov eax, dword[ebp-8]
 	
 	mov esp, ebp
 	pop ebp

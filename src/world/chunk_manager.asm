@@ -33,9 +33,14 @@
 ;the chunk is pushed into the loadedChunks vector
 
 section .rodata use32
+	texture_path db "./sprites/texture.bmp",0
+
+	print_int_nl db "%d",10,0
 	print_three_ints_nl db "%d %d %d",10,0
+	print_six_ints_nl db "%d %d %d %d %d %d",10,0
+	print_seven_ints_nl db "%d %d %d %d %d %d %d",10,0
 	
-	test_text db "robux",10,0
+	test_text db "Otto von Rizzmarck",10,0
 
 section .text use32
 
@@ -85,6 +90,7 @@ section .text use32
 	extern tsQueue_push
 	extern tsQueue_pop
 	extern tsQueue_search
+	extern tsQueue_isEmpty
 	
 	extern vec4_add
 	extern vec4_scale
@@ -92,6 +98,7 @@ section .text use32
 	extern renderable_create
 	extern renderable_destroy
 	extern renderable_render
+	extern renderable_setAlbedo
 	extern RENDERABLE_ATTRIB_P3UV2
 	
 chunkManager_create:
@@ -135,7 +142,7 @@ chunkManager_create:
 	push eax
 	call hyperPlane_create
 	
-	;create mutex
+	;create loaded chunk mutex
 	call mutex_create
 	mov ecx, dword[ebp-4]
 	mov dword[ecx+96], eax
@@ -235,10 +242,17 @@ chunkManager_load:
 				neg eax				;w index in eax
 				chunkManager_load_w_loop_start:
 					;check if the chunk is loaded
-					sub esp, 12
-					mov dword[ebp-40], esi
-					mov dword[ebp-36], edi
-					mov dword[ebp-32], eax
+					push eax						;save eax
+					
+					mov ecx, dword[ebp-4]
+					add ecx, esi
+					mov dword[ebp-40], ecx			;chunkX
+					mov ecx, dword[ebp-8]
+					add ecx, edi
+					mov dword[ebp-36], ecx			;chunkZ
+					mov ecx, dword[ebp-12]
+					add ecx, eax
+					mov dword[ebp-32], ecx			;chunkW
 					
 					;loaded chunk
 					lea eax, [ebp-40]
@@ -293,7 +307,7 @@ chunkManager_load:
 					jmp chunkManager_load_radius_loop_end
 					
 					chunkManager_load_w_loop_continue:
-					mov eax, dword[ebp-32]			;restore eax
+					pop eax					;restore eax
 					
 					inc eax
 					cmp eax, ebx
@@ -342,13 +356,6 @@ chunkManager_load:
 	call tsQueue_push
 	add esp, 8
 	
-	push dword[ebp-24]
-	push dword[ebp-20]
-	push dword[ebp-16]
-	push print_three_ints_nl
-	call my_printf
-	add esp, 16
-	
 	chunkManager_load_end:
 	mov esp, ebp
 	pop ebx
@@ -390,6 +397,14 @@ chunkManager_unload:
 	call chunkManager_getPlayerChunk
 	add esp, 20
 	
+	;lock vector mutex
+	mov eax, dword[ebp+20]
+	push -1
+	push dword[eax+96]
+	call mutex_lock
+	add esp, 8
+	
+	
 	mov edi, dword[ebp+20]
 	mov esi, dword[edi]				;index in esi
 	mov edi, dword[edi+12]			;current chunk* in edi
@@ -428,10 +443,22 @@ chunkManager_unload:
 		cmp eax, dword[ebp+28]
 		jg chunkManager_unload_loop_should_unload			;w is further than the render distance
 		
+		
 		;the chunk is within render distance
 		jmp chunkManager_unload_loop_continue
 	
 		chunkManager_unload_loop_should_unload:
+			;check if the chunk is not already in the unload queue
+			push ebx
+			push chunkManager_pending_unloads_search
+			mov eax, dword[ebp+20]
+			add eax, 16
+			push eax
+			call tsQueue_search
+			add esp, 12
+			cmp eax, -1
+			jne chunkManager_unload_loop_continue
+		
 			;save info
 			mov dword[ebp-16], ebx
 			
@@ -451,6 +478,12 @@ chunkManager_unload:
 		jnz chunkManager_unload_loop_start
 		
 	chunkManager_unload_loop_end:
+	
+	;unlock vector mutex
+	mov eax, dword[ebp+20]
+	push dword[eax+96]
+	call mutex_unlock
+	add esp, 4
 		
 	;did we find an unloadable chunk?
 	cmp dword[ebp-16], 0
@@ -493,8 +526,18 @@ chunkManager_processUpdate:
 	sub esp, 4				;chunk					4
 	sub esp, 4				;chunk update			8
 	sub esp, 4				;chunk graphics update	12
+	sub esp, 4				;removal successful		16
 	
-	;try to pop an update
+	;check if the pending updates queue is empty
+	mov eax, dword[ebp+8]
+	add eax, 16
+	push eax
+	call tsQueue_isEmpty
+	add esp, 4
+	test eax, eax
+	jnz chunkManager_processUpdate_end
+	
+	;pop an update
 	lea eax, [ebp-8]
 	push eax
 	mov eax, dword[ebp+8]
@@ -502,8 +545,7 @@ chunkManager_processUpdate:
 	push eax
 	call tsQueue_pop
 	add esp, 8
-	test eax, eax
-	jnz chunkManager_processUpdate_end
+
 	
 	;examine what kind of update it is
 	mov eax, dword[ebp-8]
@@ -549,6 +591,28 @@ chunkManager_processUpdate:
 		mov ecx, dword[eax+4]
 		mov dword[ebp-4], ecx
 		
+		;remove chunk from loaded chunks
+		mov eax, dword[ebp+8]
+		push -1
+		push dword[eax+96]
+		call mutex_lock
+		add esp, 8
+		
+		push dword[ebp-4]
+		push dword[ebp+8]
+		call vector_remove
+		mov dword[ebp-16], eax
+		add esp, 8
+		
+		mov eax, dword[ebp+8]
+		push dword[eax+96]
+		call mutex_unlock
+		add esp, 4
+		
+		;flee if the removal from the loadedChunks vector was unsuccessful
+		cmp dword[ebp-16], 0
+		je chunkManager_processUpdate_dealloc_update
+		
 		;TODO: unregister and yeet collider if necessary
 		
 		;create graphics update and add it to the queue if there is a renderable
@@ -573,24 +637,9 @@ chunkManager_processUpdate:
 			push ecx
 			call tsQueue_push
 			add esp, 8
+			
 		chunkManager_processUpdate_unload_no_renderable:
 		
-		;remove chunk from loaded chunks
-		mov eax, dword[ebp+8]
-		push -1
-		push dword[eax+96]
-		call mutex_lock
-		add esp, 8
-		
-		push dword[ebp-4]
-		push dword[ebp+8]
-		call vector_remove
-		add esp, 8
-		
-		mov eax, dword[ebp+8]
-		push dword[eax+96]
-		call mutex_unlock
-		add esp, 4
 		
 		;yeet chunk
 		push dword[ebp-4]
@@ -618,7 +667,16 @@ chunkManager_processGraphicsUpdate:
 	sub esp, 16			;imitated vertex vector			20
 	sub esp, 16			;imitated index vector			36
 	
-	;try to pop an update
+	;check if the pending updates queue is empty
+	mov eax, dword[ebp+8]
+	add eax, 24
+	push eax
+	call tsQueue_isEmpty
+	add esp, 4
+	test eax, eax
+	jnz chunkManager_processGraphicsUpdate_end
+	
+	;pop an update
 	lea eax, [ebp-4]
 	push eax
 	mov eax, dword[ebp+8]
@@ -626,8 +684,7 @@ chunkManager_processGraphicsUpdate:
 	push eax
 	call tsQueue_pop
 	add esp, 8
-	test eax, eax
-	jnz chunkManager_processGraphicsUpdate_end
+
 	
 	;examine what kind of update it is
 	mov eax, dword[ebp-4]
@@ -637,49 +694,74 @@ chunkManager_processGraphicsUpdate:
 		mov eax, dword[ebp-4]
 		mov eax, dword[eax]				;chunk in eax
 		cmp dword[eax+56], 0
-		je chunkManager_processGraphicsUpdate_dealloc_update			;there is no mesh
+		je chunkManager_processGraphicsUpdate_no_mesh			;there is no mesh
 		
-		;create the imitated vectors
-		mov ecx, dword[eax+56]
-		mov dword[ebp-20], ecx
-		mov dword[ebp-16], ecx
-		mov dword[ebp-12], 4
-		mov ecx, dword[eax+52]
-		mov dword[ebp-8], ecx
+			;create the imitated vectors
+			mov ecx, dword[eax+56]
+			mov dword[ebp-20], ecx
+			mov dword[ebp-16], ecx
+			mov dword[ebp-12], 4
+			mov ecx, dword[eax+52]
+			mov dword[ebp-8], ecx
+			
+			mov ecx, dword[eax+64]
+			mov dword[ebp-36], ecx
+			mov dword[ebp-32], ecx
+			mov dword[ebp-28], 4
+			mov ecx, dword[eax+60]
+			mov dword[ebp-24], ecx
+			
+			;create renderable and set texture
+			push dword[RENDERABLE_ATTRIB_P3UV2]
+			lea eax, [ebp-36]
+			push eax
+			lea eax, [ebp-20]
+			push eax
+			call renderable_create
+			add esp, 12
+			
+			mov ecx, dword[ebp-4]
+			mov ecx, dword[ecx]
+			mov dword[ecx+12], eax
+			
+			push texture_path
+			push eax
+			call renderable_setAlbedo
+			add esp, 8
+			
+			
+			;destroy the vertex and index data in the chunk
+			mov eax, dword[ebp-4]
+			mov eax, dword[eax]
+			push dword[eax+52]
+			push dword[eax+60]
+			mov dword[eax+52], 0
+			mov dword[eax+56], 0
+			mov dword[eax+60], 0
+			mov dword[eax+64], 0
+			call my_free
+			add esp, 4
+			call my_free
+			add esp, 4
 		
-		mov ecx, dword[eax+64]
-		mov dword[ebp-36], ecx
-		mov dword[ebp-32], ecx
-		mov dword[ebp-28], 4
-		mov ecx, dword[eax+60]
-		mov dword[ebp-24], ecx
+		chunkManager_processGraphicsUpdate_no_mesh:
 		
-		;create renderable
-		push dword[RENDERABLE_ATTRIB_P3UV2]
-		lea eax, [ebp-36]
-		push eax
-		lea eax, [ebp-20]
-		push eax
-		call renderable_create
-		add esp, 12
+		;add chunk to loaded chunks
+		mov eax, dword[ebp+8]
+		push -1
+		push dword[eax+96]
+		call mutex_lock
+		add esp, 8
 		
 		mov ecx, dword[ebp-4]
-		mov ecx, dword[ecx]
-		mov dword[ecx+12], eax
-		
-		
-		;destroy the vertex and index data in the chunk
-		mov eax, dword[ebp-4]
-		mov eax, dword[eax]
-		push dword[eax+52]
-		push dword[eax+60]
-		mov dword[eax+52], 0
-		mov dword[eax+56], 0
-		mov dword[eax+60], 0
-		mov dword[eax+64], 0
-		call my_free
-		add esp, 4
-		call my_free
+		push dword[ecx]
+		push dword[ebp+8]
+		call vector_push_back
+		add esp, 8
+			
+		mov eax, dword[ebp+8]
+		push dword[eax+96]
+		call mutex_unlock
 		add esp, 4
 		
 		jmp chunkManager_processGraphicsUpdate_dealloc_update
@@ -696,23 +778,6 @@ chunkManager_processGraphicsUpdate:
 		jmp chunkManager_processGraphicsUpdate_dealloc_update
 		
 	chunkManager_processGraphicsUpdate_dealloc_update:
-	;add chunk to loaded chunks
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax+96]
-	call mutex_lock
-	add esp, 8
-	
-	mov ecx, dword[ebp-4]
-	push dword[ecx]
-	push dword[ebp+8]
-	call vector_push_back
-	add esp, 8
-		
-	mov eax, dword[ebp+8]
-	push dword[eax+96]
-	call mutex_unlock
-	add esp, 4
 	
 	;dealloc update
 	push dword[ebp-4]
@@ -967,6 +1032,33 @@ chunkManager_pending_graphics_updates_search:
 		mov dword[ebp-4], 0
 	
 	chunkManager_pending_graphics_updates_search_end:
+	mov eax, dword[ebp-4]
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+;it is a compare function for vector_search
+;returns 0 if there is a match
+;int chunkManager_loaded_chunks_search(ChunkUpdate** cu, Chunk* data)
+chunkManager_pending_unloads_search:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4				;return value
+	mov dword[ebp-4], 69
+	
+	mov eax, dword[ebp+8]
+	mov eax, dword[eax]
+	cmp dword[eax], 0
+	jne chunkManager_pending_unloads_search_end		;not an unload update
+	
+	mov eax, dword[eax+4]	;chunk*
+	cmp eax, dword[ebp+12]
+	jne chunkManager_pending_unloads_search_end
+		mov dword[ebp-4], 0
+	
+	chunkManager_pending_unloads_search_end:
 	mov eax, dword[ebp-4]
 	
 	mov esp, ebp

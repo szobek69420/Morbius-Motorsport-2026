@@ -241,7 +241,7 @@ my_realloc:
 	mov ebp, esp
 	
 	;no need to check for the heap handle
-	;because realloc w/o malloc would be doomed to eternal cringeness anyway
+	;because realloc w/o malloc would be doomed to eternal cringeness anyways
 	push dword[ebp+12]
 	push dword[ebp+8]
 	push 0

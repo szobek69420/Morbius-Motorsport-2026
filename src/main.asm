@@ -16,7 +16,7 @@ section .text use32
 	extern window_destroy
 	
 	extern game_loop
-	
+
 	
 	..start:
 		push ebp

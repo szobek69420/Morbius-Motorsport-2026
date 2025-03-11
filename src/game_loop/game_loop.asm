@@ -42,6 +42,8 @@ section .rodata use32
 	text_based_vectors db "Hyperplane based vectors",0
 	print_vec4 db "(%f; %f; %f; %f)",0
 	
+	print_loaded_chunk_count db "loaded chunks: %d",10,0
+	
 	vertex_data_vector:		;imitates a vector
 	dd 120
 	dd 120
@@ -485,14 +487,20 @@ game_loop:
 		call player_update
 		add esp, 8
 		
-		;do chunk update things
+		;do chunk update things		
 		mov eax, dword[pplayer]
 		mov eax, dword[eax]				;&player.camera.position
 		push 4
 		push eax
 		push dword[chunk_manager]
 		call chunkManager_load
+		call chunkManager_unload
 		add esp, 12
+		
+		push dword[chunk_manager]
+		call chunkManager_processUpdate
+		call chunkManager_processGraphicsUpdate
+		add esp, 4
 	
 		;set clear color
 		push dword[ONE]
