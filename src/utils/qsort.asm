@@ -77,7 +77,7 @@ my_qsort:
 		add esp, 8
 		
 		cmp eax, 0
-		jl my_qsort_loop_continue
+		jge my_qsort_loop_continue
 			;current element is lower than the pivot
 			;swap the current element with the first higher element
 			push ebx					;save ebx

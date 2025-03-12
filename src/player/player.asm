@@ -18,7 +18,7 @@ section .rodata use32
 	
 	GRAV_ACC dd -9.80625
 	
-	START_POSITION dd 0.0, 3.0, 0.0
+	START_POSITION dd 0.0, 100.0, 0.0
 	
 	UP dd 0.0, 1.0, 0.0
 	DOWN dd 0.0, -1.0, 0.0
@@ -145,15 +145,6 @@ player_init:
 	call mutex_create
 	mov ecx, dword[ebp-4]
 	mov dword[ecx+32], eax
-	
-	push 0xc3190000
-	push HYPERPLANE_ROTATION_VECTOR_2
-	push HYPERPLANE_ROTATION_VECTOR_1
-	mov eax, dword[ebp+12]
-	add eax, 32
-	push eax
-	call hyperPlane_rotate
-	add esp, 16
 	
 	;set return value
 	mov eax, dword[ebp-4]

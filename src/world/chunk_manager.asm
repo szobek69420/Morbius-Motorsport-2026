@@ -69,6 +69,7 @@ section .text use32
 	extern my_malloc
 	extern my_free
 	extern my_memcpy
+	extern my_qsort
 	
 	extern chunk_generate
 	extern chunk_destroy
@@ -388,8 +389,17 @@ chunkManager_unload:
 	
 	sub esp, 4				;reload necessary			36
 	
+	;it is an array of struct{int distance; Chunk* chunk}
+	;which is sorted in ascending order of distances
+	;distance is the greatest difference in chunk positions from the player chunk
+	sub esp, 4				;helper array				40
+	sub esp, 4				;helper array length		44
+	
 	mov dword[ebp-16], 0
 	mov dword[ebp-36], 0
+	
+	mov dword[ebp-40], 0
+	mov dword[ebp-44], 0
 	
 	;calculate player chunk
 	lea eax, [ebp-20]
@@ -410,114 +420,154 @@ chunkManager_unload:
 	call mutex_lock
 	add esp, 8
 	
+	;check if there are any chunks loaded
+	mov eax, dword[ebp+20]
+	mov eax, dword[eax]
+	cmp eax, 0
+	jle chunkManager_unload_no_helper_necessary
 	
-	mov edi, dword[ebp+20]
-	mov esi, dword[edi]				;index in esi
-	mov edi, dword[edi+12]			;current chunk* in edi
-	test esi, esi
-	jz chunkManager_unload_loop_end
-	chunkManager_unload_loop_start:
-		mov ebx, dword[edi]
+	;allocate helper array
+	mov dword[ebp-44], eax		;save helper length
+	shl eax, 3					;eax =8 *eax
+	push eax
+	call my_malloc
+	mov dword[ebp-40], eax
+	add esp, 4
 	
-		;check chunk x
-		mov eax, dword[ebx]
+	
+	;fill up helper array
+	mov esi, dword[ebp+20]
+	mov ebx, dword[esi]				;index in ebx
+	mov esi, dword[esi+12]			;current chunk* in esi
+	mov edi, dword[ebp-40]			;current helper element in edi
+	chunkManager_unload_helper_loop_start:
+		;calculate distance from chunk
+		mov ecx, dword[esi]
+		xor edx, edx
+		
+		;chunkX
+		mov eax, dword[ecx]
 		sub eax, dword[ebp-28]
 		test eax, 0x80000000
-		jz chunkManager_unload_loop_x_not_negative
+		jz chunkManager_unload_helper_loop_x_not_negative
 			neg eax
-		chunkManager_unload_loop_x_not_negative:
-		cmp eax, dword[ebp+28]
-		jg chunkManager_unload_loop_should_unload			;x is further than the render distance
+		chunkManager_unload_helper_loop_x_not_negative:
+		mov edx, eax
 		
-		;check chunk z
-		mov eax, dword[ebx+4]
+		;chunkZ
+		mov eax, dword[ecx+4]
 		sub eax, dword[ebp-24]
 		test eax, 0x80000000
-		jz chunkManager_unload_loop_z_not_negative
+		jz chunkManager_unload_helper_loop_z_not_negative
 			neg eax
-		chunkManager_unload_loop_z_not_negative:
-		cmp eax, dword[ebp+28]
-		jg chunkManager_unload_loop_should_unload			;z is further than the render distance
+		chunkManager_unload_helper_loop_z_not_negative:
+		cmp eax, edx
+		jl chunkManager_unload_helper_loop_z_not_greater
+			mov edx, eax
+		chunkManager_unload_helper_loop_z_not_greater:
 		
-		;check chunk w
-		mov eax, dword[ebx+8]
+		;chunkW
+		mov eax, dword[ecx+8]
 		sub eax, dword[ebp-20]
 		test eax, 0x80000000
-		jz chunkManager_unload_loop_w_not_negative
+		jz chunkManager_unload_helper_loop_w_not_negative
 			neg eax
-		chunkManager_unload_loop_w_not_negative:
-		cmp eax, dword[ebp+28]
-		jg chunkManager_unload_loop_should_unload			;w is further than the render distance
+		chunkManager_unload_helper_loop_w_not_negative:
+		cmp eax, edx
+		jl chunkManager_unload_helper_loop_w_not_greater
+			mov edx, eax
+		chunkManager_unload_helper_loop_w_not_greater:
 		
-		;check if the chunk should be unloaded
-		cmp dword[ebx+68], 0
-		jne chunkManager_unload_loop_should_reload
-		
-		;the chunk is within render distance
-		jmp chunkManager_unload_loop_continue
+		;set helper value
+		mov dword[edi], edx
+		mov dword[edi+4], ecx
 	
-		chunkManager_unload_loop_should_unload:
-			;check if the chunk is not already in the unload queue
-			push ebx
-			push chunkManager_pending_unloads_search
-			mov eax, dword[ebp+20]
-			add eax, 16
-			push eax
-			call tsQueue_search
-			add esp, 12
-			cmp eax, -1
-			jne chunkManager_unload_loop_continue
-		
-			;save info
-			mov dword[ebp-16], ebx
-			
-			mov ecx, dword[ebx]
-			mov dword[ebp-12], ecx
-			mov ecx, dword[ebx+4]
-			mov dword[ebp-8], ecx
-			mov ecx, dword[ebx+8]
-			mov dword[ebp-4], ecx
-			
-			jmp chunkManager_unload_loop_end
-			
-			
-		chunkManager_unload_loop_should_reload:
-			;check if the chunk is not already in the unload queue
-			push ebx
-			push chunkManager_pending_unloads_search
-			mov eax, dword[ebp+20]
-			add eax, 16
-			push eax
-			call tsQueue_search
-			add esp, 12
-			cmp eax, -1
-			jne chunkManager_unload_loop_continue
-			
-			;save info
-			mov dword[ebp-36], 69			;reload is necessary
-			mov dword[ebp-16], ebx
-			
-			mov ecx, dword[ebx]
-			mov dword[ebp-12], ecx
-			mov ecx, dword[ebx+4]
-			mov dword[ebp-8], ecx
-			mov ecx, dword[ebx+8]
-			mov dword[ebp-4], ecx
-			
-			jmp chunkManager_unload_loop_end
-		
-		chunkManager_unload_loop_continue:
-		add edi, 4
-		dec esi
-		test esi, esi
-		jnz chunkManager_unload_loop_start
-		
-	chunkManager_unload_loop_end:
 	
+		add esi, 4
+		add edi, 8
+		dec ebx
+		test ebx, ebx
+		jnz chunkManager_unload_helper_loop_start
+		
+	chunkManager_unload_no_helper_necessary:
+		
 	;unlock vector mutex
 	mov eax, dword[ebp+20]
 	push dword[eax+96]
 	call mutex_unlock
+	add esp, 4
+	
+	;check if there are any chunks to be unloaded
+	cmp dword[ebp-44], 0
+	jle chunkManager_unload_end
+	
+	;sort the helper array according to the distance
+	push chunkManager_unload_comparator
+	push 8
+	push dword[ebp-44]
+	push dword[ebp-40]
+	call my_qsort
+	add esp, 16
+	
+	;search for chunk updates
+	mov esi, dword[ebp-44]			;index in esi
+	mov edi, dword[ebp-40]			;current helper element in edi
+	chunkManager_unload_unload_loop_start:
+		;check if the chunk is out of the render distance
+		mov eax, dword[edi]
+		cmp eax, dword[ebp+28]
+		jg chunkManager_unload_unload_loop_should_unload_or_reload
+		
+		;check if the chunk is marked as reloadable
+		mov eax, dword[edi+4]
+		cmp dword[eax+68], 0
+		jne chunkManager_unload_unload_loop_should_unload_or_reload
+		
+		
+		jmp chunkManager_unload_unload_loop_continue
+		
+		
+		chunkManager_unload_unload_loop_should_unload_or_reload:
+			mov ebx, dword[edi+4]
+		
+			;check if the chunk is not already in the unload queue
+			push ebx
+			push chunkManager_pending_unloads_search
+			mov eax, dword[ebp+20]
+			add eax, 16
+			push eax
+			call tsQueue_search
+			add esp, 12
+			cmp eax, -1
+			jne chunkManager_unload_unload_loop_continue
+		
+			;save info
+			mov dword[ebp-16], ebx
+			
+			mov ecx, dword[ebx]
+			mov dword[ebp-12], ecx
+			mov ecx, dword[ebx+4]
+			mov dword[ebp-8], ecx
+			mov ecx, dword[ebx+8]
+			mov dword[ebp-4], ecx
+			
+			;should reload?
+			mov ecx, dword[ebx+68]
+			mov dword[ebp-36], ecx
+			
+			jmp chunkManager_unload_unload_loop_end
+			
+		chunkManager_unload_unload_loop_continue:
+		add edi, 8
+		dec esi
+		test esi, esi
+		jnz chunkManager_unload_unload_loop_start
+		
+	chunkManager_unload_unload_loop_end:
+	
+	;destroy helper
+	push dword[ebp-40]
+	call my_free
 	add esp, 4
 		
 	;did we find an unloadable chunk?
@@ -1271,4 +1321,13 @@ chunkManager_pending_unloads_search:
 	
 	mov esp, ebp
 	pop ebp
+	ret
+
+;it is a compare function for qsort
+;int chunkManager_unload_comparator(const struct{int; Chunk*}* a, const struct{int; Chunk*}* b)	
+chunkManager_unload_comparator:
+	mov ecx, dword[esp+4]
+	mov edx, dword[esp+8]
+	mov eax, dword[ecx]
+	sub eax, dword[edx]
 	ret
