@@ -7,7 +7,8 @@
 ;	tsQueue<ChunkGraphicsUpdate*> pendingGraphicsUpdates;		24
 ;	HyperPlane hyperPlane;										32
 ;	Mutex* loadedChunksMutex;									96
-;}		100 bytes overall
+;	GLuint shader;												100
+;}		104 bytes overall
 
 ;layout:
 ;struct ChunkUpdate{
@@ -34,6 +35,10 @@
 
 section .rodata use32
 	texture_path db "./sprites/texture.bmp",0
+	
+	vertex_shader_path db "./shaders/chunk/chunk_directional.vag",0
+	fragment_shader_path db "./shaders/chunk/chunk_directional.fag",0
+	geometry_shader_path db "./shaders/chunk/chunk_directional.gag",0
 
 	print_int_nl db "%d",10,0
 	print_three_ints_nl db "%d %d %d",10,0
@@ -44,6 +49,7 @@ section .rodata use32
 
 section .text use32
 
+	;should be called from the graphics thread
 	global chunkManager_create					;ChunkManager* chunkManager_create()
 	
 	global chunkManager_load					;void chunkManager_load(ChunkManager* manager, vec3* playerPos3D, int renderDistance)
@@ -99,11 +105,11 @@ section .text use32
 	extern vec4_add
 	extern vec4_scale
 	
-	extern renderable_create
+	extern renderable_createCustom
 	extern renderable_destroy
-	extern renderable_render
+	extern renderable_renderCustom
 	extern renderable_setAlbedo
-	extern RENDERABLE_ATTRIB_P3UV2
+	extern renderable_createShader
 	
 chunkManager_create:
 	push ebp
@@ -112,7 +118,7 @@ chunkManager_create:
 	sub esp, 4				;ChunkManager*
 	
 	;alloc chunk manager
-	push 100
+	push 104
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
@@ -151,6 +157,14 @@ chunkManager_create:
 	mov ecx, dword[ebp-4]
 	mov dword[ecx+96], eax
 	
+	;create shader
+	push geometry_shader_path
+	push fragment_shader_path
+	push vertex_shader_path
+	call renderable_createShader
+	mov ecx, dword[ebp-4]
+	mov dword[ecx+100], eax
+	
 	;set return value
 	mov eax, dword[ebp-4]
 	
@@ -177,10 +191,13 @@ chunkManager_render:
 		je chunkManager_render_loop_continue
 		
 		;render chunk
+		push 69					;use textures
+		mov ecx, dword[ebp+16]
+		push dword[ecx+100]		;shader
 		push dword[ebp+20]
 		push dword[eax+12]
-		call renderable_render
-		add esp, 8
+		call renderable_renderCustom
+		add esp, 16
 	
 		chunkManager_render_loop_continue:
 		add edi, 4
@@ -824,13 +841,15 @@ chunkManager_processGraphicsUpdate:
 			mov dword[ebp-24], ecx
 			
 			;create renderable and set texture
-			push dword[RENDERABLE_ATTRIB_P3UV2]
+			push 2
+			push 3
+			push 2
 			lea eax, [ebp-36]
 			push eax
 			lea eax, [ebp-20]
 			push eax
-			call renderable_create
-			add esp, 12
+			call renderable_createCustom
+			add esp, 20
 			
 			mov ecx, dword[ebp-4]
 			mov ecx, dword[ecx]

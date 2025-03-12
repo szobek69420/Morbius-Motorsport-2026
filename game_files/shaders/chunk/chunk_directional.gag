@@ -1,0 +1,27 @@
+#version 330 core
+layout (triangles) in;
+layout (triangle_strip, max_vertices = 3) out;
+
+in vec3 gs_position[3];
+in vec2 gs_uv[3];
+
+out vec2 uv;
+out vec3 normal;
+  
+void main() { 
+	normal=normalize(cross(gs_position[2].xyz-gs_position[1].xyz, gs_position[0].xyz-gs_position[1].xyz));
+   
+    gl_Position = gl_in[0].gl_Position; 
+	uv=gs_uv[0];
+    EmitVertex();
+
+    gl_Position = gl_in[1].gl_Position; 
+	uv=gs_uv[1];
+    EmitVertex();
+	
+	gl_Position = gl_in[2].gl_Position; 
+	uv=gs_uv[2];
+    EmitVertex();
+    
+    EndPrimitive();
+}    

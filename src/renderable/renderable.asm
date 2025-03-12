@@ -20,9 +20,33 @@ section .rodata
 	RENDERABLE_ATTRIB_P3 dd 1
 	RENDERABLE_ATTRIB_P3UV2 dd 2
 	RENDERABLE_ATTRIB_P3C3 dd 3
+	RENDERABLE_ATTRIB_CUSTOM dd 4
+	
+	extern RENDERABLE_UNIFORM_FLOAT
+	extern RENDERABLE_UNIFORM_VEC2
+	extern RENDERABLE_UNIFORM_VEC3
+	extern RENDERABLE_UNIFORM_VEC4
+	extern RENDERABLE_UNIFORM_1I
+	extern RENDERABLE_UNIFORM_2I
+	extern RENDERABLE_UNIFORM_3I
+	extern RENDERABLE_UNIFORM_4I
+	extern RENDERABLE_UNIFORM_MAT3
+	extern RENDERABLE_UNIFORM_MAT4
+	
+	RENDERABLE_UNIFORM_FLOAT dd 0
+	RENDERABLE_UNIFORM_VEC2 dd 1
+	RENDERABLE_UNIFORM_VEC3 dd 2
+	RENDERABLE_UNIFORM_VEC4 dd 3
+	RENDERABLE_UNIFORM_1I dd 4
+	RENDERABLE_UNIFORM_2I dd 5
+	RENDERABLE_UNIFORM_3I dd 6
+	RENDERABLE_UNIFORM_4I dd 7
+	RENDERABLE_UNIFORM_MAT3 dd 8
+	RENDERABLE_UNIFORM_MAT4 dd 9
 	
 	error_not_initialized db "renderable: renderable_init has not been called",10,0
 	error_unsupported_layout db "renderable_create: unsupported vertex attribute layout",10,0
+	error_invalid_uniform_type db "renderable_setUniform: no such uniform type exists blud",10,0
 	
 	vertex_shader_p3 db "shaders/renderable/p3.vag",0
 	fragment_shader_p3 db "shaders/renderable/p3.fag",0
@@ -46,6 +70,10 @@ section .rodata
 	Y_AXIS dd 0.0, 1.0, 0.0
 	Z_AXIS dd 0.0, 0.0, -1.0
 	
+	test_text db "microsoft bing chilling",10,0
+	print_int_nl db "%d",10,0
+	print_four_ints_nl db "%d %d %d %d",10,0
+	
 section .data use32
 	renderable_initialized dd 0
 	shader_p3 dd 0
@@ -60,9 +88,18 @@ section .text use32
 	global renderable_deinit			;void renderable_deinit()	//undoes renderable_init
 	
 	global renderable_create			;Renderable* renderable_create(const vector<float>* vertices, const vector<int>* indices, int vertexAttribLayout)
+	
+	;Renderable* renderable_createCustom(
+	;	const vector<float>* vertices,
+	;	const vector<int>* indices,
+	;	int vertexAttribCount,
+	;	int... floatsPerAttrib
+	;);
+	global renderable_createCustom
 	global renderable_destroy			;void renderable_destroy(Renderable* renderable)
 	
 	global renderable_render			;void renderable_render(Renderable* renderable, mat4* pv)
+	global renderable_renderCustom		;void renderable_renderCustom(Renderable* renderable, mat4* pv, GLuint shader, int texturesUsed)
 
 	;both setAlbedo and setSpecular sets the textures the 0 if the path is NULL
 	global renderable_setAlbedo			;void renderable_setAlbedo(Renderable* renderable, const char* albedoMapPath)
@@ -76,6 +113,12 @@ section .text use32
 	global renderable_setPosition		;void renderable_setPosition(Renderable*, vec3*)
 	global renderable_setRotation		;void renderable_setRotation(Renderable*, vec3*)
 	global renderable_setScale			;void renderable_setScale(Renderable*, vec3*)
+	
+	global renderable_createShader		;GLuint renderable_createShader(const char* vertexShaderPath, const char* fragmentShaderPath, const char* geometryShaderNullablePath)
+	global renderable_destroyShader		;void renderable_destroyShader(GLuint shader)
+	global renderable_useShader			;void renderable_useShader(GLuint shader)
+	;doesn't call glUseShader so make sure you use it in conjunction with renderable_useShader
+	global renderable_setUniform		;void renderable_setUniform(GLuint shader, const char* uniformName, int uniformType, ...data)
 	
 	;it is a system state setting function
 	global renderable_setPrimitive		;void renderable_setPrimitive(GLuint primitive)
@@ -91,7 +134,15 @@ section .text use32
 	extern glVertexAttribPointer
 	extern glEnableVertexAttribArray
 	extern glGetUniformLocation
+	extern glUniform1f
+	extern glUniform2f
+	extern glUniform3f
+	extern glUniform4f
 	extern glUniform1i
+	extern glUniform2i
+	extern glUniform3i
+	extern glUniform4i
+	extern glUniformMatrix3fv
 	extern glUniformMatrix4fv
 	extern glUseProgram
 	extern glDrawElements
@@ -390,6 +441,85 @@ renderable_create:
 	ret
 	
 	
+renderable_createCustom:
+	push ebp
+	push ebx
+	push esi
+	mov ebp, esp
+	
+	sub esp, 4				;renderable
+	sub esp, 4				;stride
+	
+	;create the renderable as normal
+	push dword[RENDERABLE_ATTRIB_CUSTOM]
+	push dword[ebp+20]
+	push dword[ebp+16]
+	call renderable_create
+	mov dword[ebp-4], eax
+	add esp, 12
+	
+	;get the stride
+	mov dword[ebp-8], 0
+	
+	cmp dword[ebp+24], 0
+	jle renderable_createCustom_stride_loop_end
+	
+	xor ebx, ebx
+	renderable_createCustom_stride_loop_start:
+		mov eax, dword[ebp+28+4*ebx]
+		add dword[ebp-8], eax
+		
+		inc ebx
+		cmp ebx, dword[ebp+24]
+		jl renderable_createCustom_stride_loop_start
+	renderable_createCustom_stride_loop_end:
+	shl dword[ebp-8], 2
+	
+	;bind vao and vbo
+	mov eax, dword[ebp-4]
+	push dword[eax+4]
+	push dword[GL_ARRAY_BUFFER]
+	push dword[eax]
+	call [glBindVertexArray]
+	call [glBindBuffer]
+	
+	;set the renderable attributes
+	cmp dword[ebp+24], 0
+	jle renderable_createCustom_attrib_loop_end
+	
+	xor ebx, ebx				;index in ebx
+	xor esi, esi				;current vertex attrib offset
+	renderable_createCustom_attrib_loop_start:
+		push esi						;current vertex attrib offset
+		push dword[ebp-8]				;stride
+		push dword[GL_FALSE]
+		push dword[GL_FLOAT]
+		push dword[ebp+28+4*ebx]		;float count
+		push ebx						;attrib location
+		call [glVertexAttribPointer]
+		
+		push ebx
+		call [glEnableVertexAttribArray]
+	
+		mov eax, dword[ebp+28+4*ebx]
+		lea esi, [esi+4*eax]			;update vertex attrib offset
+	
+		inc ebx
+		cmp ebx, dword[ebp+24]
+		jl renderable_createCustom_attrib_loop_start
+	renderable_createCustom_attrib_loop_end:
+	
+	
+	;set return value
+	mov eax, dword[ebp-4]
+	
+	mov esp, ebp
+	pop esi
+	pop ebx
+	pop ebp
+	ret
+	
+	
 renderable_destroy:
 	push ebp
 	mov ebp, esp
@@ -444,7 +574,6 @@ renderable_render:
 	sub esp, 4		;currently used shader
 	sub esp, 64		;model matrix
 	
-	
 	;choose shader
 	mov eax, dword[ebp+8]
 	mov eax, dword[eax+52]
@@ -459,7 +588,7 @@ renderable_render:
 	renderable_render_shader_p3:
 		;use shader
 		push dword[shader_p3]
-		call [glUseProgram]
+		call renderable_useShader
 		
 		mov eax, dword[shader_p3]
 		mov dword[ebp-4], eax
@@ -468,7 +597,7 @@ renderable_render:
 	renderable_render_shader_p3c3:
 		;use shader
 		push dword[shader_p3c3]
-		call [glUseProgram]
+		call renderable_useShader
 		
 		mov eax, dword[shader_p3c3]
 		mov dword[ebp-4], eax
@@ -490,41 +619,38 @@ renderable_render:
 		
 		;use shader
 		push dword[shader_p3uv2]
-		call [glUseProgram]
+		call renderable_useShader
 		
 		mov eax, dword[shader_p3uv2]
 		mov dword[ebp-4], eax
 		jmp renderable_render_shader_done
 		
 		;set texture uniforms
+		push 0
+		push dword[RENDERABLE_UNIFORM_1I]
 		push uniform_name_albedo
 		push dword[ebp-4]			;current shader
-		call [glGetUniformLocation]
-		push 0
-		push eax					;albedo uniform location
-		call [glUniform1i]
+		call renderable_setUniform
+		add esp, 16
 		
+		push 1
+		push dword[RENDERABLE_UNIFORM_1I]
 		push uniform_name_specular
 		push dword[ebp-4]			;current shader
-		call [glGetUniformLocation]
-		push 1
-		push eax					;specular uniform location
-		call [glUniform1i]
+		call renderable_setUniform
+		add esp, 16
 		
 		jmp renderable_render_shader_done
 		
 	renderable_render_shader_done:
 	
 	;set matrices
+	push dword[ebp+12]		;pv
+	push dword[RENDERABLE_UNIFORM_MAT4]
 	push uniform_name_pv
 	push dword[ebp-4]		;current shader
-	call [glGetUniformLocation]
-	
-	push dword[ebp+12]		;pv
-	push dword[GL_TRUE]
-	push 1
-	push eax
-	call [glUniformMatrix4fv]
+	call renderable_setUniform
+	add esp, 16
 	
 	
 	lea eax, [ebp-68]
@@ -533,16 +659,13 @@ renderable_render:
 	call renderable_calculateModel
 	add esp, 8
 	
+	lea ecx, [ebp-68]
+	push ecx					;model
+	push dword[RENDERABLE_UNIFORM_MAT4]
 	push uniform_name_model
 	push dword[ebp-4]
-	call [glGetUniformLocation]
-	
-	lea ecx, [ebp-68]
-	push ecx
-	push dword[GL_TRUE]
-	push 1
-	push eax
-	call [glUniformMatrix4fv]
+	call renderable_setUniform
+	add esp, 16
 	
 	;render
 	mov eax, dword[ebp+8]
@@ -562,6 +685,96 @@ renderable_render:
 	call [glUseProgram]
 	
 	renderable_render_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+renderable_renderCustom:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 64		;model matrix
+	
+	;calculate model matrix
+	lea eax, [ebp-64]
+	push eax
+	push dword[ebp+8]
+	call renderable_calculateModel
+	add esp, 8
+	
+	;use shader
+	push dword[ebp+16]
+	call renderable_useShader
+	add esp, 4
+	
+	;are textures necessary?
+	cmp dword[ebp+20], 0
+	je renderable_renderCustom_no_textures
+		;bind textures
+		mov eax, dword[ebp+8]
+		push dword[eax+60]			;specular map
+		push dword[GL_TEXTURE_2D]
+		push dword[GL_TEXTURE1]
+		push dword[eax+56]			;albedo map
+		push dword[GL_TEXTURE_2D]
+		push dword[GL_TEXTURE0]
+		call [glActiveTexture]
+		call [glBindTexture]
+		call [glActiveTexture]
+		call [glBindTexture]
+		
+		;set texture uniforms
+		push 0
+		push dword[RENDERABLE_UNIFORM_1I]
+		push uniform_name_albedo
+		push dword[ebp+16]			;current shader
+		call renderable_setUniform
+		add esp, 16
+		
+		push 1
+		push dword[RENDERABLE_UNIFORM_1I]
+		push uniform_name_specular
+		push dword[ebp+16]			;current shader
+		call renderable_setUniform
+		add esp, 16
+	
+	renderable_renderCustom_no_textures:
+	
+	;set matrices
+	push dword[ebp+12]		;pv
+	push dword[RENDERABLE_UNIFORM_MAT4]
+	push uniform_name_pv
+	push dword[ebp+16]		;current shader
+	call renderable_setUniform
+	add esp, 16
+	
+	lea ecx, [ebp-64]
+	push ecx					;model
+	push dword[RENDERABLE_UNIFORM_MAT4]
+	push uniform_name_model
+	push dword[ebp+16]
+	call renderable_setUniform
+	add esp, 16
+	
+	;render
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	call [glBindVertexArray]
+	
+	push 0
+	push dword[GL_UNSIGNED_INT]
+	mov eax, dword[ebp+8]
+	push dword[eax+12]
+	push dword[renderable_primitive]
+	call [glDrawElements]
+	
+	push 0
+	call [glBindVertexArray]
+	push 0
+	call [glUseProgram]
+	
+	
 	mov esp, ebp
 	pop ebp
 	ret
@@ -764,6 +977,171 @@ renderable_setScale:
 	mov edx, dword[ecx+8]
 	mov dword[eax+8], edx
 	
+	ret
+	
+	
+renderable_createShader:
+	push ebp
+	mov ebp, esp
+	
+	push dword[ebp+16]
+	push dword[ebp+12]
+	push dword[ebp+8]
+	call shader_import
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+renderable_destroyShader:
+	push ebp
+	mov ebp, esp
+	
+	push dword[ebp+8]
+	call shader_destroy
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+renderable_useShader:
+	push ebp
+	mov ebp, esp
+	
+	push dword[ebp+8]
+	call [glUseProgram]
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+renderable_setUniform:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4					;uniform location
+	
+	;use shader
+	;push dword[ebp+8]
+	;call [glUseProgram]
+	
+	;get uniform location
+	push dword[ebp+12]
+	push dword[ebp+8]
+	call [glGetUniformLocation]
+	mov dword[ebp-4], eax
+	
+	
+	;decide what we want to do
+	mov eax, dword[ebp+16]
+	lea eax, [renderable_setUniform_switch+4*eax]
+	cmp eax, renderable_setUniform_switch
+	jl renderable_setUniform_error
+	cmp eax, renderable_setUniform_nigga
+	jge renderable_setUniform_error
+	
+	jmp dword[eax]
+	
+	renderable_setUniform_error:
+		push error_invalid_uniform_type
+		call my_printf
+		jmp renderable_setUniform_end
+	
+	renderable_setUniform_switch:
+	dd renderable_setUniform_float
+	dd renderable_setUniform_vec2
+	dd renderable_setUniform_vec3
+	dd renderable_setUniform_vec4
+	dd renderable_setUniform_1i
+	dd renderable_setUniform_2i
+	dd renderable_setUniform_3i
+	dd renderable_setUniform_4i
+	dd renderable_setUniform_mat3
+	dd renderable_setUniform_mat4
+	renderable_setUniform_nigga:
+	
+	renderable_setUniform_float:
+		push dword[ebp+20]
+		push dword[ebp-4]
+		call [glUniform1f]
+		jmp renderable_setUniform_end
+		
+	renderable_setUniform_vec2:
+		push dword[ebp+24]
+		push dword[ebp+20]
+		push dword[ebp-4]
+		call [glUniform2f]
+		jmp renderable_setUniform_end
+		
+	renderable_setUniform_vec3:
+		push dword[ebp+28]
+		push dword[ebp+24]
+		push dword[ebp+20]
+		push dword[ebp-4]
+		call [glUniform3f]
+		jmp renderable_setUniform_end
+		
+	renderable_setUniform_vec4:
+		push dword[ebp+32]
+		push dword[ebp+28]
+		push dword[ebp+24]
+		push dword[ebp+20]
+		push dword[ebp-4]
+		call [glUniform4f]
+		jmp renderable_setUniform_end
+		
+	renderable_setUniform_1i:
+		push dword[ebp+20]
+		push dword[ebp-4]
+		call [glUniform1i]
+		jmp renderable_setUniform_end
+	
+	renderable_setUniform_2i:
+		push dword[ebp+24]
+		push dword[ebp+20]
+		push dword[ebp-4]
+		call [glUniform2i]
+		jmp renderable_setUniform_end
+		
+	renderable_setUniform_3i:
+		push dword[ebp+28]
+		push dword[ebp+24]
+		push dword[ebp+20]
+		push dword[ebp-4]
+		call [glUniform3i]
+		jmp renderable_setUniform_end
+		
+	renderable_setUniform_4i:
+		push dword[ebp+32]
+		push dword[ebp+28]
+		push dword[ebp+24]
+		push dword[ebp+20]
+		push dword[ebp-4]
+		call [glUniform4i]
+		jmp renderable_setUniform_end
+		
+	renderable_setUniform_mat3:
+		push dword[ebp+20]
+		push dword[GL_TRUE]
+		push 1
+		push dword[ebp-4]
+		call [glUniformMatrix3fv]
+		jmp renderable_setUniform_end
+		
+	renderable_setUniform_mat4:
+		push dword[ebp+20]
+		push dword[GL_TRUE]
+		push 1
+		push dword[ebp-4]
+		call [glUniformMatrix4fv]
+		jmp renderable_setUniform_end
+	
+	renderable_setUniform_end:
+	mov esp, ebp
+	pop ebp
 	ret
 	
 	
