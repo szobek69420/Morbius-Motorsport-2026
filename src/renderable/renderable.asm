@@ -3,13 +3,15 @@
 ;layout
 ;struct Renderable{
 ;	GLuint vao, vbo, ebo;			;0
-;	int indexCount;					;12
+;	int indexCount;					;12		//it is vertex count if there is no ebo
 ;	vec3 position;					;16
 ;	vec3 rotation;					;28
 ;	vec3 scale;						;40
 ;	int vertexAttribLayout;			;52
 ;	GLuint albedoMap, specularMap	;56
 ;}		;64 bytes overall
+
+NO_EBO equ 0xFFFFFFFF
 
 section .rodata
 
@@ -94,7 +96,7 @@ section .text use32
 	;then the unsigned int attribs (uint, uvec2, uvec3, uvec4...)
 	;Renderable* renderable_createCustom(
 	;	const vector<float>* vertices,
-	;	const vector<int>* indices,
+	;	const vector<int>* indices,				//if this is NULL, then no ebo will be used
 	;	int floatVertexAttribCount,
 	;	int... floatsPerAttrib
 	;	int uintVertexAttribCount,
@@ -151,6 +153,7 @@ section .text use32
 	extern glUniformMatrix3fv
 	extern glUniformMatrix4fv
 	extern glUseProgram
+	extern glDrawArrays
 	extern glDrawElements
 	extern GL_ARRAY_BUFFER
 	extern GL_ELEMENT_ARRAY_BUFFER
@@ -302,9 +305,9 @@ renderable_create:
 	call [glGenVertexArrays]
 	
 	
-	lea eax, [ebp-16]
-	push eax
-	push 2
+	lea eax, [ebp-12]
+	push eax				;&vbo
+	push 1
 	call [glGenBuffers]
 	
 	
@@ -326,19 +329,29 @@ renderable_create:
 	push dword[GL_ARRAY_BUFFER]
 	call [glBufferData]
 	
+	;is there ebo?
+	mov dword[ebp-16], NO_EBO
 	
-	push dword[ebp-16]
-	push dword[GL_ELEMENT_ARRAY_BUFFER]
-	call [glBindBuffer]
+	cmp dword[ebp+12], 0
+	je renderable_create_no_ebo
+		lea eax, [ebp-16]
+		push eax				;&ebo
+		push 1
+		call [glGenBuffers]
 	
-	push dword[GL_STATIC_DRAW]
-	mov eax, dword[ebp+12]
-	push dword[eax+12]			;indices
-	mov eax, dword[eax]
-	shl eax, 2
-	push eax					;sizeof(indices)
-	push dword[GL_ELEMENT_ARRAY_BUFFER]
-	call [glBufferData]
+		push dword[ebp-16]
+		push dword[GL_ELEMENT_ARRAY_BUFFER]
+		call [glBindBuffer]
+		
+		push dword[GL_STATIC_DRAW]
+		mov eax, dword[ebp+12]
+		push dword[eax+12]			;indices
+		mov eax, dword[eax]
+		shl eax, 2
+		push eax					;sizeof(indices)
+		push dword[GL_ELEMENT_ARRAY_BUFFER]
+		call [glBufferData]
+	renderable_create_no_ebo:
 	
 	;do attribute layout specific opengl things
 	mov eax, dword[ebp+16]		;attrib layout in eax
@@ -433,12 +446,24 @@ renderable_create:
 	mov ecx, dword[ebp-16]
 	mov dword[eax+8], ecx
 	
-	mov ecx, dword[ebp+12]
-	mov ecx, dword[ecx]		;index count in ecx
-	mov dword[eax+12], ecx
+	cmp dword[ebp-16], NO_EBO
+	je renderable_create_indexCount_no_ebo
+	renderable_create_indexCount_ebo:
+		mov ecx, dword[ebp+12]
+		mov ecx, dword[ecx]		;index count in ecx
+		mov dword[eax+12], ecx
+		jmp renderable_create_indexCount_done
+		
+	renderable_create_indexCount_no_ebo:
+		mov ecx, dword[ebp+8]
+		mov ecx, dword[ecx]		;vertex count in ecx
+		mov dword[eax+12], ecx
+		jmp renderable_create_indexCount_done
+		
+	renderable_create_indexCount_done:
 	
 	
-	
+	;set return value
 	mov eax, dword[ebp-4]
 	
 	renderable_create_end:
@@ -733,12 +758,28 @@ renderable_render:
 	push dword[eax]
 	call [glBindVertexArray]
 	
-	push 0
-	push dword[GL_UNSIGNED_INT]
 	mov eax, dword[ebp+8]
-	push dword[eax+12]
-	push dword[renderable_primitive]
-	call [glDrawElements]
+	cmp dword[eax+8], NO_EBO
+	je renderable_render_no_ebo
+	
+	renderable_render_ebo:
+		push 0
+		push dword[GL_UNSIGNED_INT]
+		mov eax, dword[ebp+8]
+		push dword[eax+12]
+		push dword[renderable_primitive]
+		call [glDrawElements]
+		jmp renderable_render_done
+		
+	renderable_render_no_ebo:
+		mov eax, dword[ebp+8]
+		push dword[eax+12]
+		push 0
+		push dword[renderable_primitive]
+		call [glDrawArrays]
+		jmp renderable_render_done
+		
+	renderable_render_done:
 	
 	push 0
 	call [glBindVertexArray]
