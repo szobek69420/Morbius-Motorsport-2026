@@ -258,6 +258,7 @@ section .rodata use32
 	name_glUniformMatrix4fv db "glUniformMatrix4fv",0
 	name_glUseProgram db "glUseProgram",0
 	name_glVertexAttribDivisor db "glVertexAttribDivisor",0
+	name_glVertexAttribIPointer db "glVertexAttribIPointer",0
 	name_glVertexAttribPointer db "glVertexAttribPointer",0
 	name_glViewport db "glViewport",0
 
@@ -345,6 +346,7 @@ section .bss use32
 	glFunc glUniformMatrix4fv
 	glFunc glUseProgram
 	glFunc glVertexAttribDivisor
+	glFunc glVertexAttribIPointer
 	glFunc glVertexAttribPointer
 	glFunc glViewport
 
@@ -440,6 +442,7 @@ load_gl_functions:
 	load dword[ebp+8], glUniformMatrix4fv
 	load dword[ebp+8], glUseProgram
 	load dword[ebp+8], glVertexAttribDivisor
+	load dword[ebp+8], glVertexAttribIPointer
 	load dword[ebp+8], glVertexAttribPointer
 	load dword[ebp+8], glViewport
 	

@@ -1,0 +1,10 @@
+#version 460 core
+in vec3 normal;
+in vec2 uv;
+
+out vec4 fragmentColour;
+
+void main()
+{
+	fragmentColour=vec4(0.5*normal+0.5, 1.0);
+}

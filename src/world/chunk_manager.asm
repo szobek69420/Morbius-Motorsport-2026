@@ -841,6 +841,7 @@ chunkManager_processGraphicsUpdate:
 			mov dword[ebp-24], ecx
 			
 			;create renderable and set texture
+			push 0
 			push 2
 			push 3
 			push 2

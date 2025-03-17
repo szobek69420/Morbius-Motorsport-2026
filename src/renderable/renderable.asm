@@ -22,16 +22,16 @@ section .rodata
 	RENDERABLE_ATTRIB_P3C3 dd 3
 	RENDERABLE_ATTRIB_CUSTOM dd 4
 	
-	extern RENDERABLE_UNIFORM_FLOAT
-	extern RENDERABLE_UNIFORM_VEC2
-	extern RENDERABLE_UNIFORM_VEC3
-	extern RENDERABLE_UNIFORM_VEC4
-	extern RENDERABLE_UNIFORM_1I
-	extern RENDERABLE_UNIFORM_2I
-	extern RENDERABLE_UNIFORM_3I
-	extern RENDERABLE_UNIFORM_4I
-	extern RENDERABLE_UNIFORM_MAT3
-	extern RENDERABLE_UNIFORM_MAT4
+	global RENDERABLE_UNIFORM_FLOAT
+	global RENDERABLE_UNIFORM_VEC2
+	global RENDERABLE_UNIFORM_VEC3
+	global RENDERABLE_UNIFORM_VEC4
+	global RENDERABLE_UNIFORM_1I
+	global RENDERABLE_UNIFORM_2I
+	global RENDERABLE_UNIFORM_3I
+	global RENDERABLE_UNIFORM_4I
+	global RENDERABLE_UNIFORM_MAT3
+	global RENDERABLE_UNIFORM_MAT4
 	
 	RENDERABLE_UNIFORM_FLOAT dd 0
 	RENDERABLE_UNIFORM_VEC2 dd 1
@@ -89,11 +89,16 @@ section .text use32
 	
 	global renderable_create			;Renderable* renderable_create(const vector<float>* vertices, const vector<int>* indices, int vertexAttribLayout)
 	
+	;the vertex attributes start from location=0 and are incremented by one
+	;first have to come the float attribs (float, vec2, vec3, vec4...)
+	;then the unsigned int attribs (uint, uvec2, uvec3, uvec4...)
 	;Renderable* renderable_createCustom(
 	;	const vector<float>* vertices,
 	;	const vector<int>* indices,
-	;	int vertexAttribCount,
+	;	int floatVertexAttribCount,
 	;	int... floatsPerAttrib
+	;	int uintVertexAttribCount,
+	;	int... uintsPerAttrib
 	;);
 	global renderable_createCustom
 	global renderable_destroy			;void renderable_destroy(Renderable* renderable)
@@ -132,6 +137,7 @@ section .text use32
 	extern glBindBuffer
 	extern glBufferData
 	extern glVertexAttribPointer
+	extern glVertexAttribIPointer
 	extern glEnableVertexAttribArray
 	extern glGetUniformLocation
 	extern glUniform1f
@@ -449,6 +455,7 @@ renderable_createCustom:
 	
 	sub esp, 4				;renderable
 	sub esp, 4				;stride
+	sub esp, 4				;uint attrib count param location offset
 	
 	;create the renderable as normal
 	push dword[RENDERABLE_ATTRIB_CUSTOM]
@@ -458,21 +465,43 @@ renderable_createCustom:
 	mov dword[ebp-4], eax
 	add esp, 12
 	
+	;the the uint attrib count param offset
+	mov eax, dword[ebp+24]
+	lea ecx, [ebp+28+4*eax]
+	mov dword[ebp-12], ecx
+	
 	;get the stride
 	mov dword[ebp-8], 0
 	
+	;float part of the stride
 	cmp dword[ebp+24], 0
-	jle renderable_createCustom_stride_loop_end
+	jle renderable_createCustom_stride_float_loop_end
 	
-	xor ebx, ebx
-	renderable_createCustom_stride_loop_start:
-		mov eax, dword[ebp+28+4*ebx]
-		add dword[ebp-8], eax
+		xor ebx, ebx
+		renderable_createCustom_stride_float_loop_start:
+			mov eax, dword[ebp+28+4*ebx]
+			add dword[ebp-8], eax
+			
+			inc ebx
+			cmp ebx, dword[ebp+24]
+			jl renderable_createCustom_stride_float_loop_start
+		renderable_createCustom_stride_float_loop_end:
+	
+	;uint part of the stride
+	mov esi, dword[ebp-12]
+	cmp dword[esi], 0
+	jle renderable_createCustom_stride_uint_loop_end
 		
-		inc ebx
-		cmp ebx, dword[ebp+24]
-		jl renderable_createCustom_stride_loop_start
-	renderable_createCustom_stride_loop_end:
+		xor ebx, ebx
+		renderable_createCustom_stride_uint_loop_start:
+			mov eax, dword[esi+4+4*ebx]
+			add dword[ebp-8], eax
+			
+			inc ebx
+			cmp ebx, dword[esi]
+			jl renderable_createCustom_stride_uint_loop_start
+		renderable_createCustom_stride_uint_loop_end:
+	
 	shl dword[ebp-8], 2
 	
 	;bind vao and vbo
@@ -484,30 +513,62 @@ renderable_createCustom:
 	call [glBindBuffer]
 	
 	;set the renderable attributes
-	cmp dword[ebp+24], 0
-	jle renderable_createCustom_attrib_loop_end
-	
-	xor ebx, ebx				;index in ebx
 	xor esi, esi				;current vertex attrib offset
-	renderable_createCustom_attrib_loop_start:
-		push esi						;current vertex attrib offset
-		push dword[ebp-8]				;stride
-		push dword[GL_FALSE]
-		push dword[GL_FLOAT]
-		push dword[ebp+28+4*ebx]		;float count
-		push ebx						;attrib location
-		call [glVertexAttribPointer]
+	
+	cmp dword[ebp+24], 0
+	jle renderable_createCustom_attrib_float_loop_end
+	
+		xor ebx, ebx				;index in ebx
+		renderable_createCustom_attrib_float_loop_start:
+			push esi						;current vertex attrib offset
+			push dword[ebp-8]				;stride
+			push dword[GL_FALSE]
+			push dword[GL_FLOAT]
+			push dword[ebp+28+4*ebx]		;float count
+			push ebx						;attrib location
+			call [glVertexAttribPointer]
+			
+			push ebx
+			call [glEnableVertexAttribArray]
 		
-		push ebx
-		call [glEnableVertexAttribArray]
+			mov eax, dword[ebp+28+4*ebx]
+			lea esi, [esi+4*eax]			;update vertex attrib offset
+		
+			inc ebx
+			cmp ebx, dword[ebp+24]
+			jl renderable_createCustom_attrib_float_loop_start
+		renderable_createCustom_attrib_float_loop_end:
 	
-		mov eax, dword[ebp+28+4*ebx]
-		lea esi, [esi+4*eax]			;update vertex attrib offset
+	mov eax, dword[ebp-12]
+	cmp dword[eax], 0
+	jle renderable_createCustom_attrib_uint_loop_end
 	
-		inc ebx
-		cmp ebx, dword[ebp+24]
-		jl renderable_createCustom_attrib_loop_start
-	renderable_createCustom_attrib_loop_end:
+		xor ebx, ebx				;index in ebx
+		renderable_createCustom_attrib_uint_loop_start:
+			mov ecx, dword[ebp-12]
+			mov edx, ebx
+			add edx, dword[ebp+28]
+		
+			push esi						;current vertex attrib offset
+			push dword[ebp-8]				;stride
+			push dword[GL_UNSIGNED_INT]
+			push dword[ecx+4+4*ebx]		;uint count
+			push edx						;attrib location
+			call [glVertexAttribIPointer]
+			
+			mov edx, ebx
+			add edx, dword[ebp+28]
+			push edx
+			call [glEnableVertexAttribArray]
+		
+			mov ecx, dword[ebp-12]
+			mov eax, dword[ecx+4+4*ebx]
+			lea esi, [esi+4*eax]			;update vertex attrib offset
+		
+			inc ebx
+			cmp ebx, dword[ecx]
+			jl renderable_createCustom_attrib_uint_loop_start
+		renderable_createCustom_attrib_uint_loop_end:
 	
 	
 	;set return value
