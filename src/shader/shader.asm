@@ -1,5 +1,7 @@
 [BITS 32]
 
+SHADER_MAX_LENGTH equ 30000
+
 section .rodata use32
 	print_int db "%d",10,0
 	read_mode db "r",0
@@ -67,7 +69,7 @@ shader_import:
 	sub esp, 4		;success helper
 	
 	;alloc space for shader source
-	push 10000
+	push SHADER_MAX_LENGTH
 	call my_malloc
 	mov dword[ebp-12], eax
 	add esp, 4

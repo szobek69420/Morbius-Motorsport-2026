@@ -35,6 +35,8 @@ section .rodata use32
 	CHUNK_HEIGHT_MAP_SCALE dd 20.0
 	CHUNK_HEIGHT_MAP_BASE dd 80.0
 	
+	print_int_nl db "%d",10,0
+	
 section .text use32
 
 	;the collider and renderable is initialized by the chunk manager
@@ -42,7 +44,7 @@ section .text use32
 	;the renderable is destroyed by the chunk manager
 	global chunk4d_destroy			;void chunk4d_destroy(Chunk4D* chunk)
 	
-	
+	extern my_printf
 	extern my_malloc
 	extern my_free
 	

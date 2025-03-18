@@ -572,7 +572,7 @@ renderable_createCustom:
 		renderable_createCustom_attrib_uint_loop_start:
 			mov ecx, dword[ebp-12]
 			mov edx, ebx
-			add edx, dword[ebp+28]
+			add edx, dword[ebp+24]
 		
 			push esi						;current vertex attrib offset
 			push dword[ebp-8]				;stride
@@ -582,7 +582,7 @@ renderable_createCustom:
 			call [glVertexAttribIPointer]
 			
 			mov edx, ebx
-			add edx, dword[ebp+28]
+			add edx, dword[ebp+24]
 			push edx
 			call [glEnableVertexAttribArray]
 		
@@ -864,12 +864,26 @@ renderable_renderCustom:
 	push dword[eax]
 	call [glBindVertexArray]
 	
-	push 0
-	push dword[GL_UNSIGNED_INT]
 	mov eax, dword[ebp+8]
-	push dword[eax+12]
-	push dword[renderable_primitive]
-	call [glDrawElements]
+	cmp dword[eax+8], NO_EBO
+	jne renderable_renderCustom_ebo
+	renderable_renderCustom_no_ebo:
+		push dword[eax+12]
+		push 0
+		push dword[renderable_primitive]
+		call [glDrawArrays]
+		jmp renderable_renderCustom_done
+		
+	renderable_renderCustom_ebo:
+		push 0
+		push dword[GL_UNSIGNED_INT]
+		mov eax, dword[ebp+8]
+		push dword[eax+12]
+		push dword[renderable_primitive]
+		call [glDrawElements]
+		jmp renderable_renderCustom_done
+		
+	renderable_renderCustom_done:
 	
 	push 0
 	call [glBindVertexArray]

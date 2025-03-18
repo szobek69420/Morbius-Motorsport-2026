@@ -48,6 +48,10 @@ section .rodata use32
 	uniform_name_hyperPlaneDir3 db "hyperPlaneDir3",0
 	uniform_name_hyperPlaneNormal db "hyperPlaneNormal",0
 	
+	test_text db "you're so portuguese",10,0
+	test_text2 db "you're so portuguese2",10,0
+	test_text3 db "you're so portuguese3",10,0
+	
 section .text use32
 
 	;should be called from the graphics thread
@@ -115,7 +119,10 @@ section .text use32
 	extern renderable_createShader
 	extern renderable_useShader
 	extern renderable_setUniform
+	extern renderable_setPrimitive
 	extern RENDERABLE_UNIFORM_VEC4
+	
+	extern GL_POINTS
 
 chunkManager4d_create:
 	push ebp
@@ -186,6 +193,11 @@ chunkManager4d_render:
 	mov ebp, esp
 	
 	sub esp, 16
+	
+	;set renderable primitive
+	push dword[GL_POINTS]
+	call renderable_setPrimitive
+	add esp, 4
 	
 	;use shader
 	mov eax, dword[ebp+16]
@@ -277,7 +289,6 @@ chunkManager4d_render:
 	call renderable_setUniform
 	add esp, 28
 	
-	
 	mov edi, dword[ebp+16]
 	mov esi, dword[edi]				;chunk count in esi
 	mov edi, dword[edi+12]			;current chunk in edi
@@ -290,6 +301,7 @@ chunkManager4d_render:
 		je chunkManager4d_render_loop_continue
 		
 		;set chunkPos uniform
+		mov eax, dword[edi]
 		sub esp, 16
 		mov eax, dword[ebp+16]
 		mov ecx, dword[eax]
@@ -315,6 +327,7 @@ chunkManager4d_render:
 		add esp, 28
 		
 		;render chunk
+		mov eax, dword[edi]
 		push 69					;use textures
 		mov ecx, dword[ebp+16]
 		push dword[ecx+100]		;shader
@@ -529,7 +542,7 @@ chunkManager4d_unload:
 	
 	sub esp, 4				;chunk update				32
 	
-	sub esp, 4				;reload necessary			36
+	sub esp, 4				;reload necessary			36 (unused)
 	
 	;it is an array of struct{int distance; Chunk* chunk}
 	;which is sorted in ascending order of distances
@@ -658,18 +671,11 @@ chunkManager4d_unload:
 		;check if the chunk is out of the render distance
 		mov eax, dword[edi]
 		cmp eax, dword[ebp+28]
-		jg chunkManager4d_unload_unload_loop_should_unload_or_reload
-		
-		;check if the chunk is marked as reloadable
-		mov eax, dword[edi+4]
-		cmp dword[eax+68], 0
-		jne chunkManager4d_unload_unload_loop_should_unload_or_reload
-		
+		jg chunkManager4d_unload_unload_loop_should_unload
 		
 		jmp chunkManager4d_unload_unload_loop_continue
 		
-		
-		chunkManager4d_unload_unload_loop_should_unload_or_reload:
+		chunkManager4d_unload_unload_loop_should_unload:
 			mov ebx, dword[edi+4]
 		
 			;check if the chunk is not already in the unload queue
@@ -692,10 +698,6 @@ chunkManager4d_unload:
 			mov dword[ebp-8], ecx
 			mov ecx, dword[ebx+8]
 			mov dword[ebp-4], ecx
-			
-			;should reload?
-			mov ecx, dword[ebx+68]
-			mov dword[ebp-36], ecx
 			
 			jmp chunkManager4d_unload_unload_loop_end
 			
@@ -727,34 +729,6 @@ chunkManager4d_unload:
 		mov dword[eax+4], ecx		;chunk
 		
 		;push unload chunk update onto pending chunks
-		mov eax, dword[ebp-32]
-		mov ecx, dword[ebp+20]
-		add ecx, 16
-		
-		push eax
-		push ecx
-		call tsQueue_push
-		add esp, 8
-	
-	;is a reload necessary?
-	cmp dword[ebp-36], 0
-	je chunkManager4d_unload_end
-	
-		;alloc load chunk update
-		push 20
-		call my_malloc
-		mov dword[ebp-32], eax
-		add esp, 4
-		
-		mov dword[eax], 69			;load
-		mov ecx, dword[ebp-12]
-		mov dword[eax+8], ecx		;chunkX
-		mov ecx, dword[ebp-8]
-		mov dword[eax+12], ecx		;chunkZ
-		mov ecx, dword[ebp-4]
-		mov dword[eax+16], ecx		;chunkW
-		
-		;push load chunk update onto pending chunks
 		mov eax, dword[ebp-32]
 		mov ecx, dword[ebp+20]
 		add ecx, 16
@@ -807,15 +781,13 @@ chunkManager4d_processUpdate:
 	je chunkManager4d_processUpdate_unload
 	chunkManager4d_processUpdate_load:
 		;generate chunk
-		mov ecx, dword[ebp+8]
-		add ecx, 32					;chunkmanager.hyperplane
-		push ecx
+		mov eax, dword[ebp-8]
 		push dword[eax+16]			;chunkw
 		push dword[eax+12]			;chunkz
 		push dword[eax+8]			;chunkx
 		call chunk4d_generate
 		mov dword[ebp-4], eax
-		add esp, 16
+		add esp, 12
 		
 		;create graphics update
 		push 8
@@ -946,7 +918,7 @@ chunkManager4d_processGraphicsUpdate:
 		cmp dword[eax+56], 0
 		je chunkManager4d_processGraphicsUpdate_no_mesh			;there is no mesh
 		
-			;create the imitated vectors
+			;create the imitated vertex vector
 			mov ecx, dword[eax+56]
 			mov dword[ebp-20], ecx
 			mov dword[ebp-16], ecx
@@ -959,8 +931,7 @@ chunkManager4d_processGraphicsUpdate:
 			push 1
 			push 4
 			push 1
-			lea eax, [ebp-36]
-			push eax
+			push 0
 			lea eax, [ebp-20]
 			push eax
 			call renderable_createCustom
@@ -975,18 +946,12 @@ chunkManager4d_processGraphicsUpdate:
 			call renderable_setAlbedo
 			add esp, 8
 			
-			
 			;destroy the vertex and index data in the chunk
 			mov eax, dword[ebp-4]
 			mov eax, dword[eax]
 			push dword[eax+52]
-			push dword[eax+60]
 			mov dword[eax+52], 0
 			mov dword[eax+56], 0
-			mov dword[eax+60], 0
-			mov dword[eax+64], 0
-			call my_free
-			add esp, 4
 			call my_free
 			add esp, 4
 		

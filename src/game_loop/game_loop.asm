@@ -26,6 +26,7 @@ section .rodata use32
 	P6 dd 0.6
 	
 	test_text db "OTTO VON BISMARCK",0
+	test_text2 db "hello everybody my name is welcome",10,0
 	print_int_nl db "%d",10,0
 	print_two_ints_nl db "%d %d",10,0
 	print_float db "%f",0
@@ -57,6 +58,7 @@ section .bss use32
 	pplayer resb 4
 	
 	chunk_manager resb 4
+	chunk_manager_4d resb 4
 	
 section .data use32
 	last_frame_milliseconds dd 0		;int, the GetTickCount of the last frame
@@ -185,7 +187,12 @@ section .text use32
 	extern chunkManager_processGraphicsUpdate
 	extern chunkManager_render
 	
-	extern chunk4d_generate
+	extern chunkManager4d_create
+	extern chunkManager4d_load
+	extern chunkManager4d_unload
+	extern chunkManager4d_processUpdate
+	extern chunkManager4d_processGraphicsUpdate
+	extern chunkManager4d_render
 	
 game_loop:
 	push ebp
@@ -251,6 +258,10 @@ game_loop:
 	;create chunk manager
 	call chunkManager_create
 	mov dword[chunk_manager], eax
+	
+	;create chunk manager 4d
+	call chunkManager4d_create
+	mov dword[chunk_manager_4d], eax
 	
 	;create player
 	push dword[chunk_manager]
@@ -319,6 +330,25 @@ game_loop:
 		call chunkManager_processGraphicsUpdate
 		add esp, 4
 		
+		;do 4d chunk update things		
+		mov eax, dword[pplayer]
+		mov eax, dword[eax]				;&player.camera.position
+		push 4
+		push eax
+		push dword[chunk_manager_4d]
+		call chunkManager4d_load
+		;call chunkManager4d_unload
+		add esp, 12
+		
+		push dword[chunk_manager_4d]
+		call chunkManager4d_processUpdate
+		add esp, 4
+		
+		;process a chunk graphics update 4d
+		push dword[chunk_manager_4d]
+		call chunkManager4d_processGraphicsUpdate
+		add esp, 4
+		
 		;update player
 		push dword[delta_time_seconds]
 		push dword[pplayer]
@@ -350,6 +380,12 @@ game_loop:
 		push pv_matrix
 		push dword[chunk_manager]
 		call chunkManager_render
+		add esp, 8
+		
+		;render 4d chunks
+		push pv_matrix
+		push dword[chunk_manager_4d]
+		call chunkManager4d_render
 		add esp, 8
 		
 		

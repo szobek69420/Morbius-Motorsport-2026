@@ -110,6 +110,9 @@ section .text use32
 	extern renderable_renderCustom
 	extern renderable_setAlbedo
 	extern renderable_createShader
+	extern renderable_setPrimitive
+	
+	extern GL_TRIANGLES
 	
 chunkManager_create:
 	push ebp
@@ -179,6 +182,12 @@ chunkManager_render:
 	push edi
 	mov ebp, esp
 	
+	;set renderable primitive
+	push dword[GL_TRIANGLES]
+	call renderable_setPrimitive
+	add esp, 4
+	
+	;draw chunks
 	mov edi, dword[ebp+16]
 	mov esi, dword[edi]				;chunk count in esi
 	mov edi, dword[edi+12]			;current chunk in edi
