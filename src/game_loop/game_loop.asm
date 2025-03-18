@@ -185,6 +185,8 @@ section .text use32
 	extern chunkManager_processGraphicsUpdate
 	extern chunkManager_render
 	
+	extern chunk4d_generate
+	
 game_loop:
 	push ebp
 	mov ebp, esp

@@ -14,6 +14,8 @@ section .rodata use32
 	EPSILON dd 0.00001
 	VERY_BIG_NUMBER dd 69420.69420
 
+	global CHUNK_WIDTH
+	global CHUNK_HEIGHT
 	CHUNK_WIDTH dd 16					;1<<4
 	CHUNK_HEIGHT dd 150
 	
@@ -37,7 +39,7 @@ section .text use32
 
 	;the collider and renderable is initialized by the chunk manager
 	global chunk4d_generate			;Chunk4D* chunk4d_generate(int chunkX, int chunkZ, int chunkW)
-	;the collider group and the renderable are destroyed by the chunk manager
+	;the renderable is destroyed by the chunk manager
 	global chunk4d_destroy			;void chunk4d_destroy(Chunk4D* chunk)
 	
 	
@@ -55,6 +57,8 @@ section .text use32
 chunk4d_destroy:
 	push ebp
 	mov ebp, esp
+	
+	;TODO: destroy collider group
 	
 	push dword[ebp+8]
 	call my_free
@@ -526,6 +530,8 @@ chunk4d_generate:
 	push dword[ebp-12]
 	call my_free
 	add esp, 4
+	
+	;TODO: create collider group
 	
 	;set return value
 	mov eax, dword[ebp-4]
