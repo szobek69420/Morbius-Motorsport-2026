@@ -42,9 +42,12 @@ section .rodata use32
 	text_point db "Hyperplane point",0
 	text_based_vectors db "Hyperplane based vectors",0
 	print_vec4 db "(%f; %f; %f; %f)",0
+	text_player_pos db "Player position in plane",0
+	print_vec3 db "(%f; %f; %f)",0
 	
 	print_loaded_chunk_count db "loaded chunks: %d",10,0
-		
+	
+	print_fps db "FPS: %d",0
 	
 section .bss use32
 	should_close resb 4					;tsValue*
@@ -68,6 +71,10 @@ section .data use32
 	current_window dd 0					;GLFWwindow*
 	
 	should_resize dd 0
+	
+	milliseconds_since_last_fps_update dd 0
+	frames_in_this_second dd 0
+	frames_in_last_second dd 0
 
 section .text use32
 
@@ -255,16 +262,12 @@ game_loop:
 	call hyperPlane_create
 	add esp, 4
 	
-	;create chunk manager
-	call chunkManager_create
-	mov dword[chunk_manager], eax
-	
 	;create chunk manager 4d
 	call chunkManager4d_create
 	mov dword[chunk_manager_4d], eax
 	
 	;create player
-	push dword[chunk_manager]
+	push dword[chunk_manager_4d]
 	push camera
 	call player_init
 	mov dword[pplayer], eax
@@ -316,6 +319,20 @@ game_loop:
 		fmulp
 		fstp dword[delta_time_seconds]
 		
+		;update fps counter
+		inc dword[frames_in_this_second]
+		
+		mov eax, dword[delta_time_milliseconds]
+		add dword[milliseconds_since_last_fps_update], eax
+		cmp dword[milliseconds_since_last_fps_update], 1000
+		jl gameLoop_loop_no_fps_update
+			mov eax, dword[frames_in_this_second]
+			mov dword[frames_in_last_second], eax
+			
+			mov dword[frames_in_this_second], 0
+			sub dword[milliseconds_since_last_fps_update], 1000
+		gameLoop_loop_no_fps_update:
+		
 		
 		;check if the window should be resized
 		cmp dword[should_resize], 0
@@ -324,11 +341,6 @@ game_loop:
 			call gameLoop_handleWindowResize
 		gameLoop_loop_no_resize:
 		
-		
-		;process a chunk graphics update
-		push dword[chunk_manager]
-		call chunkManager_processGraphicsUpdate
-		add esp, 4
 		
 		;do 4d chunk update things		
 		mov eax, dword[pplayer]
@@ -375,12 +387,6 @@ game_loop:
 		call camera_viewProjection
 		add esp, 8
 		
-		
-		;render chunks
-		push pv_matrix
-		push dword[chunk_manager]
-		call chunkManager_render
-		add esp, 8
 		
 		;render 4d chunks
 		push pv_matrix
@@ -541,21 +547,7 @@ gameLoop_chunkLoader:
 	
 	finit
 
-	gameLoop_chunkLoader_loop_start:		
-		;do chunk update things		
-		mov eax, dword[pplayer]
-		mov eax, dword[eax]				;&player.camera.position
-		push 4
-		push eax
-		push dword[chunk_manager]
-		call chunkManager_load
-		call chunkManager_unload
-		add esp, 12
-		
-		push dword[chunk_manager]
-		call chunkManager_processUpdate
-		add esp, 4
-		
+	gameLoop_chunkLoader_loop_start:
 		
 		;check if an exit is necessary
 		push 0
@@ -670,7 +662,7 @@ gameLoop_drawHyperplaneData:
 	sub esp, 100				;char buffer[100]
 	
 	;draw point
-	mov eax, dword[chunk_manager]
+	mov eax, dword[chunk_manager_4d]
 	add eax, 32
 	push dword[eax+12]
 	push dword[eax+8]
@@ -689,7 +681,7 @@ gameLoop_drawHyperplaneData:
 	;draw based vectors
 	render_text text_based_vectors, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 80
 	
-	mov eax, dword[chunk_manager]
+	mov eax, dword[chunk_manager_4d]
 	add eax, 48
 	sub esp, 48
 	mov ecx, esp
@@ -722,6 +714,33 @@ gameLoop_drawHyperplaneData:
 	add esp, 24
 	lea eax, [ebp-100]
 	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 140
+	
+	;draw player position
+	render_text text_player_pos, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 170
+	
+	mov eax, camera
+	push dword[eax+8]
+	push dword[eax+4]
+	push dword[eax]
+	push print_vec3
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 20
+	lea eax, [ebp-100]
+	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 190
+	
+	
+	;draw frame counter
+	push dword[frames_in_last_second]
+	push print_fps
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 12
+	
+	lea eax, [ebp-100]
+	render_text eax, dword[TEXT_ORIGIN_TOP_RIGHT], dword[TEXT_PIVOT_TOP_RIGHT], 30, 30
 	
 	mov esp, ebp
 	pop ebp

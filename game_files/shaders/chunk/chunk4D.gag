@@ -2,7 +2,6 @@
 layout (points) in;
 layout (triangle_strip, max_vertices = 6) out;
 
-in vec4 position[1];
 in uint cellData[1];
 
 out vec3 normal;
@@ -340,7 +339,7 @@ const vec4 cellNormals[]={
 
 void main()
 {
-	vec4 localHyperPlanePos=hyperPlanePos-position[0];
+	vec4 localHyperPlanePos=hyperPlanePos-gl_in[0].gl_Position;
 	float localHyperPlaneEquationE=-dot(localHyperPlanePos, hyperPlaneNormal);
 
 	vec3 cellNormal3D;

@@ -887,8 +887,6 @@ renderable_renderCustom:
 	
 	push 0
 	call [glBindVertexArray]
-	push 0
-	call [glUseProgram]
 	
 	
 	mov esp, ebp
@@ -1200,7 +1198,7 @@ renderable_setUniform:
 		call [glUniform3f]
 		jmp renderable_setUniform_end
 		
-	renderable_setUniform_vec4:
+	renderable_setUniform_vec4:		
 		push dword[ebp+32]
 		push dword[ebp+28]
 		push dword[ebp+24]

@@ -52,6 +52,11 @@ section .rodata use32
 	test_text2 db "you're so portuguese2",10,0
 	test_text3 db "you're so portuguese3",10,0
 	
+	print_four_floats_nl db "%f %f %f %f",10,0
+	
+	ONE dd 1.0
+	MINUS_SIXTEEN dd -16.0
+	
 section .text use32
 
 	;should be called from the graphics thread
@@ -123,6 +128,8 @@ section .text use32
 	extern RENDERABLE_UNIFORM_VEC4
 	
 	extern GL_POINTS
+	extern glGetUniformLocation
+	extern glUniform4f
 
 chunkManager4d_create:
 	push ebp
@@ -302,26 +309,31 @@ chunkManager4d_render:
 		
 		;set chunkPos uniform
 		mov eax, dword[edi]
-		sub esp, 16
-		mov eax, dword[ebp+16]
-		mov ecx, dword[eax]
-		imul ecx, dword[CHUNK_WIDTH]
-		mov dword[esp], ecx
-		mov dword[esp+4], 0
-		mov ecx, dword[eax+4]
-		imul ecx, dword[CHUNK_WIDTH]
-		mov dword[esp+8], ecx
+		
 		mov ecx, dword[eax+8]
 		imul ecx, dword[CHUNK_WIDTH]
-		mov dword[esp+12], ecx
+		push ecx
 		fild dword[esp]
 		fstp dword[esp]
-		fild dword[esp+8]
-		fstp dword[esp+8]
-		fild dword[esp+12]
-		fstp dword[esp+12]
+		
+		mov ecx, dword[eax+4]
+		imul ecx, dword[CHUNK_WIDTH]
+		push ecx
+		fild dword[esp]
+		fstp dword[esp]
+		
+		push 0
+		
+		mov ecx, dword[eax]
+		imul ecx, dword[CHUNK_WIDTH]
+		push ecx
+		fild dword[esp]
+		fstp dword[esp]
+		
+		
 		push dword[RENDERABLE_UNIFORM_VEC4]
 		push uniform_name_chunkPos
+		mov eax, dword[ebp+16]
 		push dword[eax+100]
 		call renderable_setUniform
 		add esp, 28
