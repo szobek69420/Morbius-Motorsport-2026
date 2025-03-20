@@ -14,6 +14,7 @@ nasm -fobj input/input.asm -o build/input.o
 nasm -fobj glfw/glfw.asm -o build/glfw.o
 nasm -fobj opengl/opengl.asm -o build/opengl.o
 nasm -fobj shader/shader.asm -o build/shader.o
+nasm -fobj physics/physics4D/collider_group_4D.asm -o build/collider_group_4D.o
 nasm -fobj physics/physics4D/aabb4D.asm -o build/aabb4D.o
 nasm -fobj physics/physics3D/physics.asm -o build/physics.o
 nasm -fobj physics/physics3D/collision_detection.asm -o build/collision_detection.o
@@ -64,6 +65,7 @@ build/opengl.o ^
 build/shader.o ^
 build/player.o ^
 build/aabb4D.o ^
+build/collider_group_4D.o ^
 build/physics.o ^
 build/collision_detection.o ^
 build/mesh_collider.o ^
