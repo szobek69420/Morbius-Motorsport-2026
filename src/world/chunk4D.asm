@@ -8,7 +8,8 @@
 ;	ColliderGroup4D* cg;						;16
 ;	vec4 lowerBound, upperBound;				;20
 ;	void* vertices, int vertexFloatCount		;52			;temporary, deleted as soon as the renderable is constructed
-;}		60 bytes overall
+;	int chunkAlreadyProcessed;					;60			;it is an indicater for the chunkManager_unload if the chunk can be unloaded
+;}		64 bytes overall
 
 section .rodata use32
 	EPSILON dd 0.00001
@@ -91,7 +92,7 @@ chunk4d_generate:
 	sub esp, 16				;vertex vector						48
 	
 	;alloc space for chunk
-	push 60
+	push 64
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
@@ -111,6 +112,8 @@ chunk4d_generate:
 	
 	mov dword[eax+52], 0			;vertices
 	mov dword[eax+56], 0			;vertexFloatCount
+	
+	mov dword[eax+60], 0			;the chunk is not yet processed
 	
 	;alloc space for heightmap
 	push dword[CHUNK_HEIGHT_MAP_LENGTH]
@@ -519,6 +522,9 @@ chunk4d_generate:
 		push eax
 		call vector_destroy
 		add esp, 8
+		
+		mov eax, dword[ebp-4]
+		mov dword[eax+60], 69			;the chunk is already processed
 		jmp chunk4d_generate_mesh_done
 		
 	chunk4d_generate_mesh_done:

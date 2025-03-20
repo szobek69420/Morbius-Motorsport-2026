@@ -378,15 +378,19 @@ void main()
 		if(edgeDistance1<0&&edgeDistance2<0)
 			continue;
 
+		//remove the sign from the edge distances as it can easily be a matter of mogging
+		edgeDistance1=abs(edgeDistance1);
+		edgeDistance2=abs(edgeDistance2);
+
 		//if edgeDistance1 is very close to zero, then another edgeDistance2 is within that range as well
 		//so the intersection point would be included twice
-		if(abs(edgeDistance1)<0.00001)
+		if(edgeDistance1<0.00001)
 			continue;
 
+		float interpolationParam=edgeDistance1/(edgeDistance1+edgeDistance2);
+
 		//register 4d point (it is in the local space of the block)
-		intersections4D[intersectionCount]=
-			-edgeDistance1*hyperPlaneNormal+
-			edgePositions[cell][i];
+		intersections4D[intersectionCount]=mix(edgePositions[cell][i], edgePositions[cell][i+1], interpolationParam);
 
 		//convert it to 3d
 		vec4 temp=intersections4D[intersectionCount]-localHyperPlanePos;
@@ -397,9 +401,7 @@ void main()
 			);
 
 		//get the uv of the point
-		intersectionsUV[intersectionCount]=
-			edgeUvs[cell][i]+
-			abs(edgeDistance1)/(abs(edgeDistance1)+abs(edgeDistance2))*(edgeUvs[cell][i+1]-edgeUvs[cell][i]);
+		intersectionsUV[intersectionCount] = mix(edgeUvs[cell][i], edgeUvs[cell][i+1], interpolationParam);
 
 		intersectionCount++;
 	}

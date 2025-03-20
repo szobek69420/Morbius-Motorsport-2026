@@ -45,7 +45,9 @@ section .rodata use32
 	text_player_pos db "Player position in plane",0
 	print_vec3 db "(%f; %f; %f)",0
 	
-	print_loaded_chunk_count db "loaded chunks: %d",10,0
+	print_loaded_chunk_count db "Loaded chunks: %d",0
+	print_pending_graphics_update_count db "Pending graphics updates: %d",0
+	print_render_distance db "Render distance: %d",0
 	
 	print_fps db "FPS: %d",0
 	
@@ -64,6 +66,8 @@ section .bss use32
 	chunk_manager_4d resb 4
 	
 section .data use32
+	render_distance dd 3
+
 	last_frame_milliseconds dd 0		;int, the GetTickCount of the last frame
 	delta_time_milliseconds dd 0		;int
 	delta_time_seconds dd 0.0			;float
@@ -155,7 +159,8 @@ section .text use32
 	extern textRenderer_init
 	extern textRenderer_deinit
 	extern textRenderer_drawText
-	extern textRenderer_setScreenSize	
+	extern textRenderer_setScreenSize
+	extern textRenderer_setFontSize
 	extern TEXT_ORIGIN_BOTTOM_CENTER
 	extern TEXT_ORIGIN_TOP_LEFT
 	extern TEXT_ORIGIN_BOTTOM_RIGHT
@@ -164,6 +169,8 @@ section .text use32
 	extern TEXT_PIVOT_BOTTOM_RIGHT
 	extern TEXT_PIVOT_TOP_LEFT
 	extern TEXT_PIVOT_TOP_RIGHT
+	extern FONT_CHAR_WIDTH
+	extern FONT_CHAR_HEIGHT
 	
 	extern textureHandler_init
 	extern textureHandler_deinit
@@ -273,7 +280,6 @@ game_loop:
 	mov dword[pplayer], eax
 	add esp, 8
 	
-	
 	;enable depth test and face cull
 	push dword[GL_DEPTH_TEST]
 	call [glEnable]
@@ -333,7 +339,6 @@ game_loop:
 			sub dword[milliseconds_since_last_fps_update], 1000
 		gameLoop_loop_no_fps_update:
 		
-		
 		;check if the window should be resized
 		cmp dword[should_resize], 0
 		je gameLoop_loop_no_resize
@@ -341,26 +346,12 @@ game_loop:
 			call gameLoop_handleWindowResize
 		gameLoop_loop_no_resize:
 		
-		
-		;do 4d chunk update things		
-		mov eax, dword[pplayer]
-		mov eax, dword[eax]				;&player.camera.position
-		push 4
-		push eax
-		push dword[chunk_manager_4d]
-		call chunkManager4d_load
-		;call chunkManager4d_unload
-		add esp, 12
-		
-		push dword[chunk_manager_4d]
-		call chunkManager4d_processUpdate
-		add esp, 4
-		
 		;process a chunk graphics update 4d
 		push dword[chunk_manager_4d]
 		call chunkManager4d_processGraphicsUpdate
 		add esp, 4
 		
+
 		;update player
 		push dword[delta_time_seconds]
 		push dword[pplayer]
@@ -395,8 +386,8 @@ game_loop:
 		add esp, 8
 		
 		
-		;draw hyperplane data
-		call gameLoop_drawHyperplaneData
+		;draw infos
+		call gameLoop_drawData
 		
 		;swap buffers
 		push dword[current_window]
@@ -545,9 +536,33 @@ gameLoop_chunkLoader:
 	push ebp
 	mov ebp, esp
 	
+	sub esp, 4				;last chunk update
+	mov dword[ebp-4], 0
+	
 	finit
 
 	gameLoop_chunkLoader_loop_start:
+		;check if it is already chunk load time
+		call [GetTickCount]
+		mov ecx, eax
+		sub ecx, dword[ebp-4]
+		cmp ecx, 50
+		jl gameLoop_chunk_loader_loop_no_load
+		
+			mov dword[ebp-4], eax			;update the last chunk update time
+		
+			;do chunk update things		
+			mov eax, dword[pplayer]
+			mov eax, dword[eax]				;&player.camera.position
+			push dword[render_distance]
+			push eax
+			push dword[chunk_manager_4d]
+			call chunkManager4d_load
+			call chunkManager4d_unload
+			add esp, 12
+		
+		gameLoop_chunk_loader_loop_no_load:
+		
 		
 		;check if an exit is necessary
 		push 0
@@ -654,12 +669,24 @@ gameLoop_handleWindowResize:
 	ret
 	
 	
-;void gameLoop_drawHyperplaneData()
-gameLoop_drawHyperplaneData:
+;void gameLoop_drawData()
+gameLoop_drawData:
 	push ebp
 	mov ebp, esp
 	
 	sub esp, 100				;char buffer[100]
+	
+	;set font size to 1.5x
+	mov eax, dword[FONT_CHAR_HEIGHT]
+	imul eax, 3
+	shr eax, 1
+	push eax
+	mov eax, dword[FONT_CHAR_WIDTH]
+	imul eax, 3
+	shr eax, 1
+	push eax
+	call textRenderer_setFontSize
+	add esp, 8
 	
 	;draw point
 	mov eax, dword[chunk_manager_4d]
@@ -676,10 +703,10 @@ gameLoop_drawHyperplaneData:
 	
 	render_text text_point, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 30
 	lea eax, [ebp-100]
-	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 50
+	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 45
 	
 	;draw based vectors
-	render_text text_based_vectors, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 80
+	render_text text_based_vectors, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 70
 	
 	mov eax, dword[chunk_manager_4d]
 	add eax, 48
@@ -697,6 +724,14 @@ gameLoop_drawHyperplaneData:
 	call my_sprintf
 	add esp, 24
 	lea eax, [ebp-100]
+	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 85
+	
+	push print_vec4
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 24
+	lea eax, [ebp-100]
 	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 100
 	
 	push print_vec4
@@ -705,18 +740,10 @@ gameLoop_drawHyperplaneData:
 	call my_sprintf
 	add esp, 24
 	lea eax, [ebp-100]
-	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 120
-	
-	push print_vec4
-	lea eax, [ebp-100]
-	push eax
-	call my_sprintf
-	add esp, 24
-	lea eax, [ebp-100]
-	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 140
+	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 115
 	
 	;draw player position
-	render_text text_player_pos, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 170
+	render_text text_player_pos, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 135
 	
 	mov eax, camera
 	push dword[eax+8]
@@ -728,7 +755,54 @@ gameLoop_drawHyperplaneData:
 	call my_sprintf
 	add esp, 20
 	lea eax, [ebp-100]
-	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 190
+	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 155
+	
+	;draw render distance
+	push dword[render_distance]
+	push print_render_distance
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 12
+	
+	lea eax, [ebp-100]
+	render_text eax, dword[TEXT_ORIGIN_BOTTOM_RIGHT], dword[TEXT_PIVOT_BOTTOM_RIGHT], 30, 80
+	
+	;draw loaded chunk count
+	mov eax, dword[chunk_manager_4d]
+	push dword[eax]
+	push print_loaded_chunk_count
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 12
+	
+	lea eax, [ebp-100]
+	render_text eax, dword[TEXT_ORIGIN_BOTTOM_RIGHT], dword[TEXT_PIVOT_BOTTOM_RIGHT], 30, 55
+	
+	;draw pending graphics update count
+	mov eax, dword[chunk_manager_4d]
+	mov eax, dword[eax+24]
+	push dword[eax+4]
+	push print_pending_graphics_update_count
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 12
+	
+	lea eax, [ebp-100]
+	render_text eax, dword[TEXT_ORIGIN_BOTTOM_RIGHT], dword[TEXT_PIVOT_BOTTOM_RIGHT], 30, 30
+	
+	
+	;set font size to 2x
+	mov eax, dword[FONT_CHAR_HEIGHT]
+	shl eax, 1
+	push eax
+	mov eax, dword[FONT_CHAR_WIDTH]
+	shl eax, 1
+	push eax
+	call textRenderer_setFontSize
+	add esp, 8
 	
 	
 	;draw frame counter
@@ -741,6 +815,7 @@ gameLoop_drawHyperplaneData:
 	
 	lea eax, [ebp-100]
 	render_text eax, dword[TEXT_ORIGIN_TOP_RIGHT], dword[TEXT_PIVOT_TOP_RIGHT], 30, 30
+	
 	
 	mov esp, ebp
 	pop ebp
