@@ -14,11 +14,12 @@ nasm -fobj input/input.asm -o build/input.o
 nasm -fobj glfw/glfw.asm -o build/glfw.o
 nasm -fobj opengl/opengl.asm -o build/opengl.o
 nasm -fobj shader/shader.asm -o build/shader.o
-nasm -fobj physics/physics.asm -o build/physics.o
-nasm -fobj physics/collision_detection.asm -o build/collision_detection.o
-nasm -fobj physics/colliders/mesh_collider.asm -o build/mesh_collider.o
-nasm -fobj physics/colliders/cylinder_collider.asm -o build/cylinder_collider.o
-nasm -fobj physics/colliders/collider.asm -o build/collider.o
+nasm -fobj physics/physics4D/aabb4D.asm -o build/aabb4D.o
+nasm -fobj physics/physics3D/physics.asm -o build/physics.o
+nasm -fobj physics/physics3D/collision_detection.asm -o build/collision_detection.o
+nasm -fobj physics/physics3D/colliders/mesh_collider.asm -o build/mesh_collider.o
+nasm -fobj physics/physics3D/colliders/cylinder_collider.asm -o build/cylinder_collider.o
+nasm -fobj physics/physics3D/colliders/collider.asm -o build/collider.o
 nasm -fobj utils/qsort.asm -o build/qsort.o
 nasm -fobj utils/thread_safe_queue.asm -o build/thread_safe_queue.o
 nasm -fobj utils/thread_safe_value.asm -o build/thread_safe_value.o
@@ -62,6 +63,7 @@ build/renderable.o ^
 build/opengl.o ^
 build/shader.o ^
 build/player.o ^
+build/aabb4D.o ^
 build/physics.o ^
 build/collision_detection.o ^
 build/mesh_collider.o ^
