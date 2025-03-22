@@ -67,7 +67,7 @@ section .bss use32
 	chunk_manager_4d resb 4
 	
 section .data use32
-	render_distance dd 3
+	render_distance dd 4
 
 	last_frame_milliseconds dd 0		;int, the GetTickCount of the last frame
 	delta_time_milliseconds dd 0		;int

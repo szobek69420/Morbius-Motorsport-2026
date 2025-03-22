@@ -19,7 +19,7 @@ section .rodata use32
 	GRAV_ACC dd -9.80625
 	
 	START_POSITION dd 0.0, 100.0, 0.0, 0.0
-	START_SCALE dd 0.15, 0.9, 0.15, 0.15
+	START_SCALE dd 0.1, 0.9, 0.1, 0.1
 	
 	UP dd 0.0, 1.0, 0.0
 	DOWN dd 0.0, -1.0, 0.0
@@ -400,7 +400,7 @@ player_move:		;void player_move(player* player, float deltaTime)
 	mov ecx, dword[ebp-4]
 	mov dword[eax+12], ecx
 	
-	;update the position of the camera
+	;update the position of the camera (with the eye offset)
 	mov eax, dword[ebp+8]
 	push dword[eax+24]
 	call aabb4d_getPosition
@@ -418,6 +418,12 @@ player_move:		;void player_move(player* player, float deltaTime)
 	
 	call hyperPlane_positionTo3d
 	
+	mov eax, dword[ebp+8]
+	push EYE_OFFSET
+	push dword[eax]
+	push dword[eax]
+	;call vec3_add
+	add esp, 12
 	
 	mov esp, ebp
 	pop ebp

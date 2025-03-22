@@ -33,6 +33,9 @@ section .rodata use32
 	HALF dd 0.5
 	ONE dd 1.0
 	VERY_BIG_NUMBER dd 69420.69420
+	
+	test_text db "cardiac house arrest",10,0
+	test_text2 db "cardiac house arrest 2",10,0
 
 section .text use32
 
@@ -51,6 +54,7 @@ section .text use32
 	global aabb4d_resolveKinematicNonkinematic		;void aabb4d_resolveKinematicNonkinematic(Aabb4D* kinematic, Aabb4D* nonkinematic)
 	global aabb4d_resolveNonkinematicNonkinematic	;void aabb4d_resolveNonkinematicNonkinematic(Aabb4D* kinematic, Aabb4D* nonkinematic)
 	
+	extern my_printf
 	extern my_malloc
 	extern my_free
 	
@@ -230,12 +234,12 @@ aabb4d_detectCollisionInternal:
 	;calculate c2 lower and upper bound
 	mov eax, dword[ebp+12]
 	lea ecx, [eax+16]
-	lea edx, [ebp-16]
+	lea edx, [ebp-32]
 	push ecx
 	push eax
 	push edx
 	call vec4_sub
-	lea edx, [ebp-48]
+	lea edx, [ebp-64]
 	mov dword[esp], edx
 	call vec4_add
 	add esp, 12
