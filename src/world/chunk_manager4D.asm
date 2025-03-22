@@ -44,6 +44,7 @@ section .rodata use32
 	test_text2 db "you're so portuguese2",10,0
 	test_text3 db "you're so portuguese3",10,0
 	
+	print_float_nl db "%f",10,0
 	print_four_floats_nl db "%f %f %f %f",10,0
 	
 	ONE dd 1.0
@@ -107,6 +108,9 @@ section .text use32
 	
 	extern vec4_add
 	extern vec4_scale
+	extern vec4_dot
+	extern vec4_mulWithMat
+	extern vec4_print
 	
 	extern renderable_createCustom
 	extern renderable_destroy
@@ -183,7 +187,25 @@ chunkManager4d_render:
 	push edi
 	mov ebp, esp
 	
-	sub esp, 16
+	sub esp, 16					;hyperplane normal				16
+	sub esp, 4					;hyperplane equation E			20
+	sub esp, 4					;hyperplane pointer				24
+	
+	
+	;obtain hyperplane, hyperplane normal and E
+	push dword[ebp+16]
+	call chunkManager4d_getHyperPlane
+	add esp, 4
+	mov dword[ebp-24], eax
+	
+	lea eax, [ebp-16]
+	push eax
+	push dword[ebp-24]
+	call hyperPlane_getNormal		;calculate normal
+	call vec4_dot					;calculate E
+	add esp, 8
+	fstp dword[ebp-20]
+	xor dword[ebp-20], 0x80000000
 	
 	;set renderable primitive
 	push dword[GL_POINTS]
@@ -282,7 +304,7 @@ chunkManager4d_render:
 	
 	mov edi, dword[ebp+16]
 	mov esi, dword[edi]				;chunk count in esi
-	mov edi, dword[edi+12]			;current chunk in edi
+	mov edi, dword[edi+12]				;current chunk in edi
 	test esi, esi
 	jz chunkManager4d_render_loop_end
 	chunkManager4d_render_loop_start:
@@ -290,6 +312,17 @@ chunkManager4d_render:
 		mov eax, dword[edi]
 		cmp dword[eax+12], 0
 		je chunkManager4d_render_loop_continue
+		
+		;do frustum culling
+		push dword[ebp+20]			;pv
+		push dword[ebp-20]			;E
+		lea eax, [ebp-16]
+		push eax					;normal
+		push dword[edi]
+		call chunkManager4d_frustumCull
+		add esp, 16
+		test eax, eax
+		jnz chunkManager4d_render_loop_continue
 		
 		;set chunkPos uniform
 		mov eax, dword[edi]
@@ -939,6 +972,128 @@ chunkManager4d_getPlayerChunk:
 	pop ebp
 	ret
 	
+;returns 0 if the chunk doesn't need to be culled
+;int chunkManager4d_frustumCull(
+;	Chunk4D* chunk,
+;	vec4* hyperPlaneNormal,
+;	float hyperPlaneEquationE,
+;	mat4* pv
+;)
+chunkManager4d_frustumCull:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	sub esp, 4				;return value						4
+	sub esp, 4				;chunk.colliderGroup				8
+	sub esp, 4				;lower bound vector					12
+	sub esp, 4				;upper bound vector					16
+	sub esp, 16				;current bounding hyperbox vertex	32
+	sub esp, 4				;are all distances negative helper	36
+	sub esp, 4				;are all distances positive helper	40
+	sub esp, 4				;temp distance						44
+	
+	mov dword[ebp-4], 0
+	
+	mov dword[ebp-36], 0x80000000			;the sign bit needs to be 1 initially
+	mov dword[ebp-40], 0x80000000			;the sign bit needs to be 1 initially
+	
+	;obtain collider group and bounds
+	mov eax, dword[ebp+16]
+	mov eax, dword[eax+16]
+	mov dword[ebp-8], eax
+	
+	add eax, 16
+	mov dword[ebp-12], eax
+	add eax, 16
+	mov dword[ebp-16], eax
+	
+	;is the chunk empty?
+	mov eax, dword[ebp-8]
+	cmp dword[eax], 0
+	jg chunkManager4d_frustumCull_chunk_not_empty
+		mov dword[ebp-4], 69
+		jmp chunkManager4d_frustumCull_end
+		
+	chunkManager4d_frustumCull_chunk_not_empty:
+	
+	;check if the chunk intersects with the hyperplane at all
+	;aka are there also positive and negative distances (given by the hyperplane's equation) between the hyperplane and the vertices of the bounding hyperbox
+	;if all of the distances are negative, then if they are AND-ed together, the resulting sign bit will be 1
+	;if all of the distances are positive, then if their opposites are AND-ed together, the resulting sign bit will be 1
+	xor esi, esi
+	chunkManager4d_frustumCull_hyperplane_intersection_loop_start:
+		mov ecx, dword[ebp-12]
+		mov edx, dword[ebp-16]
+	
+		;construct the current vertex
+		mov edi, dword[ecx]
+		mov dword[ebp-32], edi
+		test esi, 0b0001
+		jz chunkManager4d_frustumCull_hyperplane_intersection_loop_x_zero
+			mov edi, dword[edx]
+			mov dword[ebp-32], edi
+		chunkManager4d_frustumCull_hyperplane_intersection_loop_x_zero:
+		
+		mov edi, dword[ecx+4]
+		mov dword[ebp-28], edi
+		test esi, 0b0010
+		jz chunkManager4d_frustumCull_hyperplane_intersection_loop_y_zero
+			mov edi, dword[edx+4]
+			mov dword[ebp-28], edi
+		chunkManager4d_frustumCull_hyperplane_intersection_loop_y_zero:
+		
+		mov edi, dword[ecx+8]
+		mov dword[ebp-24], edi
+		test esi, 0b0100
+		jz chunkManager4d_frustumCull_hyperplane_intersection_loop_z_zero
+			mov edi, dword[edx+8]
+			mov dword[ebp-24], edi
+		chunkManager4d_frustumCull_hyperplane_intersection_loop_z_zero:
+		
+		mov edi, dword[ecx+12]
+		mov dword[ebp-20], edi
+		test esi, 0b1000
+		jz chunkManager4d_frustumCull_hyperplane_intersection_loop_w_zero
+			mov edi, dword[edx+12]
+			mov dword[ebp-20], edi
+		chunkManager4d_frustumCull_hyperplane_intersection_loop_w_zero:
+		
+		;calculate the distance from the hyperplane
+		push dword[ebp+20]
+		lea eax, [ebp-32]
+		push eax
+		call vec4_dot
+		add esp, 8
+		fld dword[ebp+24]
+		faddp
+		fstp dword[ebp-44]
+		mov eax, dword[ebp-44]
+		and dword[ebp-36], eax
+		xor eax, 0x80000000
+		and dword[ebp-40], eax
+	
+		inc esi
+		cmp esi, 16			;there are 16 vertices in a hyperbox
+		jl chunkManager4d_frustumCull_hyperplane_intersection_loop_start
+		
+	;is the chunk on only one side of the hyperplane? (at least one helper's MSB is one)
+	mov eax, dword[ebp-36]
+	or eax, dword[ebp-40]
+	test eax, 0x80000000
+	jz chunkManager4d_frustumCull_not_outside_of_plane
+		mov dword[ebp-4], 69
+	chunkManager4d_frustumCull_not_outside_of_plane:
+	
+	chunkManager4d_frustumCull_end:
+	mov eax, dword[ebp-4]
+	
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
 	
 ;it is a compare function for vector_search
 ;data is the address of a memory region in which the chunkX, chunkZ and chunkW int-triplet is stored
@@ -972,66 +1127,6 @@ chunkManager4d_loaded_chunks_search:
 	mov dword[ebp-4], 0
 	
 	chunkManager4d_loaded_chunk_search_end:
-	mov eax, dword[ebp-4]
-	
-	mov esp, ebp
-	pop ebp
-	ret
-	
-;it is a compare function for tsQueue_search
-;data is the address of a memory region in which the chunkX, chunkZ and chunkW int-triplet is stored
-;returns 0 if there is a match
-;int chunkManager4d_pending_updates_search(ChunkUpdate4D** cu, void* data)
-chunkManager4d_pending_updates_search:
-	push ebp
-	mov ebp, esp
-	
-	sub esp, 4				;return value
-	
-	mov dword[ebp-4], 69
-	
-	;decide what kind of an update it is
-	mov eax, dword[ebp+8]
-	mov eax, dword[eax]
-	cmp dword[eax], 0
-	je chunkManager4d_pending_updates_search_unload
-		;it is a load update
-		mov ecx, dword[ebp+12]
-		
-		mov edx, dword[ecx]
-		cmp edx, dword[eax+8]
-		jne chunkManager4d_pending_updates_search_end
-		mov edx, dword[ecx+4]
-		cmp edx, dword[eax+12]
-		jne chunkManager4d_pending_updates_search_end
-		mov edx, dword[ecx+8]
-		cmp edx, dword[eax+16]
-		jne chunkManager4d_pending_updates_search_end
-		
-		mov dword[ebp-4], 0
-		
-		jmp chunkManager4d_pending_updates_search_end
-		
-	chunkManager4d_pending_updates_search_unload:
-		;it is an unload update
-		mov eax, dword[eax+4]
-		mov ecx, dword[ebp+12]
-		
-		mov edx, dword[ecx]
-		cmp edx, dword[eax]
-		jne chunkManager4d_pending_updates_search_end
-		mov edx, dword[ecx+4]
-		cmp edx, dword[eax+4]
-		jne chunkManager4d_pending_updates_search_end
-		mov edx, dword[ecx+8]
-		cmp edx, dword[eax+8]
-		jne chunkManager4d_pending_updates_search_end
-		
-		mov dword[ebp-4], 0
-		
-		jmp chunkManager4d_pending_updates_search_end
-		
-	chunkManager4d_pending_updates_search_end:
 	mov eax, dword[ebp-4]
 	
 	mov esp, ebp
@@ -1079,32 +1174,6 @@ chunkManager4d_pending_graphics_updates_search:
 	pop ebp
 	ret
 	
-;it is a compare function for vector_search
-;returns 0 if there is a match
-;int chunkManager4d_loaded_chunks_search(ChunkUpdate4D** cu, Chunk4D* data)
-chunkManager4d_pending_unloads_search:
-	push ebp
-	mov ebp, esp
-	
-	sub esp, 4				;return value
-	mov dword[ebp-4], 69
-	
-	mov eax, dword[ebp+8]
-	mov eax, dword[eax]
-	cmp dword[eax], 0
-	jne chunkManager4d_pending_unloads_search_end		;not an unload update
-	
-	mov eax, dword[eax+4]	;chunk*
-	cmp eax, dword[ebp+12]
-	jne chunkManager4d_pending_unloads_search_end
-		mov dword[ebp-4], 0
-	
-	chunkManager4d_pending_unloads_search_end:
-	mov eax, dword[ebp-4]
-	
-	mov esp, ebp
-	pop ebp
-	ret
 
 ;it is a compare function for qsort
 ;int chunkManager4d_unload_comparator(const struct{int; Chunk4D*}* a, const struct{int; Chunk4D*}* b)	
