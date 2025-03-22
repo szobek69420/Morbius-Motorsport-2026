@@ -5,11 +5,11 @@
 ;	camera* cum;					0
 ;	vec3 position;					4 (unused)
 ;	float pitch, yaw;				16
-;	Collider* collider;				24
+;	Aabb4D* collider;				24
 ;	ChunkManager* chunkManager;		28
 ;	Mutex* hyperPlaneMutex;			32
-;	vec3 previousColliderPos; 		36(unused)
-;}		48 bytes
+;	vec4 previousColliderPos; 		36(unused)
+;}		52 bytes
 
 section .rodata use32
 	ZERO dd 0.0
@@ -18,7 +18,8 @@ section .rodata use32
 	
 	GRAV_ACC dd -9.80625
 	
-	START_POSITION dd 0.0, 100.0, 0.0
+	START_POSITION dd 0.0, 100.0, 0.0, 0.0
+	START_SCALE dd 0.15, 0.9, 0.15, 0.15
 	
 	UP dd 0.0, 1.0, 0.0
 	DOWN dd 0.0, -1.0, 0.0
@@ -29,7 +30,7 @@ section .rodata use32
 	COLLIDER_HEIGHT dd 0.9
 	COLLIDER_RADIUS dd 0.12
 	
-	EYE_OFFSET dd 0.0, 0.75, 0.0		;the offset of the camera from the center of the collider
+	EYE_OFFSET dd 0.0, 0.75, 0.0, 0.0		;the offset of the camera from the center of the collider
 	
 	MOVEMENT_SPEED dd 5.0
 	
@@ -57,6 +58,9 @@ section .text use32
 	extern vec3_sub
 	extern vec3_print
 	
+	extern vec4_add
+	extern vec4_sub
+	
 	extern camera_forward
 	extern camera_right
 	
@@ -70,11 +74,12 @@ section .text use32
 	extern GLFW_KEY_SPACE
 	extern GLFW_KEY_LEFT_SHIFT
 	
-	extern collider_createCylinder
-	extern collider_destroy
-	extern collider_getPosition
-	extern physics_registerNonkinematic
-	extern physics_unregisterNonkinematic
+	extern aabb4d_create
+	extern aabb4d_destroy
+	extern aabb4d_getPosition
+	extern aabb4d_getVelocity
+	extern physics4d_registerNonkinematic
+	extern physics4d_unregisterNonkinematic
 	
 	extern mutex_create
 	extern mutex_destroy
@@ -83,6 +88,10 @@ section .text use32
 	
 	extern hyperPlane_moveInsideOfPlane
 	extern hyperPlane_rotate
+	extern hyperPlane_directionTo4d
+	extern hyperPlane_positionTo3d
+	
+	extern chunkManager4d_getHyperPlane
 	
 player_init:
 	push ebp
@@ -90,7 +99,7 @@ player_init:
 	
 	sub esp, 4		;player*
 	
-	push 48
+	push 52
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
@@ -106,34 +115,30 @@ player_init:
 	mov dword[eax+20], 0
 	
 	;create and register collider
-	push dword[COLLIDER_RADIUS]
-	push dword[COLLIDER_HEIGHT]
-	call collider_createCylinder
+	push START_SCALE
+	push START_POSITION
+	call aabb4d_create
 	mov ecx, dword[ebp-4]
 	mov dword[ecx+24], eax
 	
 	push eax
-	call physics_registerNonkinematic
+	call physics4d_registerNonkinematic
 	
-	;init collider start position and previous collider position
+	;init previous collider position
 	mov eax, dword[ebp-4]
-	mov edx, eax							;player in edx
-	mov eax, dword[eax+24]					;collider* in eax
+	push dword[eax+24]
+	call aabb4d_getPosition
+	add esp, 4
 	
-	
-	mov ecx, dword[START_POSITION]
-	mov dword[eax], ecx
-	mov dword[edx+36], ecx
-	
-	mov ecx, START_POSITION
-	mov ecx, dword[ecx+4]
-	mov dword[eax+4], ecx
-	mov dword[edx+40], ecx
-	
-	mov ecx, START_POSITION
-	mov ecx, dword[ecx+8]
-	mov dword[eax+8], ecx
-	mov dword[edx+44], ecx
+	push dword[eax]
+	push dword[eax+4]
+	push dword[eax+8]
+	push dword[eax+12]
+	mov eax, dword[ebp-4]
+	pop dword[eax+48]
+	pop dword[eax+44]
+	pop dword[eax+40]
+	pop dword[eax+36]
 	
 	;initialize hyperPlane stuff
 	mov eax, dword[ebp-4]
@@ -165,7 +170,7 @@ player_destroy:
 	push 69
 	mov eax, dword[ebp+8]
 	push dword[eax+24]
-	call physics_unregisterNonkinematic
+	call physics4d_unregisterNonkinematic
 	
 	;dealloc
 	push dword[ebp+8]
@@ -193,6 +198,7 @@ player_update:
 	pop ebp
 	ret
 	
+	
 player_updatePhysics:
 	push ebp
 	mov ebp, esp
@@ -204,7 +210,7 @@ player_updatePhysics:
 	
 	push dword[ebp+12]
 	push dword[ebp+8]
-	;call player_applyGravity
+	call player_applyGravity
 	add esp, 8
 	
 	mov esp, ebp
@@ -216,58 +222,86 @@ player_move:		;void player_move(player* player, float deltaTime)
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 12		;collider velocity
-	sub esp, 12		;forward vector scaled
-	sub esp, 12		;right vector scaled
-	sub esp, 12		;up vector scaled
+	sub esp, 16		;collider velocity					16
+	sub esp, 16		;forward vector scaled				32
+	sub esp, 16		;right vector scaled				48
+	sub esp, 16		;up vector scaled					64
 	
 	;copy collider velocity
-	mov eax, dword[ebp+8]		;player* in eax
-	mov eax, dword[eax+24]		;collider* in eax
-	mov dword[ebp-12], 0
-	mov ecx, dword[eax+36]
-	mov dword[ebp-8], ecx		;collider.velocity.y
+	mov eax, dword[ebp+8]
+	push dword[eax+24]
+	call aabb4d_getVelocity
+	add esp, 4
+	
+	mov ecx, dword[eax]
+	mov dword[ebp-16], ecx
+	mov ecx, dword[eax+4]
+	mov dword[ebp-12], ecx
+	mov ecx, dword[eax+8]
+	mov dword[ebp-8], ecx
 	mov ecx, dword[eax+12]
-	mov dword[ebp-4], 0
+	mov dword[ebp-4], ecx
 	
 	;get and scale forward
 	mov eax, dword[ebp+8]
 	mov eax, dword[eax]		;camera* in eax
-	lea ecx, [ebp-24]
+	lea ecx, [ebp-32]
 	
 	push ecx
 	push eax
 	call camera_forward
 	add esp, 8
 	
-	mov dword[ebp-20], 0		;zero the y component
-	lea ecx, [ebp-24]
+	mov dword[ebp-28], 0		;zero the y component
+	lea ecx, [ebp-32]
 	push ecx
 	call vec3_normalize
 	add esp, 4
 	
-	lea ecx, [ebp-24]
+	lea ecx, [ebp-32]
 	push dword[MOVEMENT_SPEED]
 	push ecx
 	push ecx
 	call vec3_scale
 	add esp, 12
 	
+	mov eax, dword[ebp+8]
+	push dword[eax+28]
+	call chunkManager4d_getHyperPlane
+	add esp, 4
+	lea ecx, [ebp-32]
+	push ecx
+	push ecx
+	push eax
+	call hyperPlane_directionTo4d
+	add esp, 12
+	
 	;get and scale right
 	mov eax, dword[ebp+8]
 	mov eax, dword[eax]		;camera* in eax
-	lea ecx, [ebp-36]
+	lea ecx, [ebp-48]
 	
 	push ecx
 	push eax
 	call camera_right
 	add esp, 8
 	
-	lea ecx, [ebp-36]
+	lea ecx, [ebp-48]
 	push dword[MOVEMENT_SPEED]
 	push ecx
 	push ecx
 	call vec3_scale
+	add esp, 12
+	
+	mov eax, dword[ebp+8]
+	push dword[eax+28]
+	call chunkManager4d_getHyperPlane
+	add esp, 4
+	lea ecx, [ebp-48]
+	push ecx
+	push ecx
+	push eax
+	call hyperPlane_directionTo4d
 	add esp, 12
 	
 	
@@ -277,12 +311,12 @@ player_move:		;void player_move(player* player, float deltaTime)
 	add esp, 4
 	test eax, eax
 	jz player_move_not_w
-		lea ecx, [ebp-12]		;&collider.velocity
-		lea edx, [ebp-24]		;&player_forward
+		lea ecx, [ebp-16]		;&collider.velocity
+		lea edx, [ebp-32]		;&player_forward
 		push edx
 		push ecx
 		push ecx
-		call vec3_add
+		call vec4_add
 		add esp, 12
 	player_move_not_w:
 	
@@ -291,12 +325,12 @@ player_move:		;void player_move(player* player, float deltaTime)
 	add esp, 4
 	test eax, eax
 	jz player_move_not_s
-		lea ecx, [ebp-12]		;&collider.velocity
-		lea edx, [ebp-24]		;&player_forward
+		lea ecx, [ebp-16]		;&collider.velocity
+		lea edx, [ebp-32]		;&player_forward
 		push edx
 		push ecx
 		push ecx
-		call vec3_sub
+		call vec4_sub
 		add esp, 12
 	player_move_not_s:
 	
@@ -305,12 +339,12 @@ player_move:		;void player_move(player* player, float deltaTime)
 	add esp, 4
 	test eax, eax
 	jz player_move_not_d
-		lea ecx, [ebp-12]		;&collider.velocity
-		lea edx, [ebp-36]		;&player_right
+		lea ecx, [ebp-16]		;&collider.velocity
+		lea edx, [ebp-48]		;&player_right
 		push edx
 		push ecx
 		push ecx
-		call vec3_add
+		call vec4_add
 		add esp, 12
 	player_move_not_d:
 	
@@ -319,16 +353,16 @@ player_move:		;void player_move(player* player, float deltaTime)
 	add esp, 4
 	test eax, eax
 	jz player_move_not_a
-		lea ecx, [ebp-12]		;&collider.velocity
-		lea edx, [ebp-36]		;&player_right
+		lea ecx, [ebp-16]		;&collider.velocity
+		lea edx, [ebp-48]		;&player_right
 		push edx
 		push ecx
 		push ecx
-		call vec3_sub
+		call vec4_sub
 		add esp, 12
 	player_move_not_a:
 	
-	mov dword[ebp-8], 0
+	mov dword[ebp-12], 0
 	
 	push dword[GLFW_KEY_SPACE]
 	call input_keyHeld
@@ -336,9 +370,9 @@ player_move:		;void player_move(player* player, float deltaTime)
 	test eax, eax
 	jz player_move_not_space
 		movss xmm0, dword[MOVEMENT_SPEED]
-		movss xmm1, dword[ebp-8]
+		movss xmm1, dword[ebp-12]
 		addss xmm1, xmm0
-		movss dword[ebp-8], xmm1
+		movss dword[ebp-12], xmm1
 	player_move_not_space:
 	
 	
@@ -348,34 +382,45 @@ player_move:		;void player_move(player* player, float deltaTime)
 	test eax, eax
 	jz player_move_not_left_shift
 		movss xmm0, dword[MOVEMENT_SPEED]
-		movss xmm1, dword[ebp-8]
+		movss xmm1, dword[ebp-12]
 		subss xmm1, xmm0
-		movss dword[ebp-8], xmm1
+		movss dword[ebp-12], xmm1
 	player_move_not_left_shift:
 	
 	
 	;copy back the values into player.collider.velocity
 	mov eax, dword[ebp+8]
-	mov eax, dword[eax+24]
+	push dword[eax+24]
+	call aabb4d_getVelocity
+	add esp, 4
 	
+	mov ecx, dword[ebp-16]
+	mov dword[eax], ecx
 	mov ecx, dword[ebp-12]
-	mov dword[eax+32], ecx
+	mov dword[eax+4], ecx
 	mov ecx, dword[ebp-8]
-	mov dword[eax+36], ecx
+	mov dword[eax+8], ecx
 	mov ecx, dword[ebp-4]
-	mov dword[eax+40], ecx
+	mov dword[eax+12], ecx
 	
 	;update the position of the camera
 	mov eax, dword[ebp+8]
-	mov edx, dword[eax]			;&player.camera
-	mov eax, dword[eax+24]		;&player.collider.position in eax
+	push dword[eax+24]
+	call aabb4d_getPosition
+	add esp, 4
 	
-	mov ecx, dword[eax]
-	mov dword[edx], ecx
-	mov ecx, dword[eax+4]
-	mov dword[edx+4], ecx
-	mov ecx, dword[eax+8]
-	mov dword[edx+8], ecx
+	mov ecx, dword[ebp+8]
+	push dword[ecx]
+	push eax
+	
+	mov ecx, dword[ebp+8]
+	push dword[ecx+28]
+	call chunkManager4d_getHyperPlane
+	add esp, 4
+	push eax
+	
+	call hyperPlane_positionTo3d
+	
 	
 	mov esp, ebp
 	pop ebp
@@ -392,11 +437,12 @@ player_applyGravity:
 	mulss xmm1, xmm0
 	
 	mov eax, dword[ebp+8]
-	mov eax, dword[eax+24]
-	movss xmm0, dword[eax+36]	;player.collider.velocity.y
+	push dword[eax+24]
+	call aabb4d_getVelocity
+	movss xmm0, dword[eax+4]	;player.collider.velocity.y
 	
 	addss xmm0, xmm1
-	movss dword[eax+36], xmm0
+	movss dword[eax+4], xmm0
 	
 	mov esp, ebp
 	pop ebp
@@ -455,7 +501,7 @@ player_look:		;void player_look(player* pplayer, float deltaTime)
 	mov dword[eax+20], ecx
 	
 	;set the values of the camera as well
-	mov eax, dword[ebp+8]		;player* in eax
+	mov eax, dword[ebp+8]			;player* in eax
 	mov eax, dword[eax]			;camera* in eax
 	
 	mov ecx, dword[ebp-4]
@@ -509,23 +555,25 @@ player_rotatePlane:
 	;the hyperplane's new center is the players position in 4d, which is the players movement since the last rotation event
 	mov eax, dword[ebp+8]
 	push dword[eax+24]
-	call collider_getPosition
-	add esp, 4
+	call aabb4d_getPosition
+	push eax					;save aabb.position
 	
 	mov ecx, dword[ebp+8]
-	mov ecx, dword[ecx+28]
-	add ecx, 32					;hyperplane
-	push eax
-	push ecx
-	call hyperPlane_moveInsideOfPlane
+	push dword[ecx+28]
+	call chunkManager4d_getHyperPlane
 	add esp, 4
-	pop eax
+	pop ecx						;restore aabb.position
 	
-	;set the collider's and camera's position to 0, as the new center of the 3D space is the player
-	mov dword[eax], 0
-	mov dword[eax+4], 0
-	mov dword[eax+8], 0
+	mov edx, dword[ecx]
+	mov dword[eax], edx
+	mov edx, dword[ecx+4]
+	mov dword[eax+4], edx
+	mov edx, dword[ecx+8]
+	mov dword[eax+8], edx
+	mov edx, dword[ecx+12]
+	mov dword[eax+12], edx
 	
+	;set the camera's position to 0, as the new center of the 3D space is the player
 	mov ecx, dword[ebp+8]
 	mov ecx, dword[ecx]
 	mov dword[ecx], 0
@@ -538,8 +586,9 @@ player_rotatePlane:
 	push HYPERPLANE_ROTATION_VECTOR_2
 	push HYPERPLANE_ROTATION_VECTOR_1
 	mov eax, dword[ebp+8]
-	mov eax, dword[eax+28]
-	add eax, 32
+	push dword[eax+28]
+	call chunkManager4d_getHyperPlane
+	add esp, 4
 	push eax
 	call hyperPlane_rotate
 	add esp, 16

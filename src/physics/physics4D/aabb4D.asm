@@ -39,6 +39,9 @@ section .text use32
 	global aabb4d_create							;Aabb4D* aabb4d_create(vec4* position, vec4* scale)
 	global aabb4d_destroy							;void aabb4d_destroy(Aabb4D* collider)
 	
+	global aabb4d_getPosition						;vec4* aabb4d_getPosition(Aabb4D* collider)
+	global aabb4d_getVelocity						;vec4* aabb4d_getVelocity(Aabb4D* collider)
+	
 	;returns non-zero if there was a collision
 	;sets the lastCollision and lastCollisionDetection variables if there was a collision
 	;the resolutionDirection points in the direction in which the c1 should be moved
@@ -110,6 +113,16 @@ aabb4d_destroy:
 	push eax
 	call my_free
 	add esp, 4
+	ret
+	
+	
+aabb4d_getPosition:
+	mov eax, dword[esp+4]
+	ret
+	
+aabb4d_getVelocity:
+	mov eax, dword[esp+4]
+	add eax, 32
 	ret
 	
 	

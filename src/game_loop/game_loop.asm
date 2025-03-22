@@ -178,13 +178,9 @@ section .text use32
 	extern WINDOW_SIZE_X
 	extern WINDOW_SIZE_Y
 	
-	extern collider_init
-	extern collider_deinit
-	extern physics_init
-	extern physics_deinit
-	extern physics_update
-	extern physics_registerNonkinematic
-	extern physics_registerKinematic
+	extern physics4d_init
+	extern physics4d_deinit
+	extern physics4d_update
 	
 	extern thread_create
 	extern thread_join
@@ -246,8 +242,7 @@ game_loop:
 	add esp, 12
 	
 	;init physics
-	call collider_init
-	call physics_init
+	call physics4d_init
 	
 	
 	;init camera
@@ -447,8 +442,7 @@ game_loop:
 	call renderable_deinit
 	
 	;deinit physics
-	call physics_deinit
-	call collider_deinit
+	call physics4d_deinit
 	
 	;destroy should_close
 	push dword[should_close]
@@ -509,7 +503,7 @@ gameLoop_physics:
 		
 		;call physics_update
 		push dword[ebp-12]
-		call physics_update
+		call physics4d_update
 		add esp, 4
 		
 		;update player
