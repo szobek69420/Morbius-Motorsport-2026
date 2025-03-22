@@ -36,7 +36,11 @@ section .rodata use32
 	CHUNK_HEIGHT_MAP_SCALE dd 20.0
 	CHUNK_HEIGHT_MAP_BASE dd 80.0
 	
+	AABB_SCALE dd 0.5, 0.5, 0.5, 0.5
+	
 	print_int_nl db "%d",10,0
+	
+	test_text db "stalinkin park",10,0
 	
 section .text use32
 
@@ -53,16 +57,33 @@ section .text use32
 	extern vector_destroy
 	extern vector_push_back
 	
+	extern vec4_add
+	
 	extern BLOCK_AIR
 	extern BLOCK_STONE
 	
+	extern aabb4d_create
+	extern aabb4d_getPosition
+	extern colliderGroup4d_create
+	extern colliderGroup4d_destroy
+	extern colliderGroup4d_addCollider
+	extern colliderGroup4d_printInfo
+	extern physics4d_registerColliderGroup
+	extern physics4d_unregisterColliderGroup
 	
 chunk4d_destroy:
 	push ebp
 	mov ebp, esp
 	
-	;TODO: destroy collider group
+	;NOTE: renderable is not destroyed here as it wasn't created here
 	
+	;yeet cg
+	mov eax, dword[ebp+8]
+	push 69						;should destroy
+	push dword[eax+16]
+	call physics4d_unregisterColliderGroup
+	
+	;dealloc chunk
 	push dword[ebp+8]
 	call my_free
 	
@@ -90,6 +111,10 @@ chunk4d_generate:
 	sub esp, 16				;hyperplane normal					32	
 
 	sub esp, 16				;vertex vector						48
+	
+	sub esp, 4				;collider group						52
+	sub esp, 4				;is block visible					56
+	sub esp, 16				;chunk position as floats			72
 	
 	;alloc space for chunk
 	push 64
@@ -199,6 +224,12 @@ chunk4d_generate:
 	call vector_init
 	add esp, 8
 	
+	;create collider group
+	call colliderGroup4d_create
+	mov dword[ebp-52], eax				;save the collider group as a local variable for easier access
+	mov ecx, dword[ebp-4]
+	mov dword[ecx+16], eax				;save it in the chunk as well
+	
 	;calculate mesh
 	mov esi, dword[ebp-12]
 	add esi, dword[CHUNK_BLOCK_COUNT]
@@ -221,6 +252,8 @@ chunk4d_generate:
 					;is the block air?
 					cmp byte[esi], 0
 					je chunk4d_generate_mesh_w_loop_continue
+					
+					mov dword[ebp-56], 0		;block is not yet visible
 				
 					;calculate current (chunk local) block position
 					sub esp, 16				;current block position
@@ -274,6 +307,8 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
+						mov dword[ebp-56], 69			;block is visible
+						
 						add esp, 8
 					chunk4d_generate_mesh_not_pos_x:
 					
@@ -303,6 +338,8 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
+						mov dword[ebp-56], 69			;block is visible
+						
 						add esp, 8
 					chunk4d_generate_mesh_not_neg_x:
 					
@@ -329,6 +366,8 @@ chunk4d_generate:
 						mov eax, 0x00000002
 						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
+						
+						mov dword[ebp-56], 69			;block is visible
 						
 						add esp, 8
 					chunk4d_generate_mesh_not_pos_y:
@@ -359,6 +398,8 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
+						mov dword[ebp-56], 69			;block is visible
+						
 						add esp, 8
 					chunk4d_generate_mesh_not_neg_y:
 					
@@ -385,6 +426,8 @@ chunk4d_generate:
 						mov eax, 0x00000004
 						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
+						
+						mov dword[ebp-56], 69			;block is visible
 						
 						add esp, 8
 					chunk4d_generate_mesh_not_pos_z:
@@ -415,6 +458,8 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
+						mov dword[ebp-56], 69			;block is visible
+						
 						add esp, 8
 					chunk4d_generate_mesh_not_neg_z:
 					
@@ -440,6 +485,8 @@ chunk4d_generate:
 						mov eax, 0x00000006
 						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
+						
+						mov dword[ebp-56], 69			;block is visible
 						
 						add esp, 8
 						
@@ -468,8 +515,25 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
+						mov dword[ebp-56], 69			;block is visible
+						
 						add esp, 8
 					chunk4d_generate_mesh_not_neg_w:
+					
+					;add an aabb if the block is visible
+					;the aabbs sind local to the chunk yet
+					cmp dword[ebp-56], 0
+					je chunk4d_generate_mesh_no_aabb
+						mov eax, esp
+						push AABB_SCALE
+						push eax
+						call aabb4d_create
+						push eax
+						push dword[ebp-52]
+						call colliderGroup4d_addCollider
+						add esp, 16
+					
+					chunk4d_generate_mesh_no_aabb:
 					
 					add esp, 16				;release current block position
 					
@@ -539,7 +603,69 @@ chunk4d_generate:
 	call my_free
 	add esp, 4
 	
-	;TODO: create collider group
+	;calculate the chunk's position
+	fild dword[CHUNK_WIDTH]
+	fild dword[ebp+20]
+	fmulp
+	fstp dword[ebp-72]
+	
+	mov dword[ebp-68], 0
+	
+	fild dword[CHUNK_WIDTH]
+	fild dword[ebp+24]
+	fmulp
+	fstp dword[ebp-64]
+	
+	fild dword[CHUNK_WIDTH]
+	fild dword[ebp+28]
+	fmulp
+	fstp dword[ebp-60]
+	
+	;translate the collider group by the position of the chunk
+	;as the current position and bound values are local to the chunk
+	mov eax, dword[ebp-52]
+	lea eax, [eax+16]
+	lea ecx, [ebp-72]
+	push ecx
+	push eax
+	push eax
+	call vec4_add
+	mov eax, dword[ebp-52]
+	lea eax, [eax+32]
+	mov dword[esp+4], eax
+	mov dword[esp], eax
+	call vec4_add
+	
+	mov eax, dword[ebp-52]
+	mov esi, dword[eax+12]			;colliders in esi
+	mov edi, dword[eax]			;index in edi
+	test edi, edi
+	jz chunk4d_generate_translate_colliders_loop_end
+	lea eax, [ebp-72]
+	push eax						;pre-push chunk position
+	chunk4d_generate_translate_colliders_loop_start:
+		mov ebx, dword[esi]			;collider in ebx
+		
+		push ebx
+		call aabb4d_getPosition
+		add esp, 4
+		
+		push eax
+		push eax
+		call vec4_add
+		add esp, 8
+	
+		add esi, 4
+		dec edi
+		test edi, edi
+		jnz chunk4d_generate_translate_colliders_loop_start
+	
+	chunk4d_generate_translate_colliders_loop_end:
+	
+	;register the collider group in the physics	
+	push dword[ebp-52]
+	call physics4d_registerColliderGroup
+	add esp, 4
 	
 	;set return value
 	mov eax, dword[ebp-4]

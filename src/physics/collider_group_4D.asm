@@ -10,6 +10,11 @@
 section .rodata use32
 	NEGATIVE_INFINITY dd 0xff800000
 	POSITIVE_INFINITY dd 0x7f800000
+	
+	printInfo_header db "Collider group:",10,0
+	printInfo_collider_count db "Collider count: %d",10,0
+	printInfo_lower_bound db "Lower bound: ",0
+	printInfo_upper_bound db "Upper bound: ",0
 
 section .text use32
 	
@@ -22,7 +27,9 @@ section .text use32
 	
 	global colliderGroup4d_resolveCollision	;void colliderGroup4d_resolveCollision(ColliderGroup4D* cg, Aabb4D* nonkinematic)
 	
+	global colliderGroup4d_printInfo		;void colliderGroup4d_printInfo(ColliderGroup4D* cg)
 	
+	extern my_printf
 	extern my_malloc
 	extern my_free
 	
@@ -33,6 +40,7 @@ section .text use32
 	
 	extern vec4_add
 	extern vec4_sub
+	extern vec4_print
 	
 	extern aabb4d_resolveKinematicNonkinematic
 	extern aabb4d_destroy
@@ -59,14 +67,14 @@ colliderGroup4d_create:
 	mov eax, dword[ebp-4]
 	mov ecx, dword[NEGATIVE_INFINITY]
 	mov edx, dword[POSITIVE_INFINITY]
-	mov dword[eax+16], ecx
-	mov dword[eax+20], ecx
-	mov dword[eax+24], ecx
-	mov dword[eax+28], ecx
-	mov dword[eax+32], edx
-	mov dword[eax+36], edx
-	mov dword[eax+40], edx
-	mov dword[eax+44], edx
+	mov dword[eax+16], edx
+	mov dword[eax+20], edx
+	mov dword[eax+24], edx
+	mov dword[eax+28], edx
+	mov dword[eax+32], ecx
+	mov dword[eax+36], ecx
+	mov dword[eax+40], ecx
+	mov dword[eax+44], ecx
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -142,7 +150,7 @@ colliderGroup4d_addCollider:
 	push eax
 	call vec4_sub
 	lea eax, [ebp-32]
-	push eax
+	mov dword[esp], eax
 	call vec4_add
 	add esp, 12
 	
@@ -235,14 +243,14 @@ colliderGroup4d_recalculateBounds:
 	mov eax, dword[ebp-4]
 	mov ecx, dword[NEGATIVE_INFINITY]
 	mov edx, dword[POSITIVE_INFINITY]
-	mov dword[eax+16], ecx
-	mov dword[eax+20], ecx
-	mov dword[eax+24], ecx
-	mov dword[eax+28], ecx
-	mov dword[eax+32], edx
-	mov dword[eax+36], edx
-	mov dword[eax+40], edx
-	mov dword[eax+44], edx
+	mov dword[eax+16], edx
+	mov dword[eax+20], edx
+	mov dword[eax+24], edx
+	mov dword[eax+28], edx
+	mov dword[eax+32], ecx
+	mov dword[eax+36], ecx
+	mov dword[eax+40], ecx
+	mov dword[eax+44], ecx
 	
 	;calculate the bounds
 	cmp dword[eax], 0
@@ -354,7 +362,7 @@ colliderGroup4d_resolveCollision:
 	push eax
 	call vec4_sub
 	lea eax, [ebp-32]
-	push eax
+	mov dword[esp], eax
 	call vec4_add
 	add esp, 12
 	
@@ -386,6 +394,7 @@ colliderGroup4d_resolveCollision:
 	ucomiss xmm0, dword[eax+28]
 	jbe colliderGroup4d_resolveCollision_end
 	
+	
 	;resolve collision
 	mov eax, dword[ebp+16]
 	mov esi, dword[eax+12]			;current collider in esi
@@ -396,6 +405,7 @@ colliderGroup4d_resolveCollision:
 		push dword[ebp+20]
 		push dword[esi]
 		call aabb4d_resolveKinematicNonkinematic
+		add esp, 8
 		
 		add esi, 4
 		dec edi
@@ -407,5 +417,36 @@ colliderGroup4d_resolveCollision:
 	mov esp, ebp
 	pop edi
 	pop esi
+	pop ebp
+	ret
+	
+	
+colliderGroup4d_printInfo:
+	push ebp
+	mov ebp, esp
+	
+	push printInfo_header
+	call my_printf
+	
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	push printInfo_collider_count
+	call my_printf
+	
+	push printInfo_lower_bound
+	call my_printf
+	mov eax, dword[ebp+8]
+	add eax, 16
+	push eax
+	call vec4_print
+	
+	push printInfo_upper_bound
+	call my_printf
+	mov eax, dword[ebp+8]
+	add eax, 32
+	push eax
+	call vec4_print
+	
+	mov esp, ebp
 	pop ebp
 	ret
