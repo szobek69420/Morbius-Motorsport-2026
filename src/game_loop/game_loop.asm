@@ -25,6 +25,11 @@ section .rodata use32
 	P15 dd 0.15
 	P6 dd 0.6
 	
+	SKY_COLOUR_R dd 0.5294
+	SKY_COLOUR_G dd 0.8078
+	SKY_COLOUR_B dd 0.9215
+	SKY_COLOUR_A dd 1.0
+	
 	test_text db "OTTO VON BISMARCK",0
 	test_text2 db "hello everybody my name is welcome",10,0
 	print_int_nl db "%d",10,0
@@ -356,10 +361,10 @@ game_loop:
 		add esp, 8
 	
 		;set clear color
-		push dword[ONE]
-		push dword[P6]
-		push dword[ZERO]
-		push dword[P15]
+		push dword[SKY_COLOUR_A]
+		push dword[SKY_COLOUR_B]
+		push dword[SKY_COLOUR_G]
+		push dword[SKY_COLOUR_R]
 		call [glClearColor]
 		
 		
