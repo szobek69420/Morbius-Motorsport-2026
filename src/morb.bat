@@ -5,23 +5,15 @@ nasm -fobj window/window.asm -o build/window.o
 nasm -fobj game_loop/game_loop.asm -o build/game_loop.o
 nasm -fobj world/chunk_manager4d.asm -o build/chunk_manager4d.o
 nasm -fobj world/chunk4d.asm -o build/chunk4d.o
-nasm -fobj world/chunk_manager.asm -o build/chunk_manager.o
-nasm -fobj world/chunk_tesseract.asm -o build/chunk_tesseract.o
-nasm -fobj world/chunk.asm -o build/chunk.o
 nasm -fobj world/block.asm -o build/block.o
 nasm -fobj camera/camera.asm -o build/camera.o
 nasm -fobj input/input.asm -o build/input.o
 nasm -fobj glfw/glfw.asm -o build/glfw.o
 nasm -fobj opengl/opengl.asm -o build/opengl.o
 nasm -fobj shader/shader.asm -o build/shader.o
-nasm -fobj physics/physics4D/physics4D.asm -o build/physics4D.o
-nasm -fobj physics/physics4D/collider_group_4D.asm -o build/collider_group_4D.o
-nasm -fobj physics/physics4D/aabb4D.asm -o build/aabb4D.o
-nasm -fobj physics/physics3D/physics.asm -o build/physics.o
-nasm -fobj physics/physics3D/collision_detection.asm -o build/collision_detection.o
-nasm -fobj physics/physics3D/colliders/mesh_collider.asm -o build/mesh_collider.o
-nasm -fobj physics/physics3D/colliders/cylinder_collider.asm -o build/cylinder_collider.o
-nasm -fobj physics/physics3D/colliders/collider.asm -o build/collider.o
+nasm -fobj physics/physics4D.asm -o build/physics4D.o
+nasm -fobj physics/collider_group_4D.asm -o build/collider_group_4D.o
+nasm -fobj physics/aabb4D.asm -o build/aabb4D.o
 nasm -fobj utils/qsort.asm -o build/qsort.o
 nasm -fobj utils/thread_safe_queue.asm -o build/thread_safe_queue.o
 nasm -fobj utils/thread_safe_value.asm -o build/thread_safe_value.o
@@ -50,9 +42,6 @@ build/player.o ^
 build/game_loop.o ^
 build/chunk_manager4d.o ^
 build/chunk4d.o ^
-build/chunk_manager.o ^
-build/chunk_tesseract.o ^
-build/chunk.o ^
 build/block.o ^
 build/camera.o ^
 build/input.o ^
@@ -68,11 +57,6 @@ build/player.o ^
 build/physics4D.o ^
 build/collider_group_4D.o ^
 build/aabb4D.o ^
-build/physics.o ^
-build/collision_detection.o ^
-build/mesh_collider.o ^
-build/cylinder_collider.o ^
-build/collider.o ^
 build/hyperplane.o ^
 build/mat4.o ^
 build/mat3.o ^
