@@ -42,6 +42,7 @@ section .rodata use32
 	text_point db "Hyperplane point",0
 	text_based_vectors db "Hyperplane based vectors",0
 	print_vec4 db "(%f; %f; %f; %f)",0
+	text_player_pos_4d db "Player position",0
 	text_player_pos db "Player position in plane",0
 	print_vec3 db "(%f; %f; %f)",0
 	
@@ -178,6 +179,7 @@ section .text use32
 	extern WINDOW_SIZE_X
 	extern WINDOW_SIZE_Y
 	
+	extern aabb4d_getPosition
 	extern physics4d_init
 	extern physics4d_deinit
 	extern physics4d_update
@@ -736,8 +738,27 @@ gameLoop_drawData:
 	lea eax, [ebp-100]
 	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 115
 	
-	;draw player position
-	render_text text_player_pos, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 135
+	;draw player position 4d and 3d
+	render_text text_player_pos_4d, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 135
+	
+	mov eax, dword[pplayer]
+	push dword[eax+24]
+	call aabb4d_getPosition
+	add esp, 4
+	push dword[eax+12]
+	push dword[eax+8]
+	push dword[eax+4]
+	push dword[eax]
+	push print_vec4
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 24
+	lea eax, [ebp-100]
+	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 150
+	
+	
+	render_text text_player_pos, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 170
 	
 	mov eax, camera
 	push dword[eax+8]
@@ -749,7 +770,7 @@ gameLoop_drawData:
 	call my_sprintf
 	add esp, 20
 	lea eax, [ebp-100]
-	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 155
+	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 185
 	
 	;draw render distance
 	push dword[render_distance]

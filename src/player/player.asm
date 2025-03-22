@@ -210,7 +210,7 @@ player_updatePhysics:
 	
 	push dword[ebp+12]
 	push dword[ebp+8]
-	call player_applyGravity
+	;call player_applyGravity
 	add esp, 8
 	
 	mov esp, ebp
@@ -227,20 +227,17 @@ player_move:		;void player_move(player* player, float deltaTime)
 	sub esp, 16		;right vector scaled				48
 	sub esp, 16		;up vector scaled					64
 	
-	;copy collider velocity
+	;copy collider velocity y
 	mov eax, dword[ebp+8]
 	push dword[eax+24]
 	call aabb4d_getVelocity
 	add esp, 4
 	
-	mov ecx, dword[eax]
-	mov dword[ebp-16], ecx
+	mov dword[ebp-16], 0
 	mov ecx, dword[eax+4]
 	mov dword[ebp-12], ecx
-	mov ecx, dword[eax+8]
-	mov dword[ebp-8], ecx
-	mov ecx, dword[eax+12]
-	mov dword[ebp-4], ecx
+	mov dword[ebp-8], 0
+	mov dword[ebp-4], 0
 	
 	;get and scale forward
 	mov eax, dword[ebp+8]

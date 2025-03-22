@@ -190,8 +190,7 @@ hyperPlane_directionTo3d:
 	mov eax, dword[ebp+8]
 	add eax, 16
 	push eax
-	mov ecx, dword[ebp+12]
-	push ecx
+	push dword[ebp+12]
 	call vec4_dot
 	fstp dword[ebp-12]
 	
@@ -199,17 +198,15 @@ hyperPlane_directionTo3d:
 	mov eax, dword[ebp+8]
 	add eax, 32
 	push eax
-	mov ecx, dword[ebp+12]
-	push ecx
+	push dword[ebp+12]
 	call vec4_dot
 	fstp dword[ebp-8]
 	
 	;z component
 	mov eax, dword[ebp+8]
-	add eax, 32
+	add eax, 48
 	push eax
-	mov ecx, dword[ebp+12]
-	push ecx
+	push dword[ebp+12]
 	call vec4_dot
 	fstp dword[ebp-4]
 	
