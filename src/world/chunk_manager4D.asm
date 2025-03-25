@@ -1148,16 +1148,11 @@ chunkManager4d_frustumCull:
 		call vec4_mulWithMat
 		add esp, 8
 		
-		movss xmm0, dword[ONE]
+		movups xmm0, [ebp-96]
 		movss xmm1, dword[ebp-84]
-		divss xmm0, xmm1
-		sub esp, 4
-		movss dword[esp], xmm0
-		lea eax, [ebp-96]
-		push eax
-		push eax
-		call vec4_scale
-		add esp, 12
+		shufps xmm1, xmm1, 0b00000000
+		divps xmm0, xmm1
+		movups [ebp-96], xmm0
 		
 		;do frustum culling
 		movss xmm0, dword[ebp-96]

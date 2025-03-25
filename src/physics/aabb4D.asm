@@ -32,6 +32,7 @@ section .rodata use32
 	
 	HALF dd 0.5
 	ONE dd 1.0
+	MINUS_ONE dd -1.0
 	VERY_BIG_NUMBER dd 69420.69420
 	
 	test_text db "cardiac house arrest",10,0
@@ -61,6 +62,8 @@ section .text use32
 	extern vec4_add
 	extern vec4_sub
 	extern vec4_scale
+	extern vec4_normalize
+	extern vec4_dot
 	
 aabb4d_create:
 	push ebp
@@ -134,7 +137,9 @@ aabb4d_resolveKinematicNonkinematic:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 16					;resolution direction
+	sub esp, 16					;resolution direction											16
+	sub esp, 4					;<normalize(resolution direction); nonkinematic.velocity>		20
+	sub esp, 16					;velocity loss													36
 	
 	lea eax, [ebp-16]
 	push eax
@@ -145,11 +150,39 @@ aabb4d_resolveKinematicNonkinematic:
 	test eax, eax
 	jz aabb4d_resolveKinematicNonkinematic_end		;no collision happened
 	
+	;update position
 	lea eax, [ebp-16]
 	push eax
 	push dword[ebp+12]
 	push dword[ebp+12]
 	call vec4_add
+	
+	;change velocity if necessary
+	lea eax, [ebp-16]
+	push eax
+	call vec4_normalize
+	mov eax, dword[ebp+12]
+	add eax, 32
+	push eax
+	call vec4_dot
+	fstp dword[ebp-20]
+	
+	test dword[ebp-20], 0x80000000
+	jz aabb4d_resolveKinematicNonkinematic_end		;if the dot product is positive, then the velocity should not be tampered with
+	
+	push dword[ebp-20]
+	lea eax, [ebp-16]
+	push eax
+	lea eax, [ebp-36]
+	push eax
+	call vec4_scale
+	
+	mov eax, dword[ebp+12]
+	add eax, 32
+	push eax
+	push eax
+	call vec4_sub
+	
 	
 	aabb4d_resolveKinematicNonkinematic_end:
 	mov esp, ebp
@@ -160,7 +193,9 @@ aabb4d_resolveNonkinematicNonkinematic:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 16					;resolution direction
+	sub esp, 16					;resolution direction											16
+	sub esp, 4					;<normalize(resolution direction); nonkinematic.velocity>		20
+	sub esp, 16					;velocity loss													36
 	
 	lea eax, [ebp-16]
 	push eax
@@ -171,6 +206,7 @@ aabb4d_resolveNonkinematicNonkinematic:
 	test eax, eax
 	jz aabb4d_resolveNonkinematicNonkinematic_end		;no collision happened
 	
+	;change positions
 	lea eax, [ebp-16]
 	push dword[HALF]
 	push eax
@@ -188,6 +224,64 @@ aabb4d_resolveNonkinematicNonkinematic:
 	push dword[ebp+12]
 	push dword[ebp+12]
 	call vec4_sub
+	
+	;change velocities
+	lea eax, [ebp-16]
+	push eax
+	call vec4_normalize
+	add esp, 4
+	
+	;is changing c1.velocity necessary?
+	lea eax, [ebp-16]
+	push eax
+	mov eax, dword[ebp+8]
+	add eax, 32
+	push eax
+	call vec4_dot
+	fstp dword[ebp-20]
+	test dword[ebp-20], 0x80000000
+	jz aabb4d_resolveNonkinematicNonkinematic_no_c1_velocity_change
+	
+		push dword[ebp-20]
+		lea eax, [ebp-16]
+		push eax
+		lea eax, [ebp-36]
+		push eax
+		call vec4_scale
+		
+		mov eax, dword[ebp+8]
+		add eax, 32
+		push eax
+		push eax
+		call vec4_sub
+	
+	aabb4d_resolveNonkinematicNonkinematic_no_c1_velocity_change:
+	
+	;is changing c2.velocity necessary?
+	lea eax, [ebp-16]
+	push eax
+	mov eax, dword[ebp+12]
+	add eax, 32
+	push eax
+	call vec4_dot
+	fstp dword[ebp-20]
+	test dword[ebp-20], 0x80000000
+	jnz aabb4d_resolveNonkinematicNonkinematic_no_c2_velocity_change
+	
+		push dword[ebp-20]
+		lea eax, [ebp-16]
+		push eax
+		lea eax, [ebp-36]
+		push eax
+		call vec4_scale
+		
+		mov eax, dword[ebp+12]
+		add eax, 32
+		push eax
+		push eax
+		call vec4_sub
+	
+	aabb4d_resolveNonkinematicNonkinematic_no_c2_velocity_change:
 	
 	aabb4d_resolveNonkinematicNonkinematic_end:
 	mov esp, ebp
@@ -357,8 +451,7 @@ aabb4d_detectCollisionInternal:
 	jae aabb4d_detectCollisionInternal_not_neg_x
 		movss dword[ebp-72], xmm1
 		
-		mov eax, dword[ONE]
-		xor eax, 0x80000000
+		mov eax, dword[MINUS_ONE]
 		mov dword[ebp-88], eax
 		mov dword[ebp-84], 0
 		mov dword[ebp-80], 0
@@ -377,8 +470,7 @@ aabb4d_detectCollisionInternal:
 	jae aabb4d_detectCollisionInternal_not_neg_y
 		movss dword[ebp-72], xmm1
 		
-		mov eax, dword[ONE]
-		xor eax, 0x80000000
+		mov eax, dword[MINUS_ONE]
 		mov dword[ebp-88], 0
 		mov dword[ebp-84], eax
 		mov dword[ebp-80], 0
@@ -397,8 +489,7 @@ aabb4d_detectCollisionInternal:
 	jae aabb4d_detectCollisionInternal_not_neg_z
 		movss dword[ebp-72], xmm1
 		
-		mov eax, dword[ONE]
-		xor eax, 0x80000000
+		mov eax, dword[MINUS_ONE]
 		mov dword[ebp-88], 0
 		mov dword[ebp-84], 0
 		mov dword[ebp-80], eax
@@ -417,8 +508,7 @@ aabb4d_detectCollisionInternal:
 	jae aabb4d_detectCollisionInternal_not_neg_w
 		movss dword[ebp-72], xmm1
 		
-		mov eax, dword[ONE]
-		xor eax, 0x80000000
+		mov eax, dword[MINUS_ONE]
 		mov dword[ebp-88], 0
 		mov dword[ebp-84], 0
 		mov dword[ebp-80], 0
@@ -438,7 +528,7 @@ aabb4d_detectCollisionInternal:
 	call vec4_scale
 	add esp, 12
 	
-	;set the collider tags
+	;set the collision directions
 	mov eax, dword[ebp+8]
 	mov ecx, dword[ebp-92]
 	or dword[eax+56], ecx
