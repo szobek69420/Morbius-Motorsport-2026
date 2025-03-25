@@ -47,7 +47,9 @@ section .rodata use32
 	print_float_nl db "%f",10,0
 	print_four_floats_nl db "%f %f %f %f",10,0
 	
+	ZERO dd 0.0
 	ONE dd 1.0
+	MINUS_ONE dd -1.0
 	MINUS_SIXTEEN dd -16.0
 	
 section .text use32
@@ -85,6 +87,7 @@ section .text use32
 	
 	extern hyperPlane_create
 	extern hyperPlane_getNormal
+	extern hyperPlane_positionTo3d
 	
 	extern mutex_create
 	extern mutex_destroy
@@ -314,13 +317,14 @@ chunkManager4d_render:
 		je chunkManager4d_render_loop_continue
 		
 		;do frustum culling
+		push dword[ebp-24]			;hyperplane
 		push dword[ebp+20]			;pv
 		push dword[ebp-20]			;E
 		lea eax, [ebp-16]
 		push eax					;normal
 		push dword[edi]
 		call chunkManager4d_frustumCull
-		add esp, 16
+		add esp, 20
 		test eax, eax
 		jnz chunkManager4d_render_loop_continue
 		
@@ -978,6 +982,7 @@ chunkManager4d_getPlayerChunk:
 ;	vec4* hyperPlaneNormal,
 ;	float hyperPlaneEquationE,
 ;	mat4* pv
+;	HyperPlane* hp
 ;)
 chunkManager4d_frustumCull:
 	push ebp
@@ -993,7 +998,11 @@ chunkManager4d_frustumCull:
 	sub esp, 4				;are all distances negative helper	36
 	sub esp, 4				;are all distances positive helper	40
 	sub esp, 4				;temp distance						44
-	
+	sub esp, 16				;lower bound 3d						60
+	sub esp, 16				;upper bound 3d						76
+	sub esp, 4				;cull mask 3d						80
+	sub esp, 16				;current 3d vector					96
+
 	mov dword[ebp-4], 0
 	
 	mov dword[ebp-36], 0x80000000			;the sign bit needs to be 1 initially
@@ -1084,7 +1093,117 @@ chunkManager4d_frustumCull:
 	test eax, 0x80000000
 	jz chunkManager4d_frustumCull_not_outside_of_plane
 		mov dword[ebp-4], 69
+		jmp chunkManager4d_frustumCull_end
+		
 	chunkManager4d_frustumCull_not_outside_of_plane:
+	
+	;calculate the 3d projection of the bounds
+	lea eax, [ebp-60]
+	push eax
+	push dword[ebp-12]
+	push dword[ebp+32]
+	call hyperPlane_positionTo3d
+	lea eax, [ebp-76]
+	push eax
+	push dword[ebp-16]
+	push dword[ebp+32]
+	call hyperPlane_positionTo3d
+	add esp, 24
+	
+	
+	;3d frustum culling
+	mov dword[ebp-80], 0b111111		;init cull mask
+	
+	xor esi, esi				;index in esi
+	chunkManager4d_frustumCull_3d_loop_start:
+		;obtain the current bounding box vertex
+		mov eax, dword[ebp-60]
+		test esi, 0b001
+		jz chunkManager4d_frustumCull_3d_loop_not_upper_x
+			mov eax, dword[ebp-76]
+		chunkManager4d_frustumCull_3d_loop_not_upper_x:
+		mov dword[ebp-96], eax
+		
+		mov eax, dword[ebp-56]
+		test esi, 0b010
+		jz chunkManager4d_frustumCull_3d_loop_not_upper_y
+			mov eax, dword[ebp-72]
+		chunkManager4d_frustumCull_3d_loop_not_upper_y:
+		mov dword[ebp-92], eax
+		
+		mov eax, dword[ebp-52]
+		test esi, 0b100
+		jz chunkManager4d_frustumCull_3d_loop_not_upper_z
+			mov eax, dword[ebp-68]
+		chunkManager4d_frustumCull_3d_loop_not_upper_z:
+		mov dword[ebp-88], eax
+		
+		mov eax, dword[ONE]
+		mov dword[ebp-84], eax
+		
+		;multiply it with pv and do perspective division
+		lea eax, [ebp-96]
+		push dword[ebp+28]
+		push eax
+		call vec4_mulWithMat
+		add esp, 8
+		
+		movss xmm0, dword[ONE]
+		movss xmm1, dword[ebp-84]
+		divss xmm0, xmm1
+		sub esp, 4
+		movss dword[esp], xmm0
+		lea eax, [ebp-96]
+		push eax
+		push eax
+		call vec4_scale
+		add esp, 12
+		
+		;do frustum culling
+		movss xmm0, dword[ebp-96]
+		ucomiss xmm0, dword[ONE]
+		ja chunkManager4d_frustumCull_3d_x_plus_1
+			and dword[ebp-80], 0b111110
+		chunkManager4d_frustumCull_3d_x_plus_1:
+		
+		ucomiss xmm0, dword[MINUS_ONE]
+		jb chunkManager4d_frustumCull_3d_x_minus_1
+			and dword[ebp-80], 0b111101
+		chunkManager4d_frustumCull_3d_x_minus_1:
+		
+		
+		movss xmm0, dword[ebp-92]
+		ucomiss xmm0, dword[ONE]
+		ja chunkManager4d_frustumCull_3d_y_plus_1
+			and dword[ebp-80], 0b111011
+		chunkManager4d_frustumCull_3d_y_plus_1:
+		
+		ucomiss xmm0, dword[MINUS_ONE]
+		jb chunkManager4d_frustumCull_3d_y_minus_1
+			and dword[ebp-80], 0b110111
+		chunkManager4d_frustumCull_3d_y_minus_1:
+		
+		
+		movss xmm0, dword[ebp-88]
+		ucomiss xmm0, dword[ONE]
+		ja chunkManager4d_frustumCull_3d_z_plus_1
+			and dword[ebp-80], 0b101111
+		chunkManager4d_frustumCull_3d_z_plus_1:
+		
+		ucomiss xmm0, dword[MINUS_ONE]
+		jb chunkManager4d_frustumCull_3d_z_minus_1
+			and dword[ebp-80], 0b011111
+		chunkManager4d_frustumCull_3d_z_minus_1:
+	
+		inc esi
+		cmp esi, 8				;the bounding box has 8 vertices
+		jl chunkManager4d_frustumCull_3d_loop_start
+	
+	;check if the chunk is outside the frustum
+	test dword[ebp-80], 0b111111
+	jz chunkManager4d_frustumCull_end
+	
+	mov dword[ebp-4], 69
 	
 	chunkManager4d_frustumCull_end:
 	mov eax, dword[ebp-4]
