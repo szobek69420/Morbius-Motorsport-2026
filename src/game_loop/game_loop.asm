@@ -513,6 +513,7 @@ gameLoop_physics:
 		call physics4d_update
 		add esp, 4
 		
+		
 		;update player
 		push dword[ebp-12]
 		push dword[pplayer]

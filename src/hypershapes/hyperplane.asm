@@ -230,12 +230,10 @@ hyperPlane_positionTo3d:
 	
 	sub esp, 16				;position-hyperplane.point
 	
-	;calculate position- hyperPlane.point
+	;calculate position-hyperPlane.point
 	lea eax, [ebp-16]
-	mov ecx, dword[ebp+8]
-	mov edx, dword[ebp+12]
-	push ecx
-	push edx
+	push dword[ebp+8]
+	push dword[ebp+12]
 	push eax
 	call vec4_sub
 	

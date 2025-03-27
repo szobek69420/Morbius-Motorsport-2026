@@ -55,6 +55,10 @@ section .text use32
 	global aabb4d_resolveKinematicNonkinematic		;void aabb4d_resolveKinematicNonkinematic(Aabb4D* kinematic, Aabb4D* nonkinematic)
 	global aabb4d_resolveNonkinematicNonkinematic	;void aabb4d_resolveNonkinematicNonkinematic(Aabb4D* kinematic, Aabb4D* nonkinematic)
 	
+	;pushes the return value onto the FPU stack
+	;in case of penetration, it returns a negative value
+	global aabb4d_calculateDistance					;float aabb4d_calculateDistance(Aabb4D* c1, Aabb4D* c2)
+	
 	extern my_printf
 	extern my_malloc
 	extern my_free
@@ -130,6 +134,92 @@ aabb4d_getPosition:
 aabb4d_getVelocity:
 	mov eax, dword[esp+4]
 	add eax, 32
+	ret
+	
+aabb4d_calculateDistance:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 16				;lower bound of c2 local to c1						16
+	sub esp, 16				;upper bound of c2 local to c1						32
+	
+	sub esp, 4				;max distance										68
+	
+	;calculate c2 bounds
+	sub esp, 12
+	mov eax, dword[ebp+8]
+	mov dword[esp+8], eax
+	mov eax, dword[ebp+12]
+	mov dword[esp+4], eax
+	lea eax, [ebp-16]
+	mov dword[esp], eax
+	call vec4_sub
+	add esp, 12
+	
+	
+	sub esp, 12
+	mov eax, dword[ebp+12]
+	add eax, 16
+	mov dword[esp+8], eax
+	lea eax, [ebp-16]
+	mov dword[esp+4], eax
+	sub eax, 16
+	mov dword[esp], eax
+	call vec4_add
+	add dword[esp], 16
+	call vec4_sub
+	add esp, 12
+	
+	
+	
+	;subtract c1.upperBound from c2.lowerBound (c2.lowerBound-c1.scale)
+	;subtract c2.upperBound from c1.lowerBound ( -c1.scale-c2.upperBound = -(c2.upperBound+c1.scale) )	
+	mov eax, dword[ebp+8]
+	add eax, 16
+	push eax
+	lea eax, [ebp-16]
+	push eax
+	push eax
+	call vec4_sub
+	add esp, 12
+	
+	mov eax, dword[ebp+8]
+	add eax, 16
+	push eax
+	lea eax, [ebp-32]
+	push eax
+	push eax
+	call vec4_add
+	add esp, 12
+	xor dword[ebp-32], 0x80000000
+	xor dword[ebp-28], 0x80000000
+	xor dword[ebp-24], 0x80000000
+	xor dword[ebp-20], 0x80000000
+	
+	;search for the highest distance
+	mov eax, dword[VERY_BIG_NUMBER]
+	xor eax, 0x80000000
+	mov dword[ebp-68], eax
+	
+	mov eax, 8
+	lea ecx, [ebp-32]
+	aabb4d_calculateDistance_loop_start:
+		movss xmm0, dword[ecx]
+		ucomiss xmm0, dword[ebp-68]
+		jbe aabb4d_calculateDistance_loop_continue
+			movss dword[ebp-68], xmm0
+			
+		aabb4d_calculateDistance_loop_continue:
+		add ecx, 4
+		dec eax
+		test eax, eax
+		jnz aabb4d_calculateDistance_loop_start
+		
+	;set return value
+	fld dword[ebp-68]
+	
+	mov esp, ebp
+	pop ebp
 	ret
 	
 	

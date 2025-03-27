@@ -90,6 +90,7 @@ section .text use32
 	extern hyperPlane_rotate
 	extern hyperPlane_directionTo4d
 	extern hyperPlane_positionTo3d
+	extern hyperPlane_positionTo4d
 	
 	extern chunkManager4d_getHyperPlane
 	
@@ -203,6 +204,12 @@ player_updatePhysics:
 	push ebp
 	mov ebp, esp
 	
+	;snap player back onto the hyperplane
+	push dword[ebp+8]
+	call player_move
+	add esp, 4
+	
+	;move player
 	push dword[ebp+12]
 	push dword[ebp+8]
 	call player_move
@@ -212,6 +219,62 @@ player_updatePhysics:
 	push dword[ebp+8]
 	;call player_applyGravity
 	add esp, 8
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+;snap player collider onto the hyperplane
+;it is necessary, because the collision resolver may move the player collider out of the hyperplane
+;void player_snapColliderOntoHyperplane(Player* player)
+player_snapColliderOntoHyperplane:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 12				;temp vec3				12
+	sub esp, 4				;HyperPlane*			16
+	sub esp, 4				;collider position		20
+	
+	;obtain hyperplane and collider position
+	mov eax, dword[ebp+8]
+	push dword[ebp+28]
+	call chunkManager4d_getHyperPlane
+	mov dword[ebp-16], eax
+	add esp, 4
+	
+	mov eax, dword[ebp+8]
+	push dword[ebp+24]
+	call aabb4d_getPosition
+	mov dword[ebp-20], eax
+	add esp, 4
+	
+	
+	;lock hyperplane mutex
+	mov eax, dword[ebp+8]
+	push -1
+	push dword[eax+32]
+	call mutex_lock
+	add esp, 8
+	
+	lea eax, [ebp-12]
+	push eax
+	push dword[ebp-20]
+	push dword[ebp-16]
+	call hyperPlane_positionTo3d
+	add esp, 12
+	
+	push dword[ebp-20]
+	lea eax, [ebp-12]
+	push eax
+	push dword[ebp-16]
+	call hyperPlane_positionTo4d
+	add esp, 12
+	
+	;unlock hyperplane mutex
+	mov eax, dword[ebp+8]
+	push dword[eax+32]
+	call mutex_unlock
+	add esp, 4
 	
 	mov esp, ebp
 	pop ebp

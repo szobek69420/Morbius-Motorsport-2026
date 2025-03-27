@@ -15,6 +15,9 @@ section .rodata use32
 	printInfo_collider_count db "Collider count: %d",10,0
 	printInfo_lower_bound db "Lower bound: ",0
 	printInfo_upper_bound db "Upper bound: ",0
+	
+	test_text db "fidesz castrol",10,0
+	test_text2 db "fidesz castrol2",10,0
 
 section .text use32
 	
@@ -32,6 +35,7 @@ section .text use32
 	extern my_printf
 	extern my_malloc
 	extern my_free
+	extern my_qsort
 	
 	extern vector_init
 	extern vector_destroy
@@ -44,6 +48,7 @@ section .text use32
 	
 	extern aabb4d_resolveKinematicNonkinematic
 	extern aabb4d_destroy
+	extern aabb4d_calculateDistance
 
 colliderGroup4d_create:
 	push ebp
@@ -350,8 +355,17 @@ colliderGroup4d_resolveCollision:
 	push edi
 	mov ebp, esp
 	
-	sub esp, 16				;collider lower bound
-	sub esp, 16				;collider upper bound
+	sub esp, 16				;collider lower bound			16
+	sub esp, 16				;collider upper bound			32
+	sub esp, 4				;helper array					36
+	sub esp, 4				;collider count					40
+	
+	mov eax, dword[ebp+16]
+	mov eax, dword[eax]
+	mov dword[ebp-40], eax
+	
+	cmp dword[ebp-40], 0
+	jle colliderGroup4d_resolveCollision_end
 	
 	;calculate the collider bounds
 	mov eax, dword[ebp+20]
@@ -395,29 +409,90 @@ colliderGroup4d_resolveCollision:
 	jbe colliderGroup4d_resolveCollision_end
 	
 	
+	;create helper array
+	;it is an array of struct {Aabb4D* cgCollider, float distanceFromNonkinematic}
+	mov eax, dword[ebp-40]
+	shl eax, 3					;8*colliderCount
+	push eax
+	call my_malloc
+	mov dword[ebp-36], eax
+	add esp, 4
+	
+	xor esi, esi				;index in esi
+	mov edi, dword[ebp-36]		;current helper item in edi
+	colliderGroup4d_resolveCollision_helper_loop_start:
+		;get the current collider
+		mov eax, dword[ebp+16]
+		mov eax, dword[eax+12]
+		mov ecx, dword[eax+4*esi]
+		mov dword[edi], ecx
+		
+		;calculate the distance from the nonkinematic collider
+		push dword[ebp+20]
+		push ecx
+		call aabb4d_calculateDistance
+		fstp dword[edi+4]
+		add esp, 8
+		
+		add edi, 8
+		inc esi
+		cmp esi, dword[ebp-40]
+		jl colliderGroup4d_resolveCollision_helper_loop_start
+		
+	;sort the helper array according to distance
+	push colliderGroup4d_resolveCollisionHelperComparator
+	push 8
+	push dword[ebp-40]
+	push dword[ebp-36]
+	call my_qsort
+	add esp, 16
+	
+	
 	;resolve collision
-	mov eax, dword[ebp+16]
-	mov esi, dword[eax+12]			;current collider in esi
-	mov edi, dword[eax]			;index in edi
-	test edi, edi
-	jz colliderGroup4d_resolveCollision_loop_end
+	mov esi, dword[ebp-36]			;current helper item in esi
+	mov edi, dword[ebp-40]			;index in edi
 	colliderGroup4d_resolveCollision_loop_start:
+		;gtfo if the collider is not getting freaky with the nonkinematic collider
+		test dword[esi+4], 0x80000000
+		jz colliderGroup4d_resolveCollision_loop_end
+		
+		;resolve collision
 		push dword[ebp+20]
 		push dword[esi]
 		call aabb4d_resolveKinematicNonkinematic
 		add esp, 8
 		
-		add esi, 4
+		add esi, 8
 		dec edi
 		test edi, edi
 		jnz colliderGroup4d_resolveCollision_loop_start
 	colliderGroup4d_resolveCollision_loop_end:
+	
+	
+	;free the end
+	push dword[ebp-36]
+	call my_free
+	add esp, 4
 	
 	colliderGroup4d_resolveCollision_end:
 	mov esp, ebp
 	pop edi
 	pop esi
 	pop ebp
+	ret
+	
+;a comparator function for qsort to sort the helper items into an ascending order according to the distance
+;typedef struct {Aabb4D* cgCollider, float distanceFromNonkinematic} ResolutionHelper;
+;int this_func(ResolutionHelper* helper1, ResolutionHelper* helper2)
+colliderGroup4d_resolveCollisionHelperComparator:
+	mov eax, -69
+	mov ecx, dword[esp+4]
+	mov edx, dword[esp+8]
+	movss xmm0, dword[ecx+4]
+	ucomiss xmm0, dword[edx+4]
+	jbe colliderGroup4d_resolveCollisionHelperComparator_end
+		mov eax, 69
+	colliderGroup4d_resolveCollisionHelperComparator_end:
 	ret
 	
 	
