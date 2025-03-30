@@ -78,6 +78,7 @@ section .text use32
 	extern aabb4d_destroy
 	extern aabb4d_getPosition
 	extern aabb4d_getVelocity
+	extern aabb4d_setHyperPlane
 	extern physics4d_registerNonkinematic
 	extern physics4d_unregisterNonkinematic
 	
@@ -150,6 +151,15 @@ player_init:
 	mov ecx, dword[ebp-4]
 	mov dword[ecx+32], eax
 	
+	;set the aabb4d hyperplane
+	mov eax, dword[ebp-4]
+	push dword[eax+28]
+	call chunkManager4d_getHyperPlane
+	push eax
+	call aabb4d_setHyperPlane
+	add esp, 8
+	
+	
 	;set return value
 	mov eax, dword[ebp-4]
 	
@@ -203,11 +213,6 @@ player_update:
 player_updatePhysics:
 	push ebp
 	mov ebp, esp
-	
-	;snap player back onto the hyperplane
-	push dword[ebp+8]
-	call player_move
-	add esp, 4
 	
 	;move player
 	push dword[ebp+12]
@@ -289,6 +294,7 @@ player_move:		;void player_move(player* player, float deltaTime)
 	sub esp, 16		;forward vector scaled				32
 	sub esp, 16		;right vector scaled				48
 	sub esp, 16		;up vector scaled					64
+	sub esp, 12		;camera position 3d					76
 	
 	;copy collider velocity y
 	mov eax, dword[ebp+8]
@@ -469,8 +475,8 @@ player_move:		;void player_move(player* player, float deltaTime)
 	call aabb4d_getPosition
 	add esp, 4
 	
-	mov ecx, dword[ebp+8]
-	push dword[ecx]
+	lea ecx, [ebp-76]
+	push ecx
 	push eax
 	
 	mov ecx, dword[ebp+8]
@@ -481,12 +487,22 @@ player_move:		;void player_move(player* player, float deltaTime)
 	
 	call hyperPlane_positionTo3d
 	
-	mov eax, dword[ebp+8]
+	lea eax, [ebp-76]
 	push EYE_OFFSET
-	push dword[eax]
-	push dword[eax]
-	;call vec3_add
+	push eax
+	push eax
+	call vec3_add
 	add esp, 12
+	
+	mov eax, dword[ebp+8]
+	mov eax, dword[eax]
+	mov ecx, dword[ebp-76]
+	mov dword[eax], ecx
+	mov ecx, dword[ebp-72]
+	mov dword[eax+4], ecx
+	mov ecx, dword[ebp-68]
+	mov dword[eax+8], ecx
+	
 	
 	mov esp, ebp
 	pop ebp
@@ -639,12 +655,17 @@ player_rotatePlane:
 	mov edx, dword[ecx+12]
 	mov dword[eax+12], edx
 	
-	;set the camera's position to 0, as the new center of the 3D space is the player
+	;set the camera's position to EYE_OFFSET, as the new center of the 3D space is the player
 	mov ecx, dword[ebp+8]
 	mov ecx, dword[ecx]
-	mov dword[ecx], 0
-	mov dword[ecx+4], 0
-	mov dword[ecx+8], 0
+	
+	mov eax, EYE_OFFSET
+	mov edx, dword[eax]
+	mov dword[ecx], edx
+	mov edx, dword[eax+4]
+	mov dword[ecx+4], edx
+	mov edx, dword[eax+8]
+	mov dword[ecx+8], edx
 	
 	
 	;rotate plane
@@ -657,7 +678,13 @@ player_rotatePlane:
 	add esp, 4
 	push eax
 	call hyperPlane_rotate
-	add esp, 16
+	pop eax					;restore hyperplane
+	add esp, 12
+	
+	;set the aabb4d's hyperplane
+	push eax
+	call aabb4d_setHyperPlane
+	add esp, 4
 	
 	
 	;unlock hyperplane mutex

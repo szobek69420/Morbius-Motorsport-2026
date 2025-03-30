@@ -36,14 +36,15 @@ section .text use32
 	global physics4d_unregisterNonkinematic		;void physics4d_unregisterNonkinematic(Aabb4D* collider, int shouldDestroy)
 	global physics4d_unregisterColliderGroup	;void physics4d_unregisterColliderGroup(ColliderGroup* cg, int shouldDestroy)
 	
-	
 	extern aabb4d_destroy
 	
 	extern colliderGroup4d_destroy
 	extern colliderGroup4d_resolveCollision
 	
 	extern my_printf
+	extern my_memcpy
 	
+	extern hyperPlane_create
 	
 	extern vector_init
 	extern vector_destroy

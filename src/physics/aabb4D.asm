@@ -29,7 +29,27 @@ section .rodata use32
 	AABB4D_POS_W dd 0b01000000
 	AABB4D_NEG_W dd 0b10000000
 	
+	;deez have to have deez values
+	RESOLUTION_DIR_POS_X dd 0
+	RESOLUTION_DIR_NEG_X dd 1
+	RESOLUTION_DIR_POS_Y dd 2
+	RESOLUTION_DIR_NEG_Y dd 3
+	RESOLUTION_DIR_POS_Z dd 4
+	RESOLUTION_DIR_NEG_Z dd 5
+	RESOLUTION_DIR_POS_W dd 6
+	RESOLUTION_DIR_NEG_W dd 7
 	
+	NORMALIZED_POS_X dd 1.0, 0.0, 0.0, 0.0
+	NORMALIZED_NEG_X dd -1.0, 0.0, 0.0, 0.0
+	NORMALIZED_POS_Y dd 0.0, 1.0, 0.0, 0.0
+	NORMALIZED_NEG_Y dd 0.0, -1.0, 0.0, 0.0
+	NORMALIZED_POS_Z dd 0.0, 0.0, 1.0, 0.0
+	NORMALIZED_NEG_Z dd 0.0, 0.0, -1.0, 0.0
+	NORMALIZED_POS_W dd 0.0, 0.0, 0.0, 1.0
+	NORMALIZED_NEG_W dd 0.0, 0.0, 0.0, -1.0
+	
+	
+	EPSILON dd 0.000001
 	HALF dd 0.5
 	ONE dd 1.0
 	MINUS_ONE dd -1.0
@@ -37,6 +57,13 @@ section .rodata use32
 	
 	test_text db "cardiac house arrest",10,0
 	test_text2 db "cardiac house arrest 2",10,0
+	
+section .data use32
+	hyperplane_aabb4d:
+	dd 0.0, 0.0, 0.0, 0.0
+	dd 1.0, 0.0, 0.0, 0.0
+	dd 0.0, 1.0, 0.0, 0.0
+	dd 0.0, 0.0, 1.0, 0.0
 
 section .text use32
 
@@ -48,9 +75,9 @@ section .text use32
 	
 	;returns non-zero if there was a collision
 	;sets the lastCollision and lastCollisionDetection variables if there was a collision
-	;the resolutionDirection points in the direction in which the c1 should be moved
-	;and its magnitude is so much so that if only the c1 were to be moved, the collision would be resolved
-	;int aabb4d_detectCollisionInternal(Aabb4D* c1, Aabb4D* c2, vec4* resolutionDirection)
+	;the resolutionDirection points in the direction in which the c1 should be moved (it is RESOLUTION_DIR_POS_X or etc.)
+	;and the penetration is so much so that if only the c1 were to be moved, the collision would be resolved
+	;int aabb4d_detectCollisionInternal(Aabb4D* c1, Aabb4D* c2, int* resolutionDirection, float* penetration)
 	
 	global aabb4d_resolveKinematicNonkinematic		;void aabb4d_resolveKinematicNonkinematic(Aabb4D* kinematic, Aabb4D* nonkinematic)
 	global aabb4d_resolveNonkinematicNonkinematic	;void aabb4d_resolveNonkinematicNonkinematic(Aabb4D* kinematic, Aabb4D* nonkinematic)
@@ -59,15 +86,22 @@ section .text use32
 	;in case of penetration, it returns a negative value
 	global aabb4d_calculateDistance					;float aabb4d_calculateDistance(Aabb4D* c1, Aabb4D* c2)
 	
+	;it is a state setting function
+	global aabb4d_setHyperPlane				;void aabb4d_setHyperPlane(HyperPlane* hyperPlane)
+	
 	extern my_printf
 	extern my_malloc
 	extern my_free
+	extern my_memcpy
 	
 	extern vec4_add
 	extern vec4_sub
 	extern vec4_scale
 	extern vec4_normalize
 	extern vec4_dot
+	
+	extern hyperPlane_directionTo3d
+	extern hyperPlane_directionTo4d
 	
 aabb4d_create:
 	push ebp
@@ -227,11 +261,17 @@ aabb4d_resolveKinematicNonkinematic:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 16					;resolution direction											16
-	sub esp, 4					;<normalize(resolution direction); nonkinematic.velocity>		20
-	sub esp, 16					;velocity loss													36
+	sub esp, 4					;resolution direction											4
+	sub esp, 4					;penetration													8
+	sub esp, 4					;res dir scaler													12
+	sub esp, 4					;unused															16
+	sub esp, 16					;resolution direction in hyperplane								32
+	sub esp, 4					;<normalize(resolution direction); nonkinematic.velocity>		36
+	sub esp, 16					;velocity loss													52
 	
-	lea eax, [ebp-16]
+	lea eax, [ebp-8]
+	push eax
+	lea eax, [ebp-4]
 	push eax
 	push dword[ebp+8]
 	push dword[ebp+12]
@@ -240,12 +280,87 @@ aabb4d_resolveKinematicNonkinematic:
 	test eax, eax
 	jz aabb4d_resolveKinematicNonkinematic_end		;no collision happened
 	
+	;get the resolution direction's projection to the hyperplane
+	lea eax, [ebp-32]
+	push eax
+	mov eax, dword[ebp-4]
+	shl eax, 4
+	add eax, NORMALIZED_POS_X
+	push eax
+	push hyperplane_aabb4d
+	call hyperPlane_directionTo3d
+	
+	lea eax, [ebp-32]
+	push eax
+	push eax
+	push hyperplane_aabb4d
+	call hyperPlane_directionTo4d
+	
+	;scale the resolution direction so that the original (4d) resolution happens right
+	mov eax, dword[ebp-4]
+	jmp dword[aabb4d_resolveKinematicNonkinematic_scaler+4*eax]
+	aabb4d_resolveKinematicNonkinematic_scaler:
+	dd aabb4d_resolveKinematicNonkinematic_scaler_x
+	dd aabb4d_resolveKinematicNonkinematic_scaler_x
+	dd aabb4d_resolveKinematicNonkinematic_scaler_y
+	dd aabb4d_resolveKinematicNonkinematic_scaler_y
+	dd aabb4d_resolveKinematicNonkinematic_scaler_z
+	dd aabb4d_resolveKinematicNonkinematic_scaler_z
+	dd aabb4d_resolveKinematicNonkinematic_scaler_w
+	dd aabb4d_resolveKinematicNonkinematic_scaler_w
+	aabb4d_resolveKinematicNonkinematic_scaler_x:
+		fld dword[ebp-8]
+		fld dword[ebp-32]
+		fabs
+		fdivp
+		fstp dword[ebp-12]
+		jmp aabb4d_resolveKinematicNonkinematic_scaler_done
+		
+	aabb4d_resolveKinematicNonkinematic_scaler_y:
+		fld dword[ebp-8]
+		fld dword[ebp-28]
+		fabs
+		fdivp
+		fstp dword[ebp-12]
+		jmp aabb4d_resolveKinematicNonkinematic_scaler_done
+		
+	aabb4d_resolveKinematicNonkinematic_scaler_z:
+		fld dword[ebp-8]
+		fld dword[ebp-24]
+		fabs
+		fdivp
+		fstp dword[ebp-12]
+		jmp aabb4d_resolveKinematicNonkinematic_scaler_done
+		
+	aabb4d_resolveKinematicNonkinematic_scaler_w:
+		fld dword[ebp-8]
+		fld dword[ebp-20]
+		fabs
+		fdivp
+		fstp dword[ebp-12]
+		jmp aabb4d_resolveKinematicNonkinematic_scaler_done
+		
+	aabb4d_resolveKinematicNonkinematic_scaler_done:
+	
+	mov eax, dword[ebp-12]
+	and eax, 0x7f800000
+	cmp eax, 0x7f800000
+	je aabb4d_resolveKinematicNonkinematic_end					;the scaler is either +/-Inf or +/-NaN
+	
+	push dword[ebp-12]
+	lea eax, [ebp-32]
+	push eax
+	push eax
+	call vec4_scale
+	
 	;update position
-	lea eax, [ebp-16]
+	lea eax, [ebp-32]
 	push eax
 	push dword[ebp+12]
 	push dword[ebp+12]
 	call vec4_add
+	
+	jmp aabb4d_resolveKinematicNonkinematic_end
 	
 	;change velocity if necessary
 	lea eax, [ebp-16]
@@ -255,15 +370,15 @@ aabb4d_resolveKinematicNonkinematic:
 	add eax, 32
 	push eax
 	call vec4_dot
-	fstp dword[ebp-20]
+	fstp dword[ebp-36]
 	
-	test dword[ebp-20], 0x80000000
+	test dword[ebp-36], 0x80000000
 	jz aabb4d_resolveKinematicNonkinematic_end		;if the dot product is positive, then the velocity should not be tampered with
 	
-	push dword[ebp-20]
+	push dword[ebp-36]
 	lea eax, [ebp-16]
 	push eax
-	lea eax, [ebp-36]
+	lea eax, [ebp-52]
 	push eax
 	call vec4_scale
 	
@@ -390,7 +505,7 @@ aabb4d_detectCollisionInternal:
 	sub esp, 4				;was there collision				;68
 	
 	sub esp, 4				;min penetration					;72
-	sub esp, 16				;min penetration direction			;88
+	sub esp, 16				;min penetration direction			;88 (unused)
 	
 	sub esp, 4				;c1 collision mask					;92
 	sub esp, 4				;c2 collision mask					;96
@@ -465,11 +580,9 @@ aabb4d_detectCollisionInternal:
 	jae aabb4d_detectCollisionInternal_not_pos_x
 		movss dword[ebp-72], xmm1
 		
-		mov eax, dword[ONE]
-		mov dword[ebp-88], eax
-		mov dword[ebp-84], 0
-		mov dword[ebp-80], 0
-		mov dword[ebp-76], 0
+		mov eax, dword[RESOLUTION_DIR_POS_X]
+		mov ecx, dword[ebp+16]
+		mov dword[ecx], eax
 		
 		mov eax, dword[AABB4D_NEG_X]
 		mov dword[ebp-92], eax
@@ -484,11 +597,9 @@ aabb4d_detectCollisionInternal:
 	jae aabb4d_detectCollisionInternal_not_pos_y
 		movss dword[ebp-72], xmm1
 		
-		mov eax, dword[ONE]
-		mov dword[ebp-88], 0
-		mov dword[ebp-84], eax
-		mov dword[ebp-80], 0
-		mov dword[ebp-76], 0
+		mov eax, dword[RESOLUTION_DIR_POS_Y]
+		mov ecx, dword[ebp+16]
+		mov dword[ecx], eax
 		
 		mov eax, dword[AABB4D_NEG_Y]
 		mov dword[ebp-92], eax
@@ -503,11 +614,9 @@ aabb4d_detectCollisionInternal:
 	jae aabb4d_detectCollisionInternal_not_pos_z
 		movss dword[ebp-72], xmm1
 		
-		mov eax, dword[ONE]
-		mov dword[ebp-88], 0
-		mov dword[ebp-84], 0
-		mov dword[ebp-80], eax
-		mov dword[ebp-76], 0
+		mov eax, dword[RESOLUTION_DIR_POS_Z]
+		mov ecx, dword[ebp+16]
+		mov dword[ecx], eax
 		
 		mov eax, dword[AABB4D_NEG_Z]
 		mov dword[ebp-92], eax
@@ -522,11 +631,9 @@ aabb4d_detectCollisionInternal:
 	jae aabb4d_detectCollisionInternal_not_pos_w
 		movss dword[ebp-72], xmm1
 		
-		mov eax, dword[ONE]
-		mov dword[ebp-88], 0
-		mov dword[ebp-84], 0
-		mov dword[ebp-80], 0
-		mov dword[ebp-76], eax
+		mov eax, dword[RESOLUTION_DIR_POS_W]
+		mov ecx, dword[ebp+16]
+		mov dword[ecx], eax
 		
 		mov eax, dword[AABB4D_NEG_W]
 		mov dword[ebp-92], eax
@@ -541,11 +648,9 @@ aabb4d_detectCollisionInternal:
 	jae aabb4d_detectCollisionInternal_not_neg_x
 		movss dword[ebp-72], xmm1
 		
-		mov eax, dword[MINUS_ONE]
-		mov dword[ebp-88], eax
-		mov dword[ebp-84], 0
-		mov dword[ebp-80], 0
-		mov dword[ebp-76], 0
+		mov eax, dword[RESOLUTION_DIR_NEG_X]
+		mov ecx, dword[ebp+16]
+		mov dword[ecx], eax
 		
 		mov eax, dword[AABB4D_POS_X]
 		mov dword[ebp-92], eax
@@ -560,11 +665,9 @@ aabb4d_detectCollisionInternal:
 	jae aabb4d_detectCollisionInternal_not_neg_y
 		movss dword[ebp-72], xmm1
 		
-		mov eax, dword[MINUS_ONE]
-		mov dword[ebp-88], 0
-		mov dword[ebp-84], eax
-		mov dword[ebp-80], 0
-		mov dword[ebp-76], 0
+		mov eax, dword[RESOLUTION_DIR_NEG_Y]
+		mov ecx, dword[ebp+16]
+		mov dword[ecx], eax
 		
 		mov eax, dword[AABB4D_POS_Y]
 		mov dword[ebp-92], eax
@@ -579,11 +682,9 @@ aabb4d_detectCollisionInternal:
 	jae aabb4d_detectCollisionInternal_not_neg_z
 		movss dword[ebp-72], xmm1
 		
-		mov eax, dword[MINUS_ONE]
-		mov dword[ebp-88], 0
-		mov dword[ebp-84], 0
-		mov dword[ebp-80], eax
-		mov dword[ebp-76], 0
+		mov eax, dword[RESOLUTION_DIR_NEG_Z]
+		mov ecx, dword[ebp+16]
+		mov dword[ecx], eax
 		
 		mov eax, dword[AABB4D_POS_Z]
 		mov dword[ebp-92], eax
@@ -598,11 +699,9 @@ aabb4d_detectCollisionInternal:
 	jae aabb4d_detectCollisionInternal_not_neg_w
 		movss dword[ebp-72], xmm1
 		
-		mov eax, dword[MINUS_ONE]
-		mov dword[ebp-88], 0
-		mov dword[ebp-84], 0
-		mov dword[ebp-80], 0
-		mov dword[ebp-76], eax
+		mov eax, dword[RESOLUTION_DIR_NEG_W]
+		mov ecx, dword[ebp+16]
+		mov dword[ecx], eax
 		
 		mov eax, dword[AABB4D_POS_W]
 		mov dword[ebp-92], eax
@@ -610,13 +709,10 @@ aabb4d_detectCollisionInternal:
 		mov dword[ebp-96], eax
 	aabb4d_detectCollisionInternal_not_neg_w:
 	
-	;set the resolution direction
-	push dword[ebp-72]
-	lea eax, [ebp-88]
-	push eax
-	push dword[ebp+16]
-	call vec4_scale
-	add esp, 12
+	;save the penetration	
+	mov eax, dword[ebp+20]
+	mov ecx, dword[ebp-72]
+	mov dword[eax], ecx
 	
 	;set the collision directions
 	mov eax, dword[ebp+8]
@@ -638,4 +734,15 @@ aabb4d_detectCollisionInternal:
 	
 	mov esp, ebp
 	pop ebp
+	ret
+	
+	
+	
+aabb4d_setHyperPlane:
+	mov eax, dword[esp+4]
+	push 64
+	push eax
+	push hyperplane_aabb4d
+	call my_memcpy
+	add esp, 12
 	ret
