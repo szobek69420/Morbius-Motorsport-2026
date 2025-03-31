@@ -30,6 +30,12 @@ section .text use32
 	
 	global colliderGroup4d_resolveCollision	;void colliderGroup4d_resolveCollision(ColliderGroup4D* cg, Aabb4D* nonkinematic)
 	
+	;returns non-zero if there was an intersection
+	;in case of an intersection, the direction buffer is also overwritten (with for example AABB4D_POS_X)
+	global colliderGroup4d_intersectWithPoint	;int colliderGroup4d_intersectWithPoint(ColliderGroup4D* cg, vec4* point, int* direction)
+	
+	global colliderGroup4d_isPointInBounds	;int colliderGroup4d_isPointInBounds(ColliderGroup4D* cg, vec4* point)
+	
 	global colliderGroup4d_printInfo		;void colliderGroup4d_printInfo(ColliderGroup4D* cg)
 	
 	extern my_printf
@@ -49,6 +55,15 @@ section .text use32
 	extern aabb4d_resolveKinematicNonkinematic
 	extern aabb4d_destroy
 	extern aabb4d_calculateDistance
+	
+	extern AABB4D_POS_X
+	extern AABB4D_NEG_X
+	extern AABB4D_POS_Y
+	extern AABB4D_NEG_Y
+	extern AABB4D_POS_Z
+	extern AABB4D_NEG_Z
+	extern AABB4D_POS_W
+	extern AABB4D_NEG_W
 
 colliderGroup4d_create:
 	push ebp
@@ -493,6 +508,71 @@ colliderGroup4d_resolveCollisionHelperComparator:
 	jbe colliderGroup4d_resolveCollisionHelperComparator_end
 		mov eax, 69
 	colliderGroup4d_resolveCollisionHelperComparator_end:
+	ret
+	
+	
+colliderGroup4d_intersectWithPoint:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	sub esp, 4				;helper array				4		//it uses the same helper structure as resolveCollision
+	sub esp, 4				;collider count				8
+	
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+colliderGroup4d_isPointInBounds:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4				;return value
+	
+	mov dword[ebp-4], 0
+	
+	
+	mov ecx, dword[ebp+8]
+	mov eax, dword[ebp+12]
+	
+	
+	movss xmm0, dword[eax]
+	ucomiss xmm0, dword[ecx+16]
+	jbe colliderGroup4d_isPointInBounds_end
+	ucomiss xmm0, dword[ecx+32]
+	jae colliderGroup4d_isPointInBounds_end
+	
+	movss xmm0, dword[eax+4]
+	ucomiss xmm0, dword[ecx+20]
+	jbe colliderGroup4d_isPointInBounds_end
+	ucomiss xmm0, dword[ecx+36]
+	jae colliderGroup4d_isPointInBounds_end
+	
+	movss xmm0, dword[eax+8]
+	ucomiss xmm0, dword[ecx+24]
+	jbe colliderGroup4d_isPointInBounds_end
+	ucomiss xmm0, dword[ecx+40]
+	jae colliderGroup4d_isPointInBounds_end
+	
+	movss xmm0, dword[eax+12]
+	ucomiss xmm0, dword[ecx+28]
+	jbe colliderGroup4d_isPointInBounds_end
+	ucomiss xmm0, dword[ecx+44]
+	jae colliderGroup4d_isPointInBounds_end
+	
+	
+	mov dword[ebp-4], 69
+	
+	
+	colliderGroup4d_isPointInBounds_end:
+	mov eax, dword[ebp-4]
+	
+	mov esp, ebp
+	pop ebp
 	ret
 	
 	

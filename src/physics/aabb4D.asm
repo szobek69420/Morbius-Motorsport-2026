@@ -82,9 +82,15 @@ section .text use32
 	global aabb4d_resolveKinematicNonkinematic		;void aabb4d_resolveKinematicNonkinematic(Aabb4D* kinematic, Aabb4D* nonkinematic)
 	global aabb4d_resolveNonkinematicNonkinematic	;void aabb4d_resolveNonkinematicNonkinematic(Aabb4D* kinematic, Aabb4D* nonkinematic)
 	
+	;returns the greatest distance between the colliders along one axis
 	;pushes the return value onto the FPU stack
 	;in case of penetration, it returns a negative value
 	global aabb4d_calculateDistance					;float aabb4d_calculateDistance(Aabb4D* c1, Aabb4D* c2)
+	
+	;returns the greatest distance between the collider and the point along one axis
+	;pushes the return value onto the FPU stack
+	;in case of penetration, it returns a negative value
+	global aabb4d_calculateDistanceFromPoint					;float aabb4d_calculateDistanceFromPoint(Aabb4D* collider, vec4* point)
 	
 	;it is a state setting function
 	global aabb4d_setHyperPlane				;void aabb4d_setHyperPlane(HyperPlane* hyperPlane)
@@ -251,6 +257,68 @@ aabb4d_calculateDistance:
 		
 	;set return value
 	fld dword[ebp-68]
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+aabb4d_calculateDistanceFromPoint:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 16				;distance of the point per axis 16
+	sub esp, 4				;max distance					20
+	
+	
+	;calculate the local position of the point
+	mov eax, dword[ebp+12]
+	mov ecx, dword[ebp+8]
+	push ecx
+	push eax
+	lea eax, [ebp-16]
+	push eax
+	call vec4_sub
+	
+	;calculate the distance
+	and dword[ebp-16], 0x7fffffff
+	and dword[ebp-12], 0x7fffffff
+	and dword[ebp-8], 0x7fffffff
+	and dword[ebp-4], 0x7fffffff
+	
+	mov edx, dword[ebp+8]
+	add edx, 16
+	push edx
+	lea eax, [ebp-16]
+	push eax
+	push eax
+	call vec4_sub
+	
+	
+	;get the greatest distance
+	mov eax, dword[ebp-16]
+	mov dword[ebp-20], eax
+	
+	movss xmm0, dword[ebp-12]
+	ucomiss xmm0, dword[ebp-20]
+	jbe aabb4d_calculateDistanceFromPoint_not_neg_y
+		movss dword[ebp-20], xmm0
+	aabb4d_calculateDistanceFromPoint_not_neg_y:
+	
+	movss xmm0, dword[ebp-8]
+	ucomiss xmm0, dword[ebp-20]
+	jbe aabb4d_calculateDistanceFromPoint_not_neg_z
+		movss dword[ebp-20], xmm0
+	aabb4d_calculateDistanceFromPoint_not_neg_z:
+	
+	movss xmm0, dword[ebp-4]
+	ucomiss xmm0, dword[ebp-20]
+	jbe aabb4d_calculateDistanceFromPoint_not_neg_w
+		movss dword[ebp-20], xmm0
+	aabb4d_calculateDistanceFromPoint_not_neg_w:
+	
+	;set the return value
+	fld dword[ebp-20]
 	
 	mov esp, ebp
 	pop ebp
