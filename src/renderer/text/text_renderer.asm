@@ -35,6 +35,7 @@ section .rodata use32
 	uniform_pv_name db "pv",0
 	uniform_position_name db "position",0
 	uniform_scale_name db "scale",0
+	uniform_colour_name db "colour",0
 	
 	vertex_data:
 	dd 0.0, 0.0, 0.0, 0.0
@@ -77,12 +78,15 @@ section .bss use32
 	
 	spacing resb 4					;float
 	
+	colour resb 16					;float r, g, b, a
+	
 	vao resb 4
 	vbo resb 4
 	shader resb 4
 	uniform_pv_location resb 4
 	uniform_position_location resb 4
 	uniform_scale_location resb 4
+	uniform_colour_location resb 4
 
 section .text use32
 	
@@ -95,6 +99,7 @@ section .text use32
 	global textRenderer_setScreenSize	;void textRenderer_setScreenSize(int widthInPixels, int heightInPixels)
 	global textRenderer_setFontSize		;void textRenderer_setFontSize(int xSize, int ySize)
 	global textRenderer_setSpacing		;void textRenderer_setSpacing(int spacing)	//spacing between the characters
+	global textRenderer_setColour		;void textRenderer_setColour(float r, float g, float b, float a)
 	
 	global textRenderer_getTextWidth	;int textRenderer_getTextWidth(const char* text)
 	global textRenderer_getTextHeight	;int textRenderer_getTextHeight(const char* text)
@@ -132,6 +137,7 @@ section .text use32
 	extern glUniform1i
 	extern glUniform2f
 	extern glUniform2fv
+	extern glUniform4f
 	extern glUniformMatrix4fv
 	extern glUseProgram
 	extern glDrawArrays
@@ -194,6 +200,14 @@ textRenderer_init:
 	call textRenderer_setSpacing
 	add esp, 4
 	
+	;set colour
+	push dword[ONE]
+	push dword[ZERO]
+	push dword[ONE]
+	push dword[ONE]
+	call textRenderer_setColour
+	add esp, 4
+	
 	;create vao and vbo
 	push vao
 	push 1
@@ -253,6 +267,10 @@ textRenderer_init:
 	push dword[shader]
 	call [glGetUniformLocation]
 	mov dword[uniform_scale_location], eax
+	push uniform_colour_name
+	push dword[shader]
+	call [glGetUniformLocation]
+	mov dword[uniform_colour_location], eax
 	
 	push uniform_tex_name
 	push dword[shader]
@@ -381,6 +399,14 @@ textRenderer_drawText:
 	push 1
 	push dword[uniform_pv_location]
 	call [glUniformMatrix4fv]
+	
+	mov eax, colour
+	push dword[eax+12]
+	push dword[eax+8]
+	push dword[eax+4]
+	push dword[eax]
+	push dword[uniform_colour_location]
+	call [glUniform4f]
 	
 	;calculate position
 	mov eax, dword[ebp+20]
@@ -638,6 +664,19 @@ textRenderer_setSpacing:
 	fstp dword[spacing]
 	ret
 	
+textRenderer_setColour:
+	mov eax, colour
+	
+	mov ecx, dword[esp+4]
+	mov dword[eax], ecx
+	mov ecx, dword[esp+8]
+	mov dword[eax+4], ecx
+	mov ecx, dword[esp+12]
+	mov dword[eax+8], ecx
+	mov ecx, dword[esp+16]
+	mov dword[eax+12], ecx
+	
+	ret
 	
 	
 textRenderer_getTextWidth:

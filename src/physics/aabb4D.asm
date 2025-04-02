@@ -20,6 +20,7 @@ section .rodata use32
 	global AABB4D_POS_W
 	global AABB4D_NEG_W
 
+	;these values shall not be morbed
 	AABB4D_POS_X dd 0b00000001
 	AABB4D_NEG_X dd 0b00000010
 	AABB4D_POS_Y dd 0b00000100

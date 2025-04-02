@@ -2,10 +2,11 @@
 in vec2 uv;
 out vec4 fragmentColour;
 uniform sampler2D tex;
+uniform vec4 colour;
 
 void main()
 {
-	fragmentColour=texture(tex, uv).xxxx;
+	fragmentColour=texture(tex, uv).x*colour;
 	if(fragmentColour.a<0.1)
 		discard;
 }

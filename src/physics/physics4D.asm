@@ -16,6 +16,8 @@ section .rodata use32
 	
 section .data use32
 	is_initialized dd 0
+	
+	RAYCAST_PRECISION dd 0.05
 
 section .bss use32
 	registered_nonkinematic resb 16			;vector<Aabb4D*>
@@ -36,10 +38,23 @@ section .text use32
 	global physics4d_unregisterNonkinematic		;void physics4d_unregisterNonkinematic(Aabb4D* collider, int shouldDestroy)
 	global physics4d_unregisterColliderGroup	;void physics4d_unregisterColliderGroup(ColliderGroup* cg, int shouldDestroy)
 	
+	;returns a non-zero value on hit
+	;only scans collider groups
+	;int physics4d_raycastColliderGroup(
+	;	vec4* origin,
+	;	vec4* direction,
+	;	float maxDistance,
+	;	Aabb4D** colliderHit,
+	;	int* hitDirection
+	;)
+	global physics4d_raycastColliderGroup
+	
 	extern aabb4d_destroy
 	
 	extern colliderGroup4d_destroy
 	extern colliderGroup4d_resolveCollision
+	extern colliderGroup4d_isPointInBounds
+	extern colliderGroup4d_intersectWithPoint
 	
 	extern my_printf
 	extern my_memcpy
@@ -59,6 +74,7 @@ section .text use32
 	
 	extern vec4_add
 	extern vec4_scale
+	extern vec4_normalize
 	
 	
 physics4d_init:
@@ -395,5 +411,56 @@ physics4d_unregisterColliderGroup:
 
 
 	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+physics4d_raycastColliderGroup:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 16			;current point			16
+	sub esp, 16			;direction scaled		32
+	
+	;init current point
+	mov eax, dword[ebp+20]
+	mov ecx, dword[eax]
+	mov dword[ebp-16], ecx
+	mov ecx, dword[eax+4]
+	mov dword[ebp-12], ecx
+	mov ecx, dword[eax+8]
+	mov dword[ebp-8], ecx
+	mov ecx, dword[eax+12]
+	mov dword[ebp-4], ecx
+	
+	;calculate the scaled directions
+	mov eax, dword[ebp+24]
+	mov ecx, dword[eax]
+	mov dword[ebp-32], ecx
+	mov ecx, dword[eax+4]
+	mov dword[ebp-28], ecx
+	mov ecx, dword[eax+8]
+	mov dword[ebp-24], ecx
+	mov ecx, dword[eax+12]
+	mov dword[ebp-20], ecx
+	
+	lea eax, [ebp-32]
+	push eax
+	call vec4_normalize
+	pop eax
+	
+	push dword[RAYCAST_PRECISION]
+	push eax
+	push eax
+	call vec4_scale
+	add esp, 12
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
 	pop ebp
 	ret

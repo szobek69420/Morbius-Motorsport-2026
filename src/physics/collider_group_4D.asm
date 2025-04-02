@@ -11,6 +11,8 @@ section .rodata use32
 	NEGATIVE_INFINITY dd 0xff800000
 	POSITIVE_INFINITY dd 0x7f800000
 	
+	EPSILON dd 0.0000001
+	
 	printInfo_header db "Collider group:",10,0
 	printInfo_collider_count db "Collider count: %d",10,0
 	printInfo_lower_bound db "Lower bound: ",0
@@ -31,8 +33,8 @@ section .text use32
 	global colliderGroup4d_resolveCollision	;void colliderGroup4d_resolveCollision(ColliderGroup4D* cg, Aabb4D* nonkinematic)
 	
 	;returns non-zero if there was an intersection
-	;in case of an intersection, the direction buffer is also overwritten (with for example AABB4D_POS_X)
-	global colliderGroup4d_intersectWithPoint	;int colliderGroup4d_intersectWithPoint(ColliderGroup4D* cg, vec4* point, int* direction)
+	;in case of an intersection, the collider and direction buffer is also overwritten (with for example AABB4D_POS_X)
+	global colliderGroup4d_intersectWithPoint	;int colliderGroup4d_intersectWithPoint(ColliderGroup4D* cg, vec4* point, Aabb4D** collider, int* direction)
 	
 	global colliderGroup4d_isPointInBounds	;int colliderGroup4d_isPointInBounds(ColliderGroup4D* cg, vec4* point)
 	
@@ -64,6 +66,8 @@ section .text use32
 	extern AABB4D_NEG_Z
 	extern AABB4D_POS_W
 	extern AABB4D_NEG_W
+	
+	extern aabb4d_calculateDistanceFromPoint
 
 colliderGroup4d_create:
 	push ebp
@@ -517,8 +521,217 @@ colliderGroup4d_intersectWithPoint:
 	push edi
 	mov ebp, esp
 	
-	sub esp, 4				;helper array				4		//it uses the same helper structure as resolveCollision
-	sub esp, 4				;collider count				8
+	sub esp, 4				;helper array					4		//it uses the same helper structure as resolveCollision
+	sub esp, 4				;collider count					8
+	sub esp, 4				;min distance helper			12
+	sub esp, 4				;return value					16
+	sub esp, 4				;direction						20
+	sub esp, 16				;|point-coll.pos|-coll.scale	36
+	sub esp, 4				;temp value						40
+	
+	mov dword[ebp-16], 0
+	
+	;set collider count
+	mov eax, dword[ebp+16]
+	mov eax, dword[eax]
+	mov dword[ebp-8], eax			;set collider count
+	
+	cmp eax, 0
+	jle colliderGroup4d_intersectWithPoint_end		;no colliders
+	
+	;alloc helper array
+	mov eax, dword[ebp-8]
+	shl eax, 3
+	push eax
+	call my_malloc
+	mov dword[ebp-4], eax
+	add esp, 4
+	
+	;init helper array
+	mov eax, dword[ebp+16]
+	mov esi, dword[eax+12]			;current collider in esi
+	xor edi, edi					;index in edi
+	colliderGroup4d_intersectWithPoint_helper_loop_start:
+		;calculate the intersection with the collider
+		push dword[ebp+20]
+		push dword[esi]
+		call aabb4d_calculateDistanceFromPoint
+		add esp, 8
+		
+		;obtain the current helper
+		mov eax, dword[ebp-4]
+		lea eax, [eax+8*edi]
+		
+		mov ecx, dword[esi]
+		mov dword[eax], ecx			;save the current collider
+		
+		fstp dword[eax+4]			;save the distance
+		
+	
+		add esi, 4
+		inc edi
+		mov eax, dword[ebp+16]
+		cmp edi, dword[eax]
+		jl colliderGroup4d_intersectWithPoint_helper_loop_start
+	
+	;get the helper with the least distance
+	mov eax, dword[ebp-4]
+	mov dword[ebp-12], eax
+	
+	mov esi, dword[ebp-4]			;current helper in esi
+	mov edi, dword[ebp-8]			;index in edi
+	colliderGroup4d_intersectWithPoint_min_loop_start:
+		mov eax, dword[ebp-12]
+		movss xmm0, dword[esi+4]
+		ucomiss xmm0, dword[eax+4]
+		jae colliderGroup4d_intersectWithPoint_min_loop_continue
+		
+			mov dword[ebp-12], esi
+		
+		colliderGroup4d_intersectWithPoint_min_loop_continue:
+		add esi, 8
+		dec edi
+		test edi, edi
+		jnz colliderGroup4d_intersectWithPoint_helper_loop_start
+	
+	;check if there is an intersection
+	;if the minimum distance is positive, then nein
+	mov eax, dword[ebp-12]
+	test dword[eax+4], 0x80000000
+	jz colliderGroup4d_intersectWithPoint_dealloc
+	
+	;intersectin'
+	mov dword[ebp-16], 69
+	
+	;calculate var36
+	mov eax, dword[ebp-12]
+	push dword[eax]				;collider.pos
+	push dword[ebp+20]
+	lea eax, [ebp-36]
+	push eax
+	call vec4_sub
+	
+	and dword[ebp-36], 0x7fffffff
+	and dword[ebp-32], 0x7fffffff
+	and dword[ebp-28], 0x7fffffff
+	and dword[ebp-24], 0x7fffffff
+	
+	add dword[esp+8], 16		;collider.scale
+	lea eax, [ebp-36]
+	mov dword[esp+4], eax
+	call vec4_sub
+	add esp, 12
+	
+	
+	;get the direction
+	mov esi, dword[ebp-12]
+	mov esi, dword[esi]
+	mov edi, dword[ebp+20]
+	
+	mov eax, dword[ebp-12]
+	movss xmm1, dword[eax+4]
+	
+	
+	movss xmm0, dword[ebp-36]
+	subss xmm0, xmm1
+	movss dword[ebp-40], xmm0
+	mov eax, dword[ebp-40]
+	and eax, 0x7fffffff
+	cmp eax, dword[EPSILON]
+	jle colliderGroup4d_intersectWithPoint_direction_x
+	
+	movss xmm0, dword[ebp-32]
+	subss xmm0, xmm1
+	movss dword[ebp-40], xmm0
+	mov eax, dword[ebp-40]
+	and eax, 0x7fffffff
+	cmp eax, dword[EPSILON]
+	jle colliderGroup4d_intersectWithPoint_direction_y
+	
+	movss xmm0, dword[ebp-28]
+	subss xmm0, xmm1
+	movss dword[ebp-40], xmm0
+	mov eax, dword[ebp-40]
+	and eax, 0x7fffffff
+	cmp eax, dword[EPSILON]
+	jle colliderGroup4d_intersectWithPoint_direction_z
+	
+	movss xmm0, dword[ebp-24]
+	subss xmm0, xmm1
+	movss dword[ebp-40], xmm0
+	mov eax, dword[ebp-40]
+	and eax, 0x7fffffff
+	cmp eax, dword[EPSILON]
+	jle colliderGroup4d_intersectWithPoint_direction_w
+	
+	mov dword[ebp-16], 0
+	jmp colliderGroup4d_intersectWithPoint_dealloc
+	
+	colliderGroup4d_intersectWithPoint_direction_x:
+		mov eax, dword[AABB4D_POS_X]
+		mov dword[ebp-20], eax
+		
+		movss xmm0, dword[esi]
+		ucomiss xmm0, dword[edi]
+		jle colliderGroup4d_intersectWithPoint_direction_end
+			;point is to the negative direction
+			shl dword[ebp-20], 1
+			jmp colliderGroup4d_intersectWithPoint_direction_end
+			
+	
+	colliderGroup4d_intersectWithPoint_direction_y:
+		mov eax, dword[AABB4D_POS_Y]
+		mov dword[ebp-20], eax
+		
+		movss xmm0, dword[esi+4]
+		ucomiss xmm0, dword[edi+4]
+		jle colliderGroup4d_intersectWithPoint_direction_end
+			;point is to the negative direction
+			shl dword[ebp-20], 1
+			jmp colliderGroup4d_intersectWithPoint_direction_end
+			
+			
+	colliderGroup4d_intersectWithPoint_direction_z:
+		mov eax, dword[AABB4D_POS_Z]
+		mov dword[ebp-20], eax
+		
+		movss xmm0, dword[esi+8]
+		ucomiss xmm0, dword[edi+8]
+		jle colliderGroup4d_intersectWithPoint_direction_end
+			;point is to the negative direction
+			shl dword[ebp-20], 1
+			jmp colliderGroup4d_intersectWithPoint_direction_end
+			
+	colliderGroup4d_intersectWithPoint_direction_w:
+		mov eax, dword[AABB4D_POS_W]
+		mov dword[ebp-20], eax
+		
+		movss xmm0, dword[esi+12]
+		ucomiss xmm0, dword[edi+12]
+		jle colliderGroup4d_intersectWithPoint_direction_end
+			;point is to the negative direction
+			shl dword[ebp-20], 1
+			jmp colliderGroup4d_intersectWithPoint_direction_end
+		
+		
+	colliderGroup4d_intersectWithPoint_direction_end:
+	;set buffers
+	mov ecx, dword[ebp+24]
+	mov dword[ecx], esi
+	
+	mov eax, dword[ebp-20]
+	mov ecx, dword[ebp+28]
+	mov dword[ecx], eax
+	
+	colliderGroup4d_intersectWithPoint_dealloc:
+	;dealloc helper array
+	push dword[ebp-4]
+	call my_free
+	add esp, 4	
+	
+	colliderGroup4d_intersectWithPoint_end:
+	;set return value
+	mov eax, dword[ebp-16]
 	
 	mov esp, ebp
 	pop edi
