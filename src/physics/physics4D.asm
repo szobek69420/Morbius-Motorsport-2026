@@ -431,8 +431,11 @@ physics4d_raycastColliderGroup:
 	sub esp, 4			;return value			40
 	sub esp, 4			;collider buffer		44
 	sub esp, 4			;direction buffer		48
+	sub esp, 4			;current collider group	52
+	sub esp, 4			;geeignet cg helper		56
 	
 	mov dword[ebp-40], 0
+	mov dword[ebp-52], 0
 	
 	;check if there are any collider groups
 	cmp dword[registered_collider_groups], 0
@@ -480,37 +483,81 @@ physics4d_raycastColliderGroup:
 	cmp dword[ebp-36], 0
 	jle physics4d_raycastColliderGroup_end
 	
-	xor ebx, ebx		;index in ebx
+	;init the current cg
+	mov eax, registered_collider_groups
+	mov eax, dword[eax+12]
+	mov eax, dword[eax]
+	mov dword[ebp-52], eax
+	
+	;gaycast
+	xor ebx, ebx				;index in ebx
 	physics4d_raycastColliderGroup_step_loop_start:
-		;check for intersection
-		mov eax, registered_collider_groups
-		mov esi, dword[eax+12]		;current collider group in esi
-		mov edi, dword[eax]			;index in edi
-		physics4d_raycastColliderGroup_intersect_loop_start:
-			;check for intersection
-			lea eax, [ebp-48]
-			push eax
-			lea eax, [ebp-44]
-			push eax
-			lea eax, [ebp-16]
-			push eax
-			push dword[esi]
-			call colliderGroup4d_intersectWithPoint
-			add esp, 16
-			
-			;if there was an intersection, exit the loops
-			test eax, eax
-			jz physics4d_raycastColliderGroup_intersect_loop_continue
-			
-				mov dword[ebp-40], 69
-				jmp physics4d_raycastColliderGroup_step_loop_end	;direkt step_loop
-			
-			physics4d_raycastColliderGroup_intersect_loop_continue:
-			add esi, 4
-			dec edi
-			test edi, edi
-			jnz physics4d_raycastColliderGroup_intersect_loop_start
+		;does the current collider group still contain the point?
+		mov dword[ebp-56], 69	;non-zero if there is a geeignet collider group
 		
+		lea eax, [ebp-16]
+		push eax
+		push dword[ebp-52]
+		call colliderGroup4d_isPointInBounds
+		add esp, 8
+		cmp eax, 0
+		jne physics4d_raycastColliderGroup_step_loop_cg_found
+			mov dword[ebp-56], 0	;so far there is no geeignet collider group
+			
+			;find a collider group that contains the current point
+			mov eax, registered_collider_groups
+			mov esi, dword[eax+12]		;current collider group in esi
+			mov edi, dword[eax]			;index in edi
+			physics4d_raycastColliderGroup_geeignet_cg_loop_start:
+				;calculate if the point is in bounds
+				lea eax, [ebp-16]
+				push eax
+				push dword[esi]
+				call colliderGroup4d_isPointInBounds
+				add esp, 8
+				
+				;if it is in bounds, then update the current cg
+				test eax, eax
+				jz physics4d_raycastColliderGroup_geeignet_cg_loop_continue
+				
+					mov eax, dword[esi]
+					mov dword[ebp-52], eax
+					
+					mov dword[ebp-56], 69
+					
+					jmp physics4d_raycastColliderGroup_step_loop_cg_found
+				
+				physics4d_raycastColliderGroup_geeignet_cg_loop_continue:
+				add esi, 4
+				dec edi
+				test edi, edi
+				jnz physics4d_raycastColliderGroup_geeignet_cg_loop_start
+		
+		physics4d_raycastColliderGroup_step_loop_cg_found:
+		
+		;if there is no geeignet collider group, skip the point
+		cmp dword[ebp-56], 0
+		je physics4d_raycastColliderGroup_step_loop_continue
+		
+		;check for intersection with the geeignet cg
+		lea eax, [ebp-48]
+		push eax
+		lea eax, [ebp-44]
+		push eax
+		lea eax, [ebp-16]
+		push eax
+		push dword[ebp-52]
+		call colliderGroup4d_intersectWithPoint
+		add esp, 16
+		
+		;if there was an intersection, exit the loops
+		test eax, eax
+		jz physics4d_raycastColliderGroup_step_loop_continue
+			mov dword[ebp-40], 69
+			jmp physics4d_raycastColliderGroup_step_loop_end
+		
+		
+		physics4d_raycastColliderGroup_step_loop_continue:
 		;update the current point
 		lea eax, [ebp-32]
 		push eax
@@ -520,7 +567,7 @@ physics4d_raycastColliderGroup:
 		call vec4_add
 		add esp, 12
 		
-		;continue
+		;increment values
 		inc ebx
 		cmp ebx, dword[ebp-36]
 		jle physics4d_raycastColliderGroup_step_loop_start

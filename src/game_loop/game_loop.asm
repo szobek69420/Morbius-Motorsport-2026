@@ -56,6 +56,8 @@ section .rodata use32
 	print_render_distance db "Render distance: %d",0
 	
 	print_fps db "FPS: %d",0
+	print_physics_delta_time db "Physics: %d ms",0
+	print_chunk_loader_delta_time db "Chunk loader: %d ms",0
 	
 section .bss use32
 	should_close resb 4					;tsValue*
@@ -72,7 +74,7 @@ section .bss use32
 	chunk_manager_4d resb 4
 	
 section .data use32
-	render_distance dd 2
+	render_distance dd 4
 
 	last_frame_milliseconds dd 0		;int, the GetTickCount of the last frame
 	delta_time_milliseconds dd 0		;int
@@ -85,6 +87,9 @@ section .data use32
 	milliseconds_since_last_fps_update dd 0
 	frames_in_this_second dd 0
 	frames_in_last_second dd 0
+	
+	delta_time_milliseconds_physics dd 0		;int (it is just for monitoring purposes)
+	delta_time_milliseconds_chunk_loader dd 0	;int (it is just for monitoring purposes)
 
 section .text use32
 
@@ -472,7 +477,6 @@ gameLoop_physics:
 	sub esp, 4			;last tick(ms) count		;4
 	sub esp, 4			;current tick(ms) count		;8
 	sub esp, 4			;0.001f*(current-last)		;12
-	sub esp, 4			;glfwGetTime test			;16
 	
 	finit
 	
@@ -505,8 +509,7 @@ gameLoop_physics:
 		movss xmm1, dword[ONE_PER_THOUSAND]
 		mulss xmm0, xmm1
 		movss dword[ebp-12], xmm0
-	
-	
+		
 		
 		;call physics_update
 		push dword[ebp-12]
@@ -520,6 +523,10 @@ gameLoop_physics:
 		call player_updatePhysics
 		add esp, 8
 		
+		;update the displayed delta time
+		call [GetTickCount]
+		sub eax, dword[ebp-8]
+		mov dword[delta_time_milliseconds_physics], eax
 		
 		;check if an exit is necessary
 		push 0
@@ -539,6 +546,7 @@ gameLoop_chunkLoader:
 	mov ebp, esp
 	
 	sub esp, 4				;last chunk update
+	
 	mov dword[ebp-4], 0
 	
 	finit
@@ -562,6 +570,11 @@ gameLoop_chunkLoader:
 			call chunkManager4d_load
 			call chunkManager4d_unload
 			add esp, 12
+			
+			;set the displayed delta time
+			call [GetTickCount]
+			sub eax, dword[ebp-4]
+			mov dword[delta_time_milliseconds_chunk_loader], eax
 		
 		gameLoop_chunk_loader_loop_no_load:
 		
@@ -836,6 +849,30 @@ gameLoop_drawData:
 	
 	lea eax, [ebp-100]
 	render_text eax, dword[TEXT_ORIGIN_TOP_RIGHT], dword[TEXT_PIVOT_TOP_RIGHT], 30, 30
+	
+	
+	;print physics delta time
+	push dword[delta_time_milliseconds_physics]
+	push print_physics_delta_time
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 12
+	
+	lea eax, [ebp-100]
+	render_text eax, dword[TEXT_ORIGIN_TOP_RIGHT], dword[TEXT_PIVOT_TOP_RIGHT], 30, 55
+	
+	
+	;print chunk loader delta time
+	push dword[delta_time_milliseconds_chunk_loader]
+	push print_chunk_loader_delta_time
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 12
+	
+	lea eax, [ebp-100]
+	render_text eax, dword[TEXT_ORIGIN_TOP_RIGHT], dword[TEXT_PIVOT_TOP_RIGHT], 30, 80
 	
 	
 	mov esp, ebp

@@ -746,12 +746,12 @@ player_gaycast:
 		push dword[eax+4]
 		push dword[eax]
 		push print_raycast_collider_pos
-		call my_printf
+		;call my_printf
 		jmp player_raycast_end
 	
 	player_raycast_no_hit:
 		push print_raycast_no_hit
-		call my_printf
+		;call my_printf
 		jmp player_raycast_end
 	
 	player_raycast_end:
