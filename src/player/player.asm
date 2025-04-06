@@ -38,8 +38,13 @@ section .rodata use32
 	HYPERPLANE_ROTATION_VECTOR_2 dd 0.5833265, 0.0, -0.639972, 0.5001663
 	HYPERPLANE_ROTATION_ANGLE dd 2.0
 	
+	RAYCAST_MAX_DISTANCE dd 5.0
+	
 	print_two_floats db "%f %f",10,0
 	test_text db "big chungus",10,0
+	
+	print_raycast_collider_pos db "raycast hit at: (%f, %f, %f, %f)",10,0
+	print_raycast_no_hit db "kein raycast hit",10,0
 
 section .text use32
 
@@ -47,6 +52,7 @@ section .text use32
 	global player_destroy			;void player_destroy(player* player)
 	global player_update 			;void player_update(player* player, float deltaTime)
 	global player_updatePhysics		;void player_updatePhysics(player* player, float deltaTime)
+	global player_lookDirection		;void player_lookDirection(player* player, vec4* buffer)
 	
 	extern my_malloc
 	extern my_free
@@ -81,6 +87,7 @@ section .text use32
 	extern aabb4d_setHyperPlane
 	extern physics4d_registerNonkinematic
 	extern physics4d_unregisterNonkinematic
+	extern physics4d_raycastColliderGroup
 	
 	extern mutex_create
 	extern mutex_destroy
@@ -225,61 +232,44 @@ player_updatePhysics:
 	;call player_applyGravity
 	add esp, 8
 	
+	push dword[ebp+8]
+	call player_gaycast
+	add esp, 4
+	
 	mov esp, ebp
 	pop ebp
 	ret
 	
-;snap player collider onto the hyperplane
-;it is necessary, because the collision resolver may move the player collider out of the hyperplane
-;void player_snapColliderOntoHyperplane(Player* player)
-player_snapColliderOntoHyperplane:
+
+player_lookDirection:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 12				;temp vec3				12
-	sub esp, 4				;HyperPlane*			16
-	sub esp, 4				;collider position		20
+	sub esp, 12			;player forward in 3d		12
+	sub esp, 4			;hyperplane address			16
 	
-	;obtain hyperplane and collider position
+	;get the player's look direction in 3d
+	lea eax, dword[ebp-12]
+	push eax
 	mov eax, dword[ebp+8]
-	push dword[ebp+28]
+	push dword[eax]
+	call camera_forward
+	add esp, 8
+	
+	;convert it to 4d
+	mov eax, dword[ebp+8]
+	push dword[eax+28]
 	call chunkManager4d_getHyperPlane
 	mov dword[ebp-16], eax
 	add esp, 4
 	
-	mov eax, dword[ebp+8]
-	push dword[ebp+24]
-	call aabb4d_getPosition
-	mov dword[ebp-20], eax
-	add esp, 4
-	
-	
-	;lock hyperplane mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax+32]
-	call mutex_lock
+	push dword[ebp+12]
+	lea eax, [ebp-12]
+	push eax
+	push dword[ebp-16]
+	call hyperPlane_directionTo4d
 	add esp, 8
 	
-	lea eax, [ebp-12]
-	push eax
-	push dword[ebp-20]
-	push dword[ebp-16]
-	call hyperPlane_positionTo3d
-	add esp, 12
-	
-	push dword[ebp-20]
-	lea eax, [ebp-12]
-	push eax
-	push dword[ebp-16]
-	call hyperPlane_positionTo4d
-	add esp, 12
-	
-	;unlock hyperplane mutex
-	mov eax, dword[ebp+8]
-	push dword[eax+32]
-	call mutex_unlock
-	add esp, 4
 	
 	mov esp, ebp
 	pop ebp
@@ -694,6 +684,77 @@ player_rotatePlane:
 	add esp, 4
 	
 	player_rotatePlane_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;void player_gaycast(player* player)
+player_gaycast:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 16			;player position				16
+	sub esp, 16			;player look direction			32
+	sub esp, 4			;raycast hit collider			36
+	sub esp, 4			;raycast hit direction			40
+	sub esp, 4			;hyperplane address				44
+	
+	;get the hyperplane
+	mov eax, dword[ebp+8]
+	push dword[eax+28]
+	call chunkManager4d_getHyperPlane
+	mov dword[ebp-44], eax
+	add esp, 4
+	
+	;get the player's position
+	mov eax, dword[ebp+8]
+	mov eax, dword[eax]
+	lea ecx, dword[ebp-16]
+	push ecx
+	push eax
+	push dword[ebp-44]
+	call hyperPlane_positionTo4d
+	add esp, 12
+	
+	;get the player's look direction
+	lea eax, [ebp-32]
+	push eax
+	push dword[ebp+8]
+	call player_lookDirection
+	add esp, 8
+	
+	;cast the gay
+	lea eax, [ebp-40]
+	push eax
+	lea eax, [ebp-36]
+	push eax
+	push dword[RAYCAST_MAX_DISTANCE]
+	lea eax, [ebp-32]
+	push eax
+	lea eax, [ebp-16]
+	push eax
+	call physics4d_raycastColliderGroup
+	add esp, 20
+	
+	;was there a hit
+	cmp eax, 0
+	je player_raycast_no_hit
+		mov eax, dword[ebp-36]
+		push dword[eax+12]
+		push dword[eax+8]
+		push dword[eax+4]
+		push dword[eax]
+		push print_raycast_collider_pos
+		call my_printf
+		jmp player_raycast_end
+	
+	player_raycast_no_hit:
+		push print_raycast_no_hit
+		call my_printf
+		jmp player_raycast_end
+	
+	player_raycast_end:
 	mov esp, ebp
 	pop ebp
 	ret

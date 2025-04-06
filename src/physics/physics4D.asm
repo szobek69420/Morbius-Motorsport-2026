@@ -14,6 +14,9 @@ section .rodata use32
 
 	print_remaining_colliders db "physics4d_deinit:",10,9,"remaining colliders: %d",10,9,"remaining collider groups: %d",10,0
 	
+	print_int_nl db "%d",10,0
+	test_text db "holodomorbius",10,0
+	
 section .data use32
 	is_initialized dd 0
 	
@@ -91,7 +94,7 @@ physics4d_init:
 	call vector_init
 	
 	;init thread safe queue
-	push 50
+	push 500
 	push 12
 	push register_operation_buffer
 	call tsQueue_init
@@ -424,6 +427,16 @@ physics4d_raycastColliderGroup:
 	
 	sub esp, 16			;current point			16
 	sub esp, 16			;direction scaled		32
+	sub esp, 4			;max step count			36
+	sub esp, 4			;return value			40
+	sub esp, 4			;collider buffer		44
+	sub esp, 4			;direction buffer		48
+	
+	mov dword[ebp-40], 0
+	
+	;check if there are any collider groups
+	cmp dword[registered_collider_groups], 0
+	jle physics4d_raycastColliderGroup_end
 	
 	;init current point
 	mov eax, dword[ebp+20]
@@ -457,6 +470,79 @@ physics4d_raycastColliderGroup:
 	push eax
 	call vec4_scale
 	add esp, 12
+	
+	;calculate the max step count
+	fld dword[ebp+28]
+	fld dword[RAYCAST_PRECISION]
+	fdivp
+	fistp dword[ebp-36]
+	
+	cmp dword[ebp-36], 0
+	jle physics4d_raycastColliderGroup_end
+	
+	xor ebx, ebx		;index in ebx
+	physics4d_raycastColliderGroup_step_loop_start:
+		;check for intersection
+		mov eax, registered_collider_groups
+		mov esi, dword[eax+12]		;current collider group in esi
+		mov edi, dword[eax]			;index in edi
+		physics4d_raycastColliderGroup_intersect_loop_start:
+			;check for intersection
+			lea eax, [ebp-48]
+			push eax
+			lea eax, [ebp-44]
+			push eax
+			lea eax, [ebp-16]
+			push eax
+			push dword[esi]
+			call colliderGroup4d_intersectWithPoint
+			add esp, 16
+			
+			;if there was an intersection, exit the loops
+			test eax, eax
+			jz physics4d_raycastColliderGroup_intersect_loop_continue
+			
+				mov dword[ebp-40], 69
+				jmp physics4d_raycastColliderGroup_step_loop_end	;direkt step_loop
+			
+			physics4d_raycastColliderGroup_intersect_loop_continue:
+			add esi, 4
+			dec edi
+			test edi, edi
+			jnz physics4d_raycastColliderGroup_intersect_loop_start
+		
+		;update the current point
+		lea eax, [ebp-32]
+		push eax
+		lea eax, [ebp-16]
+		push eax
+		push eax
+		call vec4_add
+		add esp, 12
+		
+		;continue
+		inc ebx
+		cmp ebx, dword[ebp-36]
+		jle physics4d_raycastColliderGroup_step_loop_start
+	physics4d_raycastColliderGroup_step_loop_end:
+	
+	
+	;check if there was an intersection
+	cmp dword[ebp-40], 0
+	je physics4d_raycastColliderGroup_end
+	
+		;set the buffers
+		mov eax, dword[ebp+32]
+		mov ecx, dword[ebp-44]
+		mov dword[eax], ecx
+		
+		mov eax, dword[ebp+36]
+		mov ecx, dword[ebp-48]
+		mov dword[eax], ecx
+	
+	physics4d_raycastColliderGroup_end:
+	;set return value
+	mov eax, dword[ebp-40]
 	
 	mov esp, ebp
 	pop ebx

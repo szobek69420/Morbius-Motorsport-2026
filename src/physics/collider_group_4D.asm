@@ -570,8 +570,7 @@ colliderGroup4d_intersectWithPoint:
 	
 		add esi, 4
 		inc edi
-		mov eax, dword[ebp+16]
-		cmp edi, dword[eax]
+		cmp edi, dword[ebp-8]
 		jl colliderGroup4d_intersectWithPoint_helper_loop_start
 	
 	;get the helper with the least distance
@@ -592,7 +591,7 @@ colliderGroup4d_intersectWithPoint:
 		add esi, 8
 		dec edi
 		test edi, edi
-		jnz colliderGroup4d_intersectWithPoint_helper_loop_start
+		jnz colliderGroup4d_intersectWithPoint_min_loop_start
 	
 	;check if there is an intersection
 	;if the minimum distance is positive, then nein
@@ -620,7 +619,6 @@ colliderGroup4d_intersectWithPoint:
 	lea eax, [ebp-36]
 	mov dword[esp+4], eax
 	call vec4_sub
-	add esp, 12
 	
 	
 	;get the direction
