@@ -30,6 +30,7 @@ nasm -fobj glm3/mat3.asm -o build/mat3.o
 nasm -fobj glm3/mat4.asm -o build/mat4.o
 nasm -fobj player/player.asm -o build/player.o
 nasm -fobj hypershapes/hyperplane.asm -o build/hyperplane.o
+nasm -fobj renderable/hypercube_renderable.asm -o build/hypercube_renderable.o
 nasm -fobj renderable/renderable.asm -o build/renderable.o
 nasm -fobj renderer/text/font.asm -o build/font.o
 nasm -fobj renderer/text/text_renderer.asm -o build/text_renderer.o
@@ -50,6 +51,7 @@ build/texture_handler.o ^
 build/image.o ^
 build/text_renderer.o ^
 build/font.o ^
+build/hypercube_renderable.o ^
 build/renderable.o ^
 build/opengl.o ^
 build/shader.o ^

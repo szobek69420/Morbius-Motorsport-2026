@@ -1,0 +1,12 @@
+#version 460 core
+in vec2 uv;
+
+out vec4 fragmentColour;
+
+uniform sampler2D albedo;
+uniform sampler2D specular;
+
+void main()
+{
+	fragmentColour=texture(albedo, uv);
+}

@@ -9,7 +9,8 @@
 ;	ChunkManager* chunkManager;		28
 ;	Mutex* hyperPlaneMutex;			32
 ;	vec4 previousColliderPos; 		36(unused)
-;}		52 bytes
+;	Renderable* hypercube			52
+;}		56 bytes
 
 section .rodata use32
 	ZERO dd 0.0
@@ -40,11 +41,14 @@ section .rodata use32
 	
 	RAYCAST_MAX_DISTANCE dd 5.0
 	
+	raycast_hypercube_texture db "sprites/player_hypercube.bmp",0
+	
 	print_two_floats db "%f %f",10,0
 	test_text db "big chungus",10,0
 	
 	print_raycast_collider_pos db "raycast hit at: (%f, %f, %f, %f)",10,0
 	print_raycast_no_hit db "kein raycast hit",10,0
+	
 
 section .text use32
 
@@ -102,13 +106,18 @@ section .text use32
 	
 	extern chunkManager4d_getHyperPlane
 	
+	extern renderable_setAlbedo
+	extern hyperCubeRenderable_create
+	extern hyperCubeRenderable_destroy
+	extern hyperCubeRenderable_render
+	
 player_init:
 	push ebp
 	mov ebp, esp
 	
 	sub esp, 4		;player*
 	
-	push 52
+	push 56
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
@@ -166,6 +175,15 @@ player_init:
 	call aabb4d_setHyperPlane
 	add esp, 8
 	
+	;create raycast hypercube
+	call hyperCubeRenderable_create
+	mov ecx, dword[ebp-4]
+	mov dword[ecx+52], eax
+	
+	push raycast_hypercube_texture
+	push eax
+	call renderable_setAlbedo
+	add esp, 8
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -189,6 +207,11 @@ player_destroy:
 	mov eax, dword[ebp+8]
 	push dword[eax+24]
 	call physics4d_unregisterNonkinematic
+	
+	;destory raycast hypercube
+	mov eax, dword[ebp+8]
+	push dword[eax+52]
+	call hyperCubeRenderable_destroy
 	
 	;dealloc
 	push dword[ebp+8]
