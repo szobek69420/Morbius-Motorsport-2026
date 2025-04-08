@@ -148,6 +148,7 @@ section .text use32
 	extern player_destroy
 	extern player_update
 	extern player_updatePhysics
+	extern player_drawRaycastHypercube
 	
 	extern hyperPlane_create
 	
@@ -390,6 +391,12 @@ game_loop:
 		push pv_matrix
 		push dword[chunk_manager_4d]
 		call chunkManager4d_render
+		add esp, 8
+		
+		;draw the raycast hypercube
+		push pv_matrix
+		push dword[pplayer]
+		call player_drawRaycastHypercube
 		add esp, 8
 		
 		

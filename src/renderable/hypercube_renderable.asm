@@ -21,6 +21,13 @@ section .rodata use32
 	geometry_shader_path db "shaders/hypercube/hypercube.gag",0
 	fragment_shader_path db "shaders/hypercube/hypercube.fag",0
 	
+	uniform_position_name db "position",0
+	uniform_hyperPlanePos_name db "hyperPlanePos",0
+	uniform_hyperPlaneDir1_name db "hyperPlaneDir1",0
+	uniform_hyperPlaneDir2_name db "hyperPlaneDir2",0
+	uniform_hyperPlaneDir3_name db "hyperPlaneDir3",0
+	uniform_hyperPlaneNormal_name db "hyperPlaneNormal",0
+	
 section .data use32
 	shader dd 0
 	active_hypercubes dd 0
@@ -29,7 +36,7 @@ section .text use32
 	
 	global hyperCubeRenderable_create		;Renderable* hyperCubeRenderable_create()
 	global hyperCubeRenderable_destroy		;void hyperCubeRenderable_destroy(Renderable* hyperCubeRenderable)
-	global hyperCubeRenderable_render		;void hyperCubeRenderable_render(Renderable* hypercube, mat4* pv)
+	global hyperCubeRenderable_render		;void hyperCubeRenderable_render(Renderable* hypercube, mat4* pv, HyperPlane* hp, vec4* position)
 	
 	extern renderable_createCustom
 	extern renderable_destroy
@@ -37,6 +44,10 @@ section .text use32
 	extern renderable_createShader
 	extern renderable_destroyShader
 	extern renderable_useShader
+	extern renderable_setUniform
+	extern RENDERABLE_UNIFORM_VEC4
+	
+	extern hyperPlane_getNormal
 	
 hyperCubeRenderable_create:
 	push ebp
@@ -94,6 +105,8 @@ hyperCubeRenderable_destroy:
 		push dword[shader]
 		call renderable_destroyShader
 		add esp, 4
+		
+		mov dword[shader], 0
 	
 	hyperCubeRenderable_destroy_end:
 	mov esp, ebp
@@ -105,6 +118,88 @@ hyperCubeRenderable_render:
 	push ebp
 	mov ebp, esp
 	
+	sub esp, 16					;hyperplane normal		16
+	
+	;calculate hyperplane normal
+	lea eax, [ebp-16]
+	push eax
+	push dword[ebp+16]
+	call hyperPlane_getNormal
+	add esp, 8
+	
+	;use shader
+	push dword[shader]
+	call renderable_useShader
+	add esp, 4
+	
+	;set position
+	mov eax, dword[ebp+20]
+	push dword[eax+12]
+	push dword[eax+8]
+	push dword[eax+4]
+	push dword[eax]
+	push dword[RENDERABLE_UNIFORM_VEC4]
+	push uniform_position_name
+	push dword[shader]
+	call renderable_setUniform
+	add esp, 28
+	
+	;set hyperplane data
+	mov eax, dword[ebp+16]
+	push dword[eax+12]
+	push dword[eax+8]
+	push dword[eax+4]
+	push dword[eax]
+	push dword[RENDERABLE_UNIFORM_VEC4]
+	push uniform_hyperPlanePos_name
+	push dword[shader]
+	call renderable_setUniform
+	add esp, 28
+	
+	mov eax, dword[ebp+16]
+	push dword[eax+28]
+	push dword[eax+24]
+	push dword[eax+20]
+	push dword[eax+16]
+	push dword[RENDERABLE_UNIFORM_VEC4]
+	push uniform_hyperPlaneDir1_name
+	push dword[shader]
+	call renderable_setUniform
+	add esp, 28
+	
+	mov eax, dword[ebp+16]
+	push dword[eax+44]
+	push dword[eax+40]
+	push dword[eax+36]
+	push dword[eax+32]
+	push dword[RENDERABLE_UNIFORM_VEC4]
+	push uniform_hyperPlaneDir2_name
+	push dword[shader]
+	call renderable_setUniform
+	add esp, 28
+	
+	mov eax, dword[ebp+16]
+	push dword[eax+60]
+	push dword[eax+56]
+	push dword[eax+52]
+	push dword[eax+48]
+	push dword[RENDERABLE_UNIFORM_VEC4]
+	push uniform_hyperPlaneDir3_name
+	push dword[shader]
+	call renderable_setUniform
+	add esp, 28
+	
+	push dword[ebp-4]
+	push dword[ebp-8]
+	push dword[ebp-12]
+	push dword[ebp-16]
+	push dword[RENDERABLE_UNIFORM_VEC4]
+	push uniform_hyperPlaneNormal_name
+	push dword[shader]
+	call renderable_setUniform
+	add esp, 28
+	
+	;render
 	push 69
 	push dword[shader]
 	push dword[ebp+12]

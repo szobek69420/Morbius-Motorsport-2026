@@ -7,8 +7,10 @@ layout (location=1) in uint hypercubeCellData;
 
 out uint cellData;
 
+uniform vec4 position;
+
 void main()
 {
 	cellData=hypercubeCellData;
-	gl_Position=hypercubePos;
+	gl_Position=hypercubePos+position;
 }

@@ -49,14 +49,19 @@ section .rodata use32
 	print_raycast_collider_pos db "raycast hit at: (%f, %f, %f, %f)",10,0
 	print_raycast_no_hit db "kein raycast hit",10,0
 	
+	
+section .data use32
+	raycast_hit_collider dd 0			;Aabb4D*
+	raycast_hit_direction dd 0			;int
 
 section .text use32
 
-	global player_init				;player* player_init(camera* cum, ChunkManager4D* chunkManager)
-	global player_destroy			;void player_destroy(player* player)
-	global player_update 			;void player_update(player* player, float deltaTime)
-	global player_updatePhysics		;void player_updatePhysics(player* player, float deltaTime)
-	global player_lookDirection		;void player_lookDirection(player* player, vec4* buffer)
+	global player_init					;player* player_init(camera* cum, ChunkManager4D* chunkManager)
+	global player_destroy				;void player_destroy(player* player)
+	global player_update 				;void player_update(player* player, float deltaTime)
+	global player_updatePhysics			;void player_updatePhysics(player* player, float deltaTime)
+	global player_lookDirection			;void player_lookDirection(player* player, vec4* buffer)
+	global player_drawRaycastHypercube	;void player_drawRaycastHypercube(Player* player, mat4* pv)
 	
 	extern my_malloc
 	extern my_free
@@ -297,6 +302,44 @@ player_lookDirection:
 	mov esp, ebp
 	pop ebp
 	ret
+	
+	
+;void player_drawRaycastHypercube(Player* player, mat4* pv)
+player_drawRaycastHypercube:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4				;hyperplane			4
+	
+	;check if there was a hit
+	cmp dword[raycast_hit_collider], 0
+	je player_drawRaycastHypercube_end
+	
+	;get hyperplane
+	mov eax, dword[ebp+8]
+	push dword[eax+28]
+	call chunkManager4d_getHyperPlane
+	mov dword[ebp-4], eax
+	add esp, 4
+	
+	;draw the thing
+	push dword[raycast_hit_collider]
+	push dword[ebp-4]
+	push dword[ebp+12]
+	mov eax, dword[ebp+8]
+	push dword[eax+52]
+	call hyperCubeRenderable_render
+	add esp, 16
+	
+	player_drawRaycastHypercube_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;internal functions
+;-------------------------------------------------------------------------------
+;-------------------------------------------------------------------------------
 	
 	
 player_move:		;void player_move(player* player, float deltaTime)
@@ -764,17 +807,14 @@ player_gaycast:
 	cmp eax, 0
 	je player_raycast_no_hit
 		mov eax, dword[ebp-36]
-		push dword[eax+12]
-		push dword[eax+8]
-		push dword[eax+4]
-		push dword[eax]
-		push print_raycast_collider_pos
-		;call my_printf
+		mov dword[raycast_hit_collider], eax
+		mov eax, dword[ebp-40]
+		mov dword[raycast_hit_direction], eax
 		jmp player_raycast_end
 	
 	player_raycast_no_hit:
-		push print_raycast_no_hit
-		;call my_printf
+		mov dword[raycast_hit_collider], 0
+		mov dword[raycast_hit_direction], 0
 		jmp player_raycast_end
 	
 	player_raycast_end:
