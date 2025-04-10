@@ -10,7 +10,9 @@
 ;	Mutex* hyperPlaneMutex;			32
 ;	vec4 previousColliderPos; 		36(unused)
 ;	Renderable* hypercube			52
-;}		56 bytes
+;	Aabb4D* lastRaycastCollider		56 //zero if no hit
+;	int lastRaycastDirection		60
+;}		64 bytes
 
 section .rodata use32
 	ZERO dd 0.0
@@ -24,6 +26,7 @@ section .rodata use32
 	
 	UP dd 0.0, 1.0, 0.0
 	DOWN dd 0.0, -1.0, 0.0
+	NULL_VECTOR_4D dd 0.0, 0.0, 0.0, 0.0
 	
 	LOOK_SENSITIVITY_X dd -0.03
 	LOOK_SENSITIVITY_Y dd 0.03
@@ -43,16 +46,13 @@ section .rodata use32
 	
 	raycast_hypercube_texture db "sprites/player_hypercube.bmp",0
 	
+	print_int_nl db "%d",10,0
 	print_two_floats db "%f %f",10,0
 	test_text db "big chungus",10,0
 	
 	print_raycast_collider_pos db "raycast hit at: (%f, %f, %f, %f)",10,0
 	print_raycast_no_hit db "kein raycast hit",10,0
 	
-	
-section .data use32
-	raycast_hit_collider dd 0			;Aabb4D*
-	raycast_hit_direction dd 0			;int
 
 section .text use32
 
@@ -122,7 +122,7 @@ player_init:
 	
 	sub esp, 4		;player*
 	
-	push 56
+	push 64
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
@@ -189,6 +189,11 @@ player_init:
 	push eax
 	call renderable_setAlbedo
 	add esp, 8
+	
+	;init raycast info
+	mov eax, dword[ebp-4]
+	mov dword[eax+56], 0
+	mov dword[eax+60], 0
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -312,7 +317,8 @@ player_drawRaycastHypercube:
 	sub esp, 4				;hyperplane			4
 	
 	;check if there was a hit
-	cmp dword[raycast_hit_collider], 0
+	mov eax, dword[ebp+8]
+	cmp dword[eax+56], 0
 	je player_drawRaycastHypercube_end
 	
 	;get hyperplane
@@ -323,10 +329,10 @@ player_drawRaycastHypercube:
 	add esp, 4
 	
 	;draw the thing
-	push dword[raycast_hit_collider]
+	mov eax, dword[ebp+8]
+	push dword[eax+56]
 	push dword[ebp-4]
 	push dword[ebp+12]
-	mov eax, dword[ebp+8]
 	push dword[eax+52]
 	call hyperCubeRenderable_render
 	add esp, 16
@@ -806,15 +812,17 @@ player_gaycast:
 	;was there a hit
 	cmp eax, 0
 	je player_raycast_no_hit
+		mov ecx, dword[ebp+8]
 		mov eax, dword[ebp-36]
-		mov dword[raycast_hit_collider], eax
+		mov dword[ecx+56], eax
 		mov eax, dword[ebp-40]
-		mov dword[raycast_hit_direction], eax
+		mov dword[ecx+60], eax
 		jmp player_raycast_end
 	
 	player_raycast_no_hit:
-		mov dword[raycast_hit_collider], 0
-		mov dword[raycast_hit_direction], 0
+		mov ecx, dword[ebp+8]
+		mov dword[ecx+56], 0
+		mov dword[ecx+60], 0
 		jmp player_raycast_end
 	
 	player_raycast_end:

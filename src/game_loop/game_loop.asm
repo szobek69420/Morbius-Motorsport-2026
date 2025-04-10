@@ -30,6 +30,9 @@ section .rodata use32
 	SKY_COLOUR_B dd 0.9215
 	SKY_COLOUR_A dd 1.0
 	
+	PRETTY_YELLOW dd 1.0, 0.85, 0.0, 1.0
+	BLACK dd 0.0, 0.0, 0.0, 1.0
+	
 	test_text db "OTTO VON BISMARCK",0
 	test_text2 db "hello everybody my name is welcome",10,0
 	print_int_nl db "%d",10,0
@@ -58,6 +61,11 @@ section .rodata use32
 	print_fps db "FPS: %d",0
 	print_physics_delta_time db "Physics: %d ms",0
 	print_chunk_loader_delta_time db "Chunk loader: %d ms",0
+	
+	print_raycast_hit_info db "Raycast hit: (%f; %f; %f; %f)",0
+	print_raycast_no_hit_info db "Raycast hit: nothing bozo",0
+	
+	print_cursor db "+",0
 	
 section .bss use32
 	should_close resb 4					;tsValue*
@@ -173,14 +181,17 @@ section .text use32
 	extern textRenderer_drawText
 	extern textRenderer_setScreenSize
 	extern textRenderer_setFontSize
+	extern textRenderer_setColour
 	extern TEXT_ORIGIN_BOTTOM_CENTER
 	extern TEXT_ORIGIN_TOP_LEFT
 	extern TEXT_ORIGIN_BOTTOM_RIGHT
 	extern TEXT_ORIGIN_TOP_RIGHT
+	extern TEXT_ORIGIN_CENTER_CENTER
 	extern TEXT_PIVOT_BOTTOM_CENTER
 	extern TEXT_PIVOT_BOTTOM_RIGHT
 	extern TEXT_PIVOT_TOP_LEFT
 	extern TEXT_PIVOT_TOP_RIGHT
+	extern TEXT_PIVOT_CENTER_CENTER
 	extern FONT_CHAR_WIDTH
 	extern FONT_CHAR_HEIGHT
 	
@@ -387,16 +398,16 @@ game_loop:
 		add esp, 8
 		
 		
-		;render 4d chunks
-		push pv_matrix
-		push dword[chunk_manager_4d]
-		call chunkManager4d_render
-		add esp, 8
-		
 		;draw the raycast hypercube
 		push pv_matrix
 		push dword[pplayer]
 		call player_drawRaycastHypercube
+		add esp, 8
+		
+		;render 4d chunks
+		push pv_matrix
+		push dword[chunk_manager_4d]
+		call chunkManager4d_render
 		add esp, 8
 		
 		
@@ -710,6 +721,15 @@ gameLoop_drawData:
 	call textRenderer_setFontSize
 	add esp, 8
 	
+	;set font colour to yellow
+	mov eax, PRETTY_YELLOW
+	push dword[eax+12]
+	push dword[eax+8]
+	push dword[eax+4]
+	push dword[eax]
+	call textRenderer_setColour
+	add esp, 16
+	
 	;draw point
 	mov eax, dword[chunk_manager_4d]
 	add eax, 32
@@ -798,6 +818,31 @@ gameLoop_drawData:
 	lea eax, [ebp-100]
 	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 185
 	
+	;draw raycast hit
+	mov eax, dword[pplayer]
+	cmp dword[eax+56], 0
+	jne gameLoop_drawData_raycast_hit
+		;no hit
+		render_text print_raycast_no_hit_info, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 205
+		jmp gameLoop_drawData_raycast_done
+		
+	gameLoop_drawData_raycast_hit:
+		mov eax, dword[eax+56]
+		push dword[eax+12]
+		push dword[eax+8]
+		push dword[eax+4]
+		push dword[eax]
+		push print_raycast_hit_info
+		lea eax, [ebp-100]
+		push eax
+		call my_sprintf
+		add esp, 24
+		
+		lea eax, [ebp-100]
+		render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 205
+	
+	gameLoop_drawData_raycast_done:
+	
 	;draw render distance
 	push dword[render_distance]
 	push print_render_distance
@@ -880,6 +925,28 @@ gameLoop_drawData:
 	
 	lea eax, [ebp-100]
 	render_text eax, dword[TEXT_ORIGIN_TOP_RIGHT], dword[TEXT_PIVOT_TOP_RIGHT], 30, 80
+	
+	;set font size to 4x
+	mov eax, dword[FONT_CHAR_HEIGHT]
+	shl eax, 2
+	push eax
+	mov eax, dword[FONT_CHAR_WIDTH]
+	shl eax, 2
+	push eax
+	call textRenderer_setFontSize
+	add esp, 8
+	
+	;set font colour to black
+	mov eax, BLACK
+	push dword[eax+12]
+	push dword[eax+8]
+	push dword[eax+4]
+	push dword[eax]
+	call textRenderer_setColour
+	add esp, 16
+	
+	;print cursor
+	render_text print_cursor, dword[TEXT_ORIGIN_CENTER_CENTER], dword[TEXT_PIVOT_CENTER_CENTER], 0, 0
 	
 	
 	mov esp, ebp

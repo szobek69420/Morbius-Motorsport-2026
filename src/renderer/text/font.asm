@@ -60,7 +60,7 @@ section .rodata use32
 		dd TEXT_LEFT_PARENTHESES
 		dd TEXT_RIGHT_PARENTHESES
 		dd TEXT_SPACE
-		dd TEXT_SPACE
+		dd TEXT_PLUS
 		dd TEXT_COMMA
 		dd TEXT_DASH
 		dd TEXT_DOT
@@ -187,6 +187,16 @@ section .rodata use32
 		db 0,    0,    0,    0xff, 0xff, 0
 		db 0,    0,    0xff, 0xff, 0,    0
 		db 0,    0xff, 0xff, 0,    0,    0
+		
+	TEXT_PLUS:
+		db 0,    0,    0,    0,    0,    0
+		db 0,    0,    0xff, 0xff, 0,    0
+		db 0,    0,    0xff, 0xff, 0,    0
+		db 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+		db 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+		db 0,    0,    0xff, 0xff, 0,    0
+		db 0,    0,    0xff, 0xff, 0,    0
+		db 0,    0,    0,    0,    0,    0
 	
 	TEXT_COMMA:
 		db 0,    0,    0,    0,    0,    0

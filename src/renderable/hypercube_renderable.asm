@@ -2,12 +2,19 @@
 
 section .rodata use32
 	vertex_vector:
-	dd 16
-	dd 16
+	dd 40
+	dd 40
 	dd 4
 	dd vertex_vector_data
 	vertex_vector_data:
-	dd 0.0, 0, 0.0, 1, 0.0, 2, 0.0, 3, 0.0, 4, 0.0, 5, 0.0, 6, 0.0, 7
+	dd 0.0, 0.0, 0.0, 0.0, 0,
+	dd 0.0, 0.0, 0.0, 0.0, 1,
+	dd 0.0, 0.0, 0.0, 0.0, 2,
+	dd 0.0, 0.0, 0.0, 0.0, 3,
+	dd 0.0, 0.0, 0.0, 0.0, 4,
+	dd 0.0, 0.0, 0.0, 0.0, 5,
+	dd 0.0, 0.0, 0.0, 0.0, 6,
+	dd 0.0, 0.0, 0.0, 0.0, 7
 	
 	index_vector:
 	dd 8
@@ -28,6 +35,8 @@ section .rodata use32
 	uniform_hyperPlaneDir3_name db "hyperPlaneDir3",0
 	uniform_hyperPlaneNormal_name db "hyperPlaneNormal",0
 	
+	test_text db "marx verstappen",10,0
+	
 section .data use32
 	shader dd 0
 	active_hypercubes dd 0
@@ -37,6 +46,10 @@ section .text use32
 	global hyperCubeRenderable_create		;Renderable* hyperCubeRenderable_create()
 	global hyperCubeRenderable_destroy		;void hyperCubeRenderable_destroy(Renderable* hyperCubeRenderable)
 	global hyperCubeRenderable_render		;void hyperCubeRenderable_render(Renderable* hypercube, mat4* pv, HyperPlane* hp, vec4* position)
+	
+	extern my_printf
+	
+	extern vec4_print
 	
 	extern renderable_createCustom
 	extern renderable_destroy
@@ -71,7 +84,7 @@ hyperCubeRenderable_create:
 	;create renderable
 	push 1
 	push 1
-	push 1
+	push 4
 	push 1
 	push index_vector
 	push vertex_vector
