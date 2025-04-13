@@ -232,7 +232,6 @@ game_loop:
 	push ebp
 	mov ebp, esp
 	
-	
 	;save pwindow
 	mov eax, dword[ebp+8]
 	mov dword[current_window], eax

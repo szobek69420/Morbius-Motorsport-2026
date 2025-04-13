@@ -24,6 +24,7 @@ global %1
 section .rodata use32
 	load_error db "load_gl_functions: there was an error",10,0
 	print_version db "OpenGL version: %s",10,0
+	print_vendor_and_renderer db "GPU: %s, %s",10,0
 	print_int db "%d",10,0
 
 	;defines (alphabetic order)
@@ -118,6 +119,7 @@ section .rodata use32
 	glDefine GL_READ_FRAMEBUFFER, 0x8ca8
 	glDefine GL_RED, 0x1903
 	glDefine GL_RENDERBUFFER, 0x8d41
+	glDefine GL_RENDERER, 0x1f01
 	glDefine GL_REPEAT, 0x2901
 	glDefine GL_RGB, 0x1907
 	glDefine GL_RGB8, 0x8051
@@ -171,6 +173,7 @@ section .rodata use32
 	glDefine GL_UNSIGNED_BYTE, 0x1401
 	glDefine GL_UNSIGNED_INT, 0x1405
 	glDefine GL_UNSIGNED_INT_24_8, 0x84fa
+	glDefine GL_VENDOR, 0x1f00
 	glDefine GL_VERSION, 0x1f02
 	glDefine GL_VERTEX_SHADER, 0x8b31
 	glDefine GL_ZERO, 0x0
@@ -459,6 +462,21 @@ load_gl_functions:
 	push print_version
 	call my_printf
 	add esp, 8
+	
+	;get vendor and renderer
+	push dword[GL_RENDERER]
+	call [glGetString]
+	test eax, eax
+	jz load_gl_functions_cringe
+	push eax
+	push dword[GL_VENDOR]
+	call [glGetString]
+	test eax, eax
+	jz load_gl_functions_cringe
+	push eax
+	push print_vendor_and_renderer
+	call my_printf
+	add esp, 12
 	
 	
 	jmp load_gl_functions_successful
