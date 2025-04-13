@@ -51,12 +51,12 @@ window_create:
 	
 	call [glfwInit]
 	
-	push 3
+	push 4
 	push dword[GLFW_CONTEXT_VERSION_MAJOR]
 	call [glfwWindowHint]
 	add esp, 8
 	
-	push 3
+	push 6
 	push dword[GLFW_CONTEXT_VERSION_MINOR]
 	call [glfwWindowHint]
 	add esp, 8
