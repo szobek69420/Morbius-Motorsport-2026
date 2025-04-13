@@ -11,6 +11,15 @@
 ;	int chunkAlreadyProcessed;					;60			;it is an indicater for the chunkManager_unload if the chunk can be unloaded
 ;}		64 bytes overall
 
+SIDE_POS_X equ 0x00000000
+SIDE_NEG_X equ 0x00000001
+SIDE_POS_Y equ 0x00000002
+SIDE_NEG_Y equ 0x00000003
+SIDE_POS_Z equ 0x00000004
+SIDE_NEG_Z equ 0x00000005
+SIDE_POS_W equ 0x00000006
+SIDE_NEG_W equ 0x00000007
+
 section .rodata use32
 	EPSILON dd 0.00001
 	VERY_BIG_NUMBER dd 69420.69420
@@ -303,8 +312,7 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
-						mov eax, 0x00000000
-						mov dword[esp+4], eax			;block type and side normal
+						mov dword[esp+4], SIDE_POS_X	;block type and side normal
 						call vector_push_back
 						
 						mov dword[ebp-56], 69			;block is visible
@@ -334,8 +342,7 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
-						mov eax, 0x00000001
-						mov dword[esp+4], eax			;block type and side normal
+						mov dword[esp+4], SIDE_NEG_X	;block type and side normal
 						call vector_push_back
 						
 						mov dword[ebp-56], 69			;block is visible
@@ -363,8 +370,7 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
-						mov eax, 0x00000002
-						mov dword[esp+4], eax			;block type and side normal
+						mov dword[esp+4], SIDE_POS_Y	;block type and side normal
 						call vector_push_back
 						
 						mov dword[ebp-56], 69			;block is visible
@@ -394,8 +400,7 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
-						mov eax, 0x00000003
-						mov dword[esp+4], eax			;block type and side normal
+						mov dword[esp+4], SIDE_NEG_Y	;block type and side normal
 						call vector_push_back
 						
 						mov dword[ebp-56], 69			;block is visible
@@ -423,8 +428,7 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
-						mov eax, 0x00000004
-						mov dword[esp+4], eax			;block type and side normal
+						mov dword[esp+4], SIDE_POS_Z	;block type and side normal
 						call vector_push_back
 						
 						mov dword[ebp-56], 69			;block is visible
@@ -454,8 +458,7 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
-						mov eax, 0x00000005
-						mov dword[esp+4], eax			;block type and side normal
+						mov dword[esp+4], SIDE_NEG_Z	;block type and side normal
 						call vector_push_back
 						
 						mov dword[ebp-56], 69			;block is visible
@@ -482,8 +485,7 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
-						mov eax, 0x00000006
-						mov dword[esp+4], eax			;block type and side normal
+						mov dword[esp+4], SIDE_POS_W	;block type and side normal
 						call vector_push_back
 						
 						mov dword[ebp-56], 69			;block is visible
@@ -511,8 +513,7 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
-						mov eax, 0x00000007
-						mov dword[esp+4], eax			;block type and side normal
+						mov dword[esp+4], SIDE_NEG_W	;block type and side normal
 						call vector_push_back
 						
 						mov dword[ebp-56], 69			;block is visible

@@ -11,13 +11,16 @@
 ;	vec4 previousColliderPos; 		36(unused)
 ;	Renderable* hypercube			52
 ;	Aabb4D* lastRaycastCollider		56 //zero if no hit
-;	int lastRaycastDirection		60
-;}		64 bytes
+;	int lastRaycastDirection		60	//it's for example AABB_POS_X
+;	Renderable* debugNormal			64
+;	GLuint debugNormalShader		68
+;}		72 bytes
 
 section .rodata use32
 	ZERO dd 0.0
 	ONE dd 1.0
 	MINUS_ONE dd -1.0
+	HALF dd 0.5
 	
 	GRAV_ACC dd -9.80625
 	
@@ -46,13 +49,46 @@ section .rodata use32
 	
 	raycast_hypercube_texture db "sprites/player_hypercube.bmp",0
 	
+	debug_normal_vertex_shader db "shaders/player/debug_normal.vag",0
+	debug_normal_fragment_shader db "shaders/player/debug_normal.fag",0
+	
+	debug_normal_vertex_vector:
+	dd 2
+	dd 2
+	dd 4
+	dd debug_normal_vertex_data
+	debug_normal_vertex_data:
+	dd 0.0, 1.0
+	
+	debug_normal_index_vector:
+	dd 2
+	dd 2
+	dd 4
+	dd debug_normal_index_data
+	debug_normal_index_data:
+	dd 0, 1
+	
+	debug_normal_length dd 0.2
+	debug_normal_directions:
+	dd 1.0, 0.0, 0.0, 0.0
+	dd -1.0, 0.0, 0.0, 0.0
+	dd 0.0, 1.0, 0.0, 0.0
+	dd 0.0, -1.0, 0.0, 0.0
+	dd 0.0, 0.0, 1.0, 0.0
+	dd 0.0, 0.0, -1,0, 0.0
+	dd 0.0, 0.0, 0.0, 1,0
+	dd 0.0, 0.0, 0.0, -1,0
+	
+	uniform_debug_normal_lineStart_name db "lineStart",0
+	uniform_debug_normal_lineDirection_name db "lineDirection",0
+	
+	
 	print_int_nl db "%d",10,0
 	print_two_floats db "%f %f",10,0
 	test_text db "big chungus",10,0
 	
 	print_raycast_collider_pos db "raycast hit at: (%f, %f, %f, %f)",10,0
 	print_raycast_no_hit db "kein raycast hit",10,0
-	
 
 section .text use32
 
@@ -75,6 +111,8 @@ section .text use32
 	
 	extern vec4_add
 	extern vec4_sub
+	extern vec4_scale
+	extern vec4_print
 	
 	extern camera_forward
 	extern camera_right
@@ -105,16 +143,29 @@ section .text use32
 	
 	extern hyperPlane_moveInsideOfPlane
 	extern hyperPlane_rotate
+	extern hyperPlane_directionTo3d
 	extern hyperPlane_directionTo4d
 	extern hyperPlane_positionTo3d
 	extern hyperPlane_positionTo4d
 	
 	extern chunkManager4d_getHyperPlane
 	
+	extern renderable_createCustom
+	extern renderable_destroy
+	extern renderable_renderCustom
+	extern renderable_setUniform
 	extern renderable_setAlbedo
+	extern renderable_createShader
+	extern renderable_destroyShader
+	extern renderable_useShader
+	extern renderable_setPrimitive
 	extern hyperCubeRenderable_create
 	extern hyperCubeRenderable_destroy
 	extern hyperCubeRenderable_render
+	extern RENDERABLE_UNIFORM_VEC3
+	
+	extern GL_LINES
+	extern GL_TRIANGLES
 	
 player_init:
 	push ebp
@@ -122,7 +173,7 @@ player_init:
 	
 	sub esp, 4		;player*
 	
-	push 64
+	push 72
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
@@ -190,6 +241,25 @@ player_init:
 	call renderable_setAlbedo
 	add esp, 8
 	
+	;create raycast debug normal renderable and shader
+	push 0
+	push 1
+	push 1
+	push debug_normal_index_vector
+	push debug_normal_vertex_vector
+	call renderable_createCustom
+	mov ecx, dword[ebp-4]
+	mov dword[ecx+64], eax
+	add esp, 20
+	
+	push 0
+	push debug_normal_fragment_shader
+	push debug_normal_vertex_shader
+	call renderable_createShader
+	mov ecx, dword[ebp-4]
+	mov dword[ecx+68], eax
+	add esp, 12
+	
 	;init raycast info
 	mov eax, dword[ebp-4]
 	mov dword[eax+56], 0
@@ -218,10 +288,18 @@ player_destroy:
 	push dword[eax+24]
 	call physics4d_unregisterNonkinematic
 	
-	;destory raycast hypercube
+	;destory raycast hypercube, debug normal and shader
 	mov eax, dword[ebp+8]
 	push dword[eax+52]
 	call hyperCubeRenderable_destroy
+	
+	mov eax, dword[ebp+8]
+	push dword[eax+64]
+	call renderable_destroy
+	
+	mov eax, dword[ebp+8]
+	push dword[eax+68]
+	call renderable_destroyShader
 	
 	;dealloc
 	push dword[ebp+8]
@@ -315,6 +393,9 @@ player_drawRaycastHypercube:
 	mov ebp, esp
 	
 	sub esp, 4				;hyperplane			4
+	sub esp, 4				;vec4* normalDir	8
+	sub esp, 16				;lineStart4d		24
+	sub esp, 16				;lineDirection4d	40
 	
 	;check if there was a hit
 	mov eax, dword[ebp+8]
@@ -328,7 +409,7 @@ player_drawRaycastHypercube:
 	mov dword[ebp-4], eax
 	add esp, 4
 	
-	;draw the thing
+	;draw the hypercube
 	mov eax, dword[ebp+8]
 	push dword[eax+56]
 	push dword[ebp-4]
@@ -336,6 +417,109 @@ player_drawRaycastHypercube:
 	push dword[eax+52]
 	call hyperCubeRenderable_render
 	add esp, 16
+	
+	;draw the debug normal
+	;get the normal direction
+	mov dword[ebp-8], debug_normal_directions
+	mov eax, dword[ebp+8]
+	mov eax, dword[eax+60]		;raycast direction in eax
+	mov ecx, 1					;mask in ecx
+	player_drawRaycastHypercube_normal_loop_start:
+		test eax, ecx
+		jnz player_drawRaycastHypercube_normal_loop_end
+		
+		add dword[ebp-8], 16
+		shl ecx, 1
+		jmp player_drawRaycastHypercube_normal_loop_start
+		
+	player_drawRaycastHypercube_normal_loop_end:
+	
+	push ecx
+	push print_int_nl
+	call my_printf
+	add esp, 8
+	
+	push dword[ebp-8]
+	call vec4_print
+	add esp, 4
+	
+	;calculate lineStart
+	push dword[HALF]
+	push dword[ebp-8]
+	lea eax, [ebp-24]
+	push eax
+	call vec4_scale
+
+	mov eax, dword[ebp+8]
+	push dword[eax+56]
+	lea eax, [ebp-24]
+	push eax
+	push eax
+	call vec4_add
+
+	lea eax, [ebp-24]
+	push eax
+	push eax
+	push dword[ebp-4]
+	call hyperPlane_positionTo3d
+	add esp, 36
+	
+	;calculate lineDirection
+	push dword[debug_normal_length]
+	push dword[ebp-8]
+	lea eax, [ebp-40]
+	push eax
+	call vec4_scale
+
+	lea eax, [ebp-40]
+	push eax
+	push eax
+	push dword[ebp-4]
+	call hyperPlane_directionTo3d
+	add esp, 24
+	
+	;set uniforms
+	mov eax, dword[ebp+8]
+	push dword[eax+68]
+	call renderable_useShader
+	add esp, 4
+	
+	push dword[ebp-16]
+	push dword[ebp-20]
+	push dword[ebp-24]
+	push dword[RENDERABLE_UNIFORM_VEC3]
+	push dword[uniform_debug_normal_lineStart_name]
+	mov eax, dword[ebp+8]
+	push dword[eax+68]
+	call renderable_setUniform
+	add esp, 24
+	
+	push dword[ebp-32]
+	push dword[ebp-36]
+	push dword[ebp-40]
+	push dword[RENDERABLE_UNIFORM_VEC3]
+	push dword[uniform_debug_normal_lineDirection_name]
+	mov eax, dword[ebp+8]
+	push dword[eax+68]
+	call renderable_setUniform
+	add esp, 24
+	
+	;actually draw the line
+	push dword[GL_LINES]
+	call renderable_setPrimitive
+	add esp, 4
+	
+	push 69
+	mov eax, dword[ebp+8]
+	push dword[eax+68]
+	push dword[ebp+12]
+	push dword[eax+64]
+	call renderable_renderCustom
+	add esp, 16
+	
+	push dword[GL_TRIANGLES]
+	call renderable_setPrimitive
+	add esp, 4
 	
 	player_drawRaycastHypercube_end:
 	mov esp, ebp

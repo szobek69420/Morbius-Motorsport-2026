@@ -20,7 +20,7 @@ section .rodata use32
 section .data use32
 	is_initialized dd 0
 	
-	RAYCAST_PRECISION dd 0.05
+	RAYCAST_PRECISION dd 0.025
 
 section .bss use32
 	registered_nonkinematic resb 16			;vector<Aabb4D*>

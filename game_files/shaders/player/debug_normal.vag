@@ -1,0 +1,11 @@
+#version 330 core
+layout (location=0) in float aValue;
+
+uniform vec3 lineStart;
+uniform vec3 lineDirection;
+uniform mat4 pv;
+
+void main()
+{
+	gl_Position=pv*vec4(aValue*lineDirection+lineStart, 1.0);
+}
