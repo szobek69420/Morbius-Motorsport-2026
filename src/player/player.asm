@@ -68,16 +68,16 @@ section .rodata use32
 	debug_normal_index_data:
 	dd 0, 1
 	
-	debug_normal_length dd 0.2
+	debug_normal_length dd 1.0
 	debug_normal_directions:
 	dd 1.0, 0.0, 0.0, 0.0
 	dd -1.0, 0.0, 0.0, 0.0
 	dd 0.0, 1.0, 0.0, 0.0
 	dd 0.0, -1.0, 0.0, 0.0
 	dd 0.0, 0.0, 1.0, 0.0
-	dd 0.0, 0.0, -1,0, 0.0
-	dd 0.0, 0.0, 0.0, 1,0
-	dd 0.0, 0.0, 0.0, -1,0
+	dd 0.0, 0.0, -1.0, 0.0
+	dd 0.0, 0.0, 0.0, 1.0
+	dd 0.0, 0.0, 0.0, -1.0
 	
 	uniform_debug_normal_lineStart_name db "lineStart",0
 	uniform_debug_normal_lineDirection_name db "lineDirection",0
@@ -434,35 +434,14 @@ player_drawRaycastHypercube:
 		
 	player_drawRaycastHypercube_normal_loop_end:
 	
-	push ecx
-	push print_int_nl
-	call my_printf
-	add esp, 8
-	
-	push dword[ebp-8]
-	call vec4_print
-	add esp, 4
-	
 	;calculate lineStart
-	push dword[HALF]
-	push dword[ebp-8]
 	lea eax, [ebp-24]
 	push eax
-	call vec4_scale
-
 	mov eax, dword[ebp+8]
 	push dword[eax+56]
-	lea eax, [ebp-24]
-	push eax
-	push eax
-	call vec4_add
-
-	lea eax, [ebp-24]
-	push eax
-	push eax
 	push dword[ebp-4]
 	call hyperPlane_positionTo3d
-	add esp, 36
+	add esp, 12
 	
 	;calculate lineDirection
 	push dword[debug_normal_length]
@@ -478,6 +457,7 @@ player_drawRaycastHypercube:
 	call hyperPlane_directionTo3d
 	add esp, 24
 	
+	
 	;set uniforms
 	mov eax, dword[ebp+8]
 	push dword[eax+68]
@@ -488,7 +468,7 @@ player_drawRaycastHypercube:
 	push dword[ebp-20]
 	push dword[ebp-24]
 	push dword[RENDERABLE_UNIFORM_VEC3]
-	push dword[uniform_debug_normal_lineStart_name]
+	push uniform_debug_normal_lineStart_name
 	mov eax, dword[ebp+8]
 	push dword[eax+68]
 	call renderable_setUniform
@@ -498,7 +478,7 @@ player_drawRaycastHypercube:
 	push dword[ebp-36]
 	push dword[ebp-40]
 	push dword[RENDERABLE_UNIFORM_VEC3]
-	push dword[uniform_debug_normal_lineDirection_name]
+	push uniform_debug_normal_lineDirection_name
 	mov eax, dword[ebp+8]
 	push dword[eax+68]
 	call renderable_setUniform
@@ -509,7 +489,7 @@ player_drawRaycastHypercube:
 	call renderable_setPrimitive
 	add esp, 4
 	
-	push 69
+	push 0
 	mov eax, dword[ebp+8]
 	push dword[eax+68]
 	push dword[ebp+12]

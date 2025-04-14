@@ -671,7 +671,7 @@ colliderGroup4d_intersectWithPoint:
 		
 		movss xmm0, dword[esi]
 		ucomiss xmm0, dword[edi]
-		jle colliderGroup4d_intersectWithPoint_direction_end
+		jbe colliderGroup4d_intersectWithPoint_direction_end
 			;point is to the negative direction
 			shl dword[ebp-20], 1
 			jmp colliderGroup4d_intersectWithPoint_direction_end
@@ -683,7 +683,7 @@ colliderGroup4d_intersectWithPoint:
 		
 		movss xmm0, dword[esi+4]
 		ucomiss xmm0, dword[edi+4]
-		jle colliderGroup4d_intersectWithPoint_direction_end
+		jbe colliderGroup4d_intersectWithPoint_direction_end
 			;point is to the negative direction
 			shl dword[ebp-20], 1
 			jmp colliderGroup4d_intersectWithPoint_direction_end
@@ -695,7 +695,7 @@ colliderGroup4d_intersectWithPoint:
 		
 		movss xmm0, dword[esi+8]
 		ucomiss xmm0, dword[edi+8]
-		jle colliderGroup4d_intersectWithPoint_direction_end
+		jbe colliderGroup4d_intersectWithPoint_direction_end
 			;point is to the negative direction
 			shl dword[ebp-20], 1
 			jmp colliderGroup4d_intersectWithPoint_direction_end
@@ -706,7 +706,7 @@ colliderGroup4d_intersectWithPoint:
 		
 		movss xmm0, dword[esi+12]
 		ucomiss xmm0, dword[edi+12]
-		jle colliderGroup4d_intersectWithPoint_direction_end
+		jbe colliderGroup4d_intersectWithPoint_direction_end
 			;point is to the negative direction
 			shl dword[ebp-20], 1
 			jmp colliderGroup4d_intersectWithPoint_direction_end
