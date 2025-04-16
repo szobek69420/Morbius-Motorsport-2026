@@ -15,6 +15,8 @@ section .rodata use32
 	error_bad_alloc db "queue_init: queue could not be created",10,0
 	error_queue_is_full db "queue_push: queue is full",10,0
 	error_queue_is_full_2 db "queue_pushBuffer: queue is full",10,0
+	error_queue_is_full_3 db "queue_pushFront: queue is full",10,0
+	error_queue_is_full_4 db "queue_pushBufferFront: queue is full",10,0
 	error_queue_is_empty db "queue_pop: queue is empty",10,0
 	error_invalid_index db "queue_at: % is invalid index, queue size is %d",10,0
 	
@@ -25,14 +27,26 @@ section .text use32
 	global queue_init			;void queue_init(queue* buffer, int elementSize, int maxSize)
 	global queue_destroy		;void queue_destroy(queue* pqueue)
 	
+	
 	;returns 0 if there were no problems
 	global queue_push			;int queue_push(queue* pqueue, element elementToPush)
+	
 	;returns 0 if there were no problems
 	;the element doesn't need to be copied onto the stack
 	;the element will be added to the queue, not the pointer of the element
 	global queue_pushBuffer		;int queue_pushBuffer(queue* pqueue, element* bufferToPush)
+	
+	;returns 0 if there were no problems
+	global queue_pushFront		;int queue_pushFront(queue* pqueue, element elementToPush)
+	
+	;returns 0 if there were no problems
+	;the element doesn't need to be copied onto the stack
+	;the element will be added to the queue, not the pointer of the element
+	global queue_pushBufferFront;int queue_pushBufferFront(queue* pqueue, element* bufferToPush)
+	
 	;returns 0 if there were no problems
 	global queue_pop			;int queue_pop(queue* pqueue, element* nullableBuffer)
+	
 	;returns 0 if there were no problems
 	global queue_peek			;int queue_peek(queue* pqueue, element* buffer)
 	
@@ -188,6 +202,99 @@ queue_pushBuffer:
 	xor eax, eax
 	
 	queue_pushBuffer_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+queue_pushFront:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4				;element index			4
+	
+	;check if the queue is not full
+	mov eax, dword[ebp+8]
+	mov ecx, dword[eax+4]
+	cmp ecx, dword[eax+8]
+	jl queue_pushFront_not_full
+		push error_queue_is_full_3
+		call my_printf
+		mov eax, 69
+		jmp queue_pushFront_end
+	queue_pushFront_not_full:
+	
+	
+	;calculate the destination index
+	mov eax, dword[ebp+8]
+	mov ecx, dword[eax]
+	dec ecx
+	cmp ecx, 0
+	jge queue_pushFront_index_not_negative
+		add ecx, dword[eax+8]
+	queue_pushFront_index_not_negative:
+	mov dword[ebp-4], ecx
+	
+	;copy element
+	push dword[eax+12]			;element size in bytes
+	lea edx, [ebp+12]
+	push edx
+	imul ecx, dword[eax+12]
+	add ecx, dword[eax+16]
+	push ecx
+	call my_memcpy
+	
+	;increment size
+	mov eax, dword[ebp+8]
+	inc dword[eax+4]
+	
+	queue_pushFront_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+queue_pushBufferFront:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4				;element index			4
+	
+	;check if the queue is not full
+	mov eax, dword[ebp+8]
+	mov ecx, dword[eax+4]
+	cmp ecx, dword[eax+8]
+	jl queue_pushBufferFront_not_full
+		push error_queue_is_full_4
+		call my_printf
+		mov eax, 69
+		jmp queue_pushBufferFront_end
+	queue_pushBufferFront_not_full:
+	
+	
+	;calculate the destination index
+	mov eax, dword[ebp+8]
+	mov ecx, dword[eax]
+	dec ecx
+	cmp ecx, 0
+	jge queue_pushBufferFront_index_not_negative
+		add ecx, dword[eax+8]
+	queue_pushBufferFront_index_not_negative:
+	mov dword[ebp-4], ecx
+	
+	;copy element
+	push dword[eax+12]			;element size in bytes
+	push dword[ebp+12]
+	imul ecx, dword[eax+12]
+	add ecx, dword[eax+16]
+	push ecx
+	call my_memcpy
+	
+	;increment size
+	mov eax, dword[ebp+8]
+	inc dword[eax+4]
+	
+	queue_pushBufferFront_end:
 	mov esp, ebp
 	pop ebp
 	ret

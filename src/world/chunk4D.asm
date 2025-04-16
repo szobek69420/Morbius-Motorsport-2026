@@ -58,6 +58,12 @@ section .text use32
 	;the renderable is destroyed by the chunk manager
 	global chunk4d_destroy			;void chunk4d_destroy(Chunk4D* chunk)
 	
+	;converts a 4d position into a block position
+	;ivec4 is just 4 ints
+	;chunkPos is the chunkX, chunkZ, chunkW of the chunk (chunkY is always 0)
+	;chunkLocalPos is the block's position local to the chunk
+	global chunk4d_vec4ToBlockPos	;void chunk4d_vec4ToBlockPos(vec4* position, ivec4* chunkPos, ivec4* chunkLocalPos)
+	
 	extern my_printf
 	extern my_malloc
 	extern my_free
@@ -79,6 +85,99 @@ section .text use32
 	extern colliderGroup4d_printInfo
 	extern physics4d_registerColliderGroup
 	extern physics4d_unregisterColliderGroup
+	
+	
+chunk4d_vec4ToBlockPos:
+	push ebp
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 16				;rounded values
+	
+	;convert the content of the position vector to integers
+	mov eax, dword[ebp+12]
+	
+	fld dword[eax]
+	frndint
+	fistp dword[ebp-16]
+	
+	fld dword[eax+4]
+	frndint
+	fistp dword[ebp-12]
+	
+	fld dword[eax+8]
+	frndint
+	fistp dword[ebp-8]
+	
+	fld dword[eax+12]
+	frndint
+	fistp dword[ebp-4]
+	
+	;get the chunk position and the chunk local block position
+	mov eax, dword[ebp+16]
+	mov ecx, dword[ebp+20]
+	
+	mov edx, dword[ebp-16]
+	mov ebx, edx
+	test ebx, 0x70000000
+	jnz chunk4d_vec4ToBlockPos_x_neg
+		shr ebx, 4
+		jmp chunk4d_vec4ToBlockPos_x_done
+	chunk4d_vec4ToBlockPos_x_neg:
+		neg ebx
+		dec ebx
+		shr ebx, 4
+		neg ebx
+		dec ebx
+	chunk4d_vec4ToBlockPos_x_done:
+	mov dword[eax], ebx
+	and edx, 0xf
+	mov dword[ecx], edx
+	
+	mov edx, dword[ebp-12]
+	mov dword[eax+4], 0
+	and edx, 0xf
+	mov dword[ecx+4], edx
+	
+	mov edx, dword[ebp-8]
+	mov ebx, edx
+	test ebx, 0x70000000
+	jnz chunk4d_vec4ToBlockPos_z_neg
+		shr ebx, 4
+		jmp chunk4d_vec4ToBlockPos_z_done
+	chunk4d_vec4ToBlockPos_z_neg:
+		neg ebx
+		dec ebx
+		shr ebx, 4
+		neg ebx
+		dec ebx
+	chunk4d_vec4ToBlockPos_z_done:
+	mov dword[eax+8], ebx
+	and edx, 0xf
+	mov dword[ecx+8], edx
+	
+	mov edx, dword[ebp-4]
+	mov ebx, edx
+	test ebx, 0x70000000
+	jnz chunk4d_vec4ToBlockPos_w_neg
+		shr ebx, 4
+		jmp chunk4d_vec4ToBlockPos_w_done
+	chunk4d_vec4ToBlockPos_w_neg:
+		neg ebx
+		dec ebx
+		shr ebx, 4
+		neg ebx
+		dec ebx
+	chunk4d_vec4ToBlockPos_w_done:
+	mov dword[eax+12], ebx
+	and edx, 0xf
+	mov dword[ecx+12], edx
+	
+	
+	mov esp, ebp
+	pop ebx
+	pop ebp
+	ret
 	
 chunk4d_destroy:
 	push ebp

@@ -18,6 +18,12 @@ section .text use32
 	;the element will be added to the queue, not the pointer of the element
 	global tsQueue_pushBuffer	;int tsQueue_pushBuffer(tsQueue* pqueue, element* bufferToPush)
 	;returns 0 if there were no problems
+	global tsQueue_pushFront	;int tsQueue_pushFront(tsQueue* pqueue, element elementToPush)
+	;returns 0 if there were no problems
+	;the element doesn't need to be copied onto the stack
+	;the element will be added to the queue, not the pointer of the element
+	global tsQueue_pushBufferFront	;int tsQueue_pushBufferFront(tsQueue* pqueue, element* bufferToPush)
+	;returns 0 if there were no problems
 	global tsQueue_pop			;int tsQueue_pop(tsQueue* pqueue, element* nullableBuffer)
 	;returns 0 if there were no problems
 	global tsQueue_peek			;int tsQueue_peek(tsQueue* pqueue, element* buffer)
@@ -41,6 +47,7 @@ section .text use32
 	extern queue_init
 	extern queue_destroy
 	extern queue_pushBuffer
+	extern queue_pushBufferFront
 	extern queue_pop
 	extern queue_peek
 	extern queue_at
@@ -170,6 +177,70 @@ tsQueue_pushBuffer:
 	pop ebp
 	ret
 	
+	
+tsQueue_pushFront:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;return value
+	
+	;lock mutex
+	mov eax, dword[ebp+8]
+	push -1
+	push dword[eax]
+	call mutex_lock
+	
+	;call pushBufferFront (it is simpler than calling push)
+	lea eax, [ebp+12]
+	push eax					;element*
+	mov eax, dword[ebp+8]
+	push dword[eax+4]			;queue*
+	call queue_pushBufferFront
+	mov dword[ebp-4], eax
+	
+	;release mutex
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	call mutex_unlock
+	
+	
+	mov eax, dword[ebp-4]
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+tsQueue_pushBufferFront:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;return value
+	
+	;lock mutex
+	mov eax, dword[ebp+8]
+	push -1
+	push dword[eax]
+	call mutex_lock
+	
+	;call pushBufferFront
+	push dword[ebp+12]			;element*
+	mov eax, dword[ebp+8]
+	push dword[eax+4]			;queue*
+	call queue_pushBufferFront
+	mov dword[ebp-4], eax
+	
+	;release mutex
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	call mutex_unlock
+	
+	
+	mov eax, dword[ebp-4]
+	
+	mov esp, ebp
+	pop ebp
+	ret
 	
 	
 tsQueue_pop:
