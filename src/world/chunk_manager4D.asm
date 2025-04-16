@@ -7,13 +7,22 @@
 ;	tsQueue<ChunkGraphicsUpdate4D*> pendingGraphicsUpdates;		20
 ;	GLuint shader;												28
 ;	HyperPlane hyperPlane;										32
-;}			96 bytes overall
+;	vector<ChangedBlockInfo> changedBlocks;						96
+;	tsQueue<ChangedBlockInfo> pendingChangedBlocks;				112
+;}			120 bytes overall
 
 ;layout:
 ;struct ChunkGraphicsUpdate4D{
 ;	void* data					0, it is Chunk4D* if load update, otherwise a renderable*
 ;	int load;					4
 ;}		8 bytes overall
+
+;layout:
+;struct ChangedBlockInfo{
+;	int blockType;
+;	int chunkX, chunkZ, chunkW;
+;	int blockX, blockY, blockZ, blockW;
+;}		32 bytes overall
 
 
 ;process of loading a chunk:
@@ -75,6 +84,9 @@ section .text use32
 	
 	global chunkManager4d_getPlayerChunk4D			;void chunkManager4d_getPlayerChunk4D(ChunkManager4D* cm, vec3* playerPos3D, int* chunkX, int* chunkZ, int* chunkW)
 	
+	;adds a block that needs to be changed to the pending changed blocks queue
+	global chunkManager4d_registerChangedBlock	;void chunkManager4d_registerChangedBlock(ChunkManager4D* cm, int blockType, ivec3* chunkPos, ivec4* chunkLocalBlockPos)
+	
 	extern my_printf
 	extern my_malloc
 	extern my_free
@@ -103,6 +115,7 @@ section .text use32
 	extern tsQueue_init
 	extern tsQueue_destroy
 	extern tsQueue_push
+	extern tsQueue_pushFront
 	extern tsQueue_pop
 	extern tsQueue_search
 	extern tsQueue_isEmpty
@@ -136,7 +149,7 @@ chunkManager4d_create:
 	sub esp, 4				;ChunkManager4D*
 	
 	;alloc chunk manager
-	push 96
+	push 120
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
@@ -175,6 +188,21 @@ chunkManager4d_create:
 	call renderable_createShader
 	mov ecx, dword[ebp-4]
 	mov dword[ecx+28], eax
+	
+	;init changed blocks vector
+	mov eax, dword[ebp-4]
+	lea eax, [eax+96]
+	push 32
+	push eax
+	call vector_init
+	
+	;init pending changed blocks queue
+	mov eax, dword[ebp-4]
+	lea eax, [eax+112]
+	push 512
+	push 32
+	push eax
+	call tsQueue_init
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -756,6 +784,169 @@ chunkManager4d_unload:
 	pop ebp
 	ret
 	
+;unloads (if necessary) and reloads a chunk
+;only internal
+;void chunkManager4d_reloadChunk(ChunkManager4D* cm, int chunkX, int chunkZ, int chunkW)
+chunkManager4d_reloadChunk:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 4				;chunk to unload			4
+	sub esp, 4				;ChunkGraphicsUpdate unload	8
+	sub esp, 4				;loaded chunk				12
+	
+	;lock vector mutex
+	mov eax, dword[ebp+20]
+	push -1
+	push dword[eax+16]
+	call mutex_lock
+	add esp, 8
+	
+	mov eax, dword[ebp+20]
+	mov esi, dword[eax+12]			;current chunk in esi
+	mov edi, dword[eax]				;index in edi
+	cmp edi, 0
+	jle chunkManager4d_reloadChunk_unload_done
+	chunkManager4d_reloadChunk_unload_loop_start:
+		mov eax, dword[esi]			;chunk in eax
+		
+		;check chunk x
+		mov ecx, dword[eax]
+		cmp ecx, dword[ebp+24]
+		jne chunkManager4d_reloadChunk_unload_loop_continue
+		
+		;check chunk z
+		mov ecx, dword[eax+4]
+		cmp ecx, dword[ebp+28]
+		jne chunkManager4d_reloadChunk_unload_loop_continue
+		
+		;check chunk w
+		mov ecx, dword[eax+8]
+		cmp ecx, dword[ebp+32]
+		jne chunkManager4d_reloadChunk_unload_loop_continue
+		
+		;unload chunk-----------------
+		mov dword[ebp-4], eax
+		
+		;remove chunk from loaded chunks		
+		push eax
+		push dword[ebp+20]
+		call vector_remove
+		add esp, 8
+		
+		;flee if the removal from the loadedChunks vector was unsuccessful
+		test eax, eax
+		jz chunkManager4d_reloadChunk_unload_done
+		
+		;create graphics update and add it to the queue if there is a renderable
+		mov eax, dword[ebp-4]
+		mov dword[eax+60], 69			;mark chunk as processed
+		cmp dword[eax+12], 0
+		je chunkManager4d_reloadChunk_unload_loop_no_renderable
+			mov dword[eax+60], 0			;unmark chunk as processed
+		
+			push 8
+			call my_malloc
+			mov dword[ebp-8], eax
+			add esp, 4
+			
+			mov dword[eax+4], 0			;unload
+			mov ecx, dword[ebp-4]
+			mov ecx, dword[ecx+12]
+			mov dword[eax], ecx				;renderable
+			
+			;add the graphics update to the queue
+			mov ecx, dword[ebp+20]
+			add ecx, 20
+			
+			push eax
+			push ecx
+			call tsQueue_push
+			add esp, 8
+			
+		chunkManager4d_unload_no_renderable:
+		
+		;yeet chunk
+		push dword[ebp-4]
+		call chunk4d_destroy
+		add esp, 4
+		
+		jmp chunkManager4d_reloadChunk_unload_done
+		
+		chunkManager4d_reloadChunk_unload_loop_continue:
+		add esi, 4
+		dec edi
+		test edi, edi
+		jnz chunkManager4d_reloadChunk_unload_loop_start
+	
+	chunkManager4d_reloadChunk_unload_done:
+	;unlock vector mutex
+	mov eax, dword[ebp+20]
+	push dword[eax+16]
+	call mutex_unlock
+	add esp, 4
+	
+	;load chunk -------------------
+	;generate chunk
+	push dword[ebp+32]			;chunkw
+	push dword[ebp+28]			;chunkz
+	push dword[ebp+24]			;chunkx
+	call chunk4d_generate
+	mov dword[ebp-12], eax
+	add esp, 12
+	
+	;add the chunk to the loaded chunks
+	mov eax, dword[ebp+20]
+	push -1
+	push dword[eax+16]
+	call mutex_lock
+	add esp, 8
+	
+	push dword[ebp-44]
+	push dword[ebp+20]
+	call vector_push_back
+	add esp, 8
+	
+	mov eax, dword[ebp+20]
+	push dword[eax+16]
+	call mutex_lock
+	add esp, 4
+	
+	;do we need a graphics update? (is the alreadyProcessed flag on?)
+	mov eax, dword[ebp-12]
+	cmp dword[eax+60], 0
+	jne chunkManager4d_reloadChunk_no_graphics_update
+	
+	;create graphics update
+	push 8
+	call my_malloc
+	add esp, 4
+	
+	mov dword[eax+4], 69			;load
+	mov ecx, dword[ebp-12]
+	mov dword[eax], ecx				;chunk
+	
+	;add the graphics update to the queue
+	mov ecx, dword[ebp+20]
+	add ecx, 20
+	
+	push eax
+	push ecx
+	call tsQueue_push
+	add esp, 8
+	
+	chunkManager4d_reloadChunk_no_graphics_update:
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
 	
 chunkManager4d_processGraphicsUpdate:
 	push ebp
@@ -975,6 +1166,41 @@ chunkManager4d_getPlayerChunk:
 	mov esp, ebp
 	pop ebp
 	ret
+	
+chunkManager4d_registerChangedBlock:
+	push ebp
+	mov ebp, esp
+	
+	mov eax, dword[ebp+20]
+	push dword[eax+12]
+	push dword[eax+8]
+	push dword[eax+4]
+	push dword[eax]
+	mov eax, dword[ebp+16]
+	push dword[eax+8]
+	push dword[eax+4]
+	push dword[eax]
+	push dword[ebp+12]
+	mov eax, dword[ebp+8]
+	lea eax, [eax+112]
+	push eax
+	call tsQueue_push
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+
+chunkManager4d_processChangedBlock:
+	push ebp
+	mov ebp, esp
+	
+	
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
 	
 ;returns 0 if the chunk doesn't need to be culled
 ;int chunkManager4d_frustumCull(

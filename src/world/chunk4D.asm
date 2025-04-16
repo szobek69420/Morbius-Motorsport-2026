@@ -59,10 +59,10 @@ section .text use32
 	global chunk4d_destroy			;void chunk4d_destroy(Chunk4D* chunk)
 	
 	;converts a 4d position into a block position
-	;ivec4 is just 4 ints
-	;chunkPos is the chunkX, chunkZ, chunkW of the chunk (chunkY is always 0)
+	;ivec3/ivec4 is just 3/4 ints
+	;chunkPos is the chunkX, chunkZ, chunkW of the chunk
 	;chunkLocalPos is the block's position local to the chunk
-	global chunk4d_vec4ToBlockPos	;void chunk4d_vec4ToBlockPos(vec4* position, ivec4* chunkPos, ivec4* chunkLocalPos)
+	global chunk4d_vec4ToBlockPos	;void chunk4d_vec4ToBlockPos(vec4* position, ivec3* chunkPos, ivec4* chunkLocalPos)
 	
 	extern my_printf
 	extern my_malloc
@@ -135,7 +135,6 @@ chunk4d_vec4ToBlockPos:
 	mov dword[ecx], edx
 	
 	mov edx, dword[ebp-12]
-	mov dword[eax+4], 0
 	and edx, 0xf
 	mov dword[ecx+4], edx
 	
@@ -152,7 +151,7 @@ chunk4d_vec4ToBlockPos:
 		neg ebx
 		dec ebx
 	chunk4d_vec4ToBlockPos_z_done:
-	mov dword[eax+8], ebx
+	mov dword[eax+4], ebx
 	and edx, 0xf
 	mov dword[ecx+8], edx
 	
@@ -169,7 +168,7 @@ chunk4d_vec4ToBlockPos:
 		neg ebx
 		dec ebx
 	chunk4d_vec4ToBlockPos_w_done:
-	mov dword[eax+12], ebx
+	mov dword[eax+8], ebx
 	and edx, 0xf
 	mov dword[ecx+12], edx
 	
