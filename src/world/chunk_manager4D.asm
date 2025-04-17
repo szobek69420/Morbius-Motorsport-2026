@@ -933,7 +933,8 @@ chunkManager4d_processChangedBlock:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 32				;changed block buffer		32
+	sub esp, 32				;changed block buffer				32
+	sub esp, 32				;neighbour's changed block buffer	64 (helper variable)
 	
 	;is there a pending block?
 	mov eax, dword[ebp+8]
@@ -979,8 +980,226 @@ chunkManager4d_processChangedBlock:
 	call chunkManager4d_loadChunk_internal
 	add esp, 16
 	
-	;TODO: if a block is at the edge of the chunk, add it as a changed block of the neighbouring chunk (for example pos.x=-1)
-	;reload that chunk as well
+	;is the block at the neg x border?
+	cmp dword[ebp-16], 0
+	jne chunkManager4d_processChangedBlock_not_neg_x
+	
+		;copy the changed block buffer to the neighbour's changed block buffer
+		push 32
+		lea eax, [ebp-32]
+		push eax
+		lea eax, [ebp-64]
+		push eax
+		call my_memcpy
+		add esp, 12
+		
+		;transform the neighbour's block buffer
+		mov dword[ebp-48], 16
+		dec dword[ebp-60]
+	
+		;add the block to the changed blocks vector
+		;esp should point to ebp-64!!!!!!!!!!!!
+		mov eax, dword[ebp+8]
+		add eax, 96
+		push eax
+		call vector_push_back
+		add esp, 4
+		
+		;reload the chunk
+		push dword[ebp-52]
+		push dword[ebp-56]
+		push dword[ebp-60]
+		push dword[ebp+8]
+		call chunkManager4d_unloadChunkByPosition_internal
+		call chunkManager4d_loadChunk_internal
+		add esp, 16
+	
+	chunkManager4d_processChangedBlock_not_neg_x:
+	
+	
+	;is the block at the pos x border?
+	cmp dword[ebp-16], 15
+	jne chunkManager4d_processChangedBlock_not_pos_x
+	
+		;copy the changed block buffer to the neighbour's changed block buffer
+		push 32
+		lea eax, [ebp-32]
+		push eax
+		lea eax, [ebp-64]
+		push eax
+		call my_memcpy
+		add esp, 12
+		
+		;transform the neighbour's block buffer
+		mov dword[ebp-48], -1
+		inc dword[ebp-60]
+	
+		;add the block to the changed blocks vector
+		;esp should point to ebp-64!!!!!!!!!!!!
+		mov eax, dword[ebp+8]
+		add eax, 96
+		push eax
+		call vector_push_back
+		add esp, 4
+		
+		;reload the chunk
+		push dword[ebp-52]
+		push dword[ebp-56]
+		push dword[ebp-60]
+		push dword[ebp+8]
+		call chunkManager4d_unloadChunkByPosition_internal
+		call chunkManager4d_loadChunk_internal
+		add esp, 16
+	
+	chunkManager4d_processChangedBlock_not_pos_x:
+	
+	
+	;is the block at the neg z border?
+	cmp dword[ebp-8], 0
+	jne chunkManager4d_processChangedBlock_not_neg_z
+	
+		;copy the changed block buffer to the neighbour's changed block buffer
+		push 32
+		lea eax, [ebp-32]
+		push eax
+		lea eax, [ebp-64]
+		push eax
+		call my_memcpy
+		add esp, 12
+		
+		;transform the neighbour's block buffer
+		mov dword[ebp-40], 16
+		dec dword[ebp-56]
+	
+		;add the block to the changed blocks vector
+		;esp should point to ebp-64!!!!!!!!!!!!
+		mov eax, dword[ebp+8]
+		add eax, 96
+		push eax
+		call vector_push_back
+		add esp, 4
+		
+		;reload the chunk
+		push dword[ebp-52]
+		push dword[ebp-56]
+		push dword[ebp-60]
+		push dword[ebp+8]
+		call chunkManager4d_unloadChunkByPosition_internal
+		call chunkManager4d_loadChunk_internal
+		add esp, 16
+	
+	chunkManager4d_processChangedBlock_not_neg_z:
+	
+	
+	;is the block at the pos z border?
+	cmp dword[ebp-8], 15
+	jne chunkManager4d_processChangedBlock_not_pos_z
+	
+		;copy the changed block buffer to the neighbour's changed block buffer
+		push 32
+		lea eax, [ebp-32]
+		push eax
+		lea eax, [ebp-64]
+		push eax
+		call my_memcpy
+		add esp, 12
+		
+		;transform the neighbour's block buffer
+		mov dword[ebp-40], -1
+		inc dword[ebp-56]
+	
+		;add the block to the changed blocks vector
+		;esp should point to ebp-64!!!!!!!!!!!!
+		mov eax, dword[ebp+8]
+		add eax, 96
+		push eax
+		call vector_push_back
+		add esp, 4
+		
+		;reload the chunk
+		push dword[ebp-52]
+		push dword[ebp-56]
+		push dword[ebp-60]
+		push dword[ebp+8]
+		call chunkManager4d_unloadChunkByPosition_internal
+		call chunkManager4d_loadChunk_internal
+		add esp, 16
+	
+	chunkManager4d_processChangedBlock_not_pos_z:
+	
+	
+	;is the block at the neg w border?
+	cmp dword[ebp-4], 0
+	jne chunkManager4d_processChangedBlock_not_neg_w
+	
+		;copy the changed block buffer to the neighbour's changed block buffer
+		push 32
+		lea eax, [ebp-32]
+		push eax
+		lea eax, [ebp-64]
+		push eax
+		call my_memcpy
+		add esp, 12
+		
+		;transform the neighbour's block buffer
+		mov dword[ebp-36], 16
+		dec dword[ebp-52]
+	
+		;add the block to the changed blocks vector
+		;esp should point to ebp-64!!!!!!!!!!!!
+		mov eax, dword[ebp+8]
+		add eax, 96
+		push eax
+		call vector_push_back
+		add esp, 4
+		
+		;reload the chunk
+		push dword[ebp-52]
+		push dword[ebp-56]
+		push dword[ebp-60]
+		push dword[ebp+8]
+		call chunkManager4d_unloadChunkByPosition_internal
+		call chunkManager4d_loadChunk_internal
+		add esp, 16
+	
+	chunkManager4d_processChangedBlock_not_neg_w:
+	
+	
+	;is the block at the pos w border?
+	cmp dword[ebp-4], 15
+	jne chunkManager4d_processChangedBlock_not_pos_w
+	
+		;copy the changed block buffer to the neighbour's changed block buffer
+		push 32
+		lea eax, [ebp-32]
+		push eax
+		lea eax, [ebp-64]
+		push eax
+		call my_memcpy
+		add esp, 12
+		
+		;transform the neighbour's block buffer
+		mov dword[ebp-36], -1
+		inc dword[ebp-52]
+	
+		;add the block to the changed blocks vector
+		;esp should point to ebp-64!!!!!!!!!!!!
+		mov eax, dword[ebp+8]
+		add eax, 96
+		push eax
+		call vector_push_back
+		add esp, 4
+		
+		;reload the chunk
+		push dword[ebp-52]
+		push dword[ebp-56]
+		push dword[ebp-60]
+		push dword[ebp+8]
+		call chunkManager4d_unloadChunkByPosition_internal
+		call chunkManager4d_loadChunk_internal
+		add esp, 16
+	
+	chunkManager4d_processChangedBlock_not_pos_w:
 	
 	
 	chunkManager4d_processChangedBlock_end:
@@ -999,12 +1218,15 @@ chunkManager4d_loadChunk_internal:
 	sub esp, 4				;loaded chunk		4
 	
 	;generate chunk
+	mov eax, dword[ebp+8]
+	add eax, 96
+	push eax
 	push dword[ebp+20]			;chunkw
 	push dword[ebp+16]			;chunkz
 	push dword[ebp+12]			;chunkx
 	call chunk4d_generate
 	mov dword[ebp-4], eax
-	add esp, 12
+	add esp, 16
 	
 	;add the chunk to the loaded chunks
 	mov eax, dword[ebp+8]

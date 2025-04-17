@@ -48,13 +48,14 @@ section .rodata use32
 	AABB_SCALE dd 0.5, 0.5, 0.5, 0.5
 	
 	print_int_nl db "%d",10,0
+	print_four_ints_nl db "%d %d %d %d",10,0
 	
 	test_text db "stalinkin park",10,0
 	
 section .text use32
 
 	;the collider and renderable is initialized by the chunk manager
-	global chunk4d_generate			;Chunk4D* chunk4d_generate(int chunkX, int chunkZ, int chunkW)
+	global chunk4d_generate			;Chunk4D* chunk4d_generate(int chunkX, int chunkZ, int chunkW, const vector<ChangedBlockInfo>* changedBlocks)
 	;the renderable is destroyed by the chunk manager
 	global chunk4d_destroy			;void chunk4d_destroy(Chunk4D* chunk)
 	
@@ -135,7 +136,6 @@ chunk4d_vec4ToBlockPos:
 	mov dword[ecx], edx
 	
 	mov edx, dword[ebp-12]
-	and edx, 0xf
 	mov dword[ecx+4], edx
 	
 	mov edx, dword[ebp-8]
@@ -322,6 +322,61 @@ chunk4d_generate:
 		inc edi
 		cmp edi, dword[CHUNK_HEIGHT_PLUS_TWO]
 		jl chunk4d_generate_block_types_y_loop_start
+		
+	;change blocks based on the changedBlocks vector
+	mov eax, dword[ebp+32]
+	mov esi, dword[eax+12]			;current changed block info in esi
+	mov edi, dword[eax]				;index in edi
+	cmp edi, 0
+	jle chunk4d_generate_changed_blocks_loop_end
+	chunk4d_generate_changed_blocks_loop_start:
+		;check for chunk x
+		mov ecx, dword[esi+4]
+		cmp dword[ebp+20], ecx
+		jne chunk4d_generate_changed_blocks_loop_continue
+		
+		;check for chunk z
+		mov ecx, dword[esi+8]
+		cmp dword[ebp+24], ecx
+		jne chunk4d_generate_changed_blocks_loop_continue
+		
+		;check for chunk w
+		mov ecx, dword[esi+12]
+		cmp dword[ebp+28], ecx
+		jne chunk4d_generate_changed_blocks_loop_continue
+		
+			;calculate the changed block index
+			mov edx, dword[esi+20]
+			inc edx
+			imul edx, dword[CHUNK_HEIGHT_MAP_WIDTH_CUBED]
+			
+			mov ecx, dword[esi+16]
+			inc ecx
+			imul ecx, dword[CHUNK_HEIGHT_MAP_WIDTH_SQUARED]
+			add edx, ecx
+			
+			mov ecx, dword[esi+24]
+			inc ecx
+			imul ecx, dword[CHUNK_HEIGHT_MAP_WIDTH]
+			add edx, ecx
+			
+			mov ecx, dword[esi+28]
+			inc ecx
+			add edx, ecx
+			
+			;change block
+			mov ecx, dword[ebp-12]
+			add ecx, edx
+			
+			mov eax, dword[esi]
+			mov byte[ecx], al
+		
+		chunk4d_generate_changed_blocks_loop_continue:
+		add esi, 32
+		dec edi
+		test edi, edi
+		jnz chunk4d_generate_changed_blocks_loop_start
+	chunk4d_generate_changed_blocks_loop_end:
 		
 	
 	;init vertex vector

@@ -84,6 +84,7 @@ section .rodata use32
 	
 	
 	print_int_nl db "%d",10,0
+	print_four_ints_nl db "%d %d %d %d",10,0
 	print_two_floats db "%f %f",10,0
 	test_text db "big chungus",10,0
 	
@@ -1043,7 +1044,9 @@ player_breakBlock:
 	push eax
 	lea eax, [ebp-28]
 	push eax
-	push dword[BLOCK_AIR]
+	xor ecx, ecx
+	mov cl, byte[BLOCK_AIR]
+	push ecx
 	mov eax, dword[ebp+8]
 	push dword[eax+28]
 	call chunkManager4d_registerChangedBlock
