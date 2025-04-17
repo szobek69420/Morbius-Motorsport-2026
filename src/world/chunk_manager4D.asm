@@ -7,7 +7,7 @@
 ;	tsQueue<ChunkGraphicsUpdate4D*> pendingGraphicsUpdates;		20
 ;	GLuint shader;												28
 ;	HyperPlane hyperPlane;										32
-;	vector<ChangedBlockInfo> changedBlocks;						96
+;	vector<ChangedBlockInfo> changedBlocks;						96 //doesn't need a mutex as it is used only on the chunk generation thread
 ;	tsQueue<ChangedBlockInfo> pendingChangedBlocks;				112
 ;}			120 bytes overall
 
@@ -552,6 +552,7 @@ chunkManager4d_load:
 	ret
 	
 	
+	
 chunkManager4d_unload:
 	push ebp
 	push esi
@@ -927,12 +928,60 @@ chunkManager4d_registerChangedBlock:
 	ret
 	
 
+;void chunkManager4d_processChangedBlock(ChunkManager4D* cm)
 chunkManager4d_processChangedBlock:
 	push ebp
 	mov ebp, esp
 	
+	sub esp, 32				;changed block buffer		32
+	
+	;is there a pending block?
+	mov eax, dword[ebp+8]
+	add eax, 112
+	push eax
+	call tsQueue_isEmpty
+	add esp, 4
+	test eax, eax
+	jnz chunkManager4d_processChangedBlock_end
+	
+	;pop the block
+	lea eax, [ebp-32]
+	push eax
+	mov eax, dword[ebp+8]
+	add eax, 112
+	push eax
+	call tsQueue_pop
+	add esp, 8
+	test eax, eax
+	jnz chunkManager4d_processChangedBlock_end		;there was a problem
+	
+	;add the block to the changed blocks vector
+	sub esp, 32
+	mov eax, esp
+	push 32
+	lea ecx, [ebp-32]
+	push ecx
+	push eax
+	call my_memcpy
+	add esp, 12
+	push dword[ebp+8]
+	call vector_push_back
+	add esp, 36
+	
+	;reload the chunk
+	push dword[ebp-20]
+	push dword[ebp-24]
+	push dword[ebp-28]
+	push dword[ebp+8]
+	call chunkManager4d_unloadChunkByPosition_internal
+	call chunkManager4d_loadChunk_internal
+	add esp, 16
+	
+	;TODO: if a block is at the edge of the chunk, add it as a changed block of the neighbouring chunk (for example pos.x=-1)
+	;reload that chunk as well
 	
 	
+	chunkManager4d_processChangedBlock_end:
 	mov esp, ebp
 	pop ebp
 	ret
@@ -1070,6 +1119,74 @@ chunkManager4d_unloadChunk_internal:
 	
 	chunkManager4d_unloadChunk_internal_end:
 	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;unloads a selected chunk
+;shouldn't be called under vector mutex lock
+;void chunkManager4d_unloadChunkByPosition_internal(ChunkManager4D* cm, int chunkX, int chunkZ, int chunkW)
+chunkManager4d_unloadChunkByPosition_internal:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	;lock mutex
+	mov eax, dword[ebp+16]
+	push -1
+	push dword[eax+16]
+	call mutex_lock
+	add esp, 8
+	
+	mov eax, dword[ebp+16]
+	mov esi, dword[eax+12]			;current chunk in esi
+	mov edi, dword[eax]				;index in edi
+	cmp edi, 0
+	jle chunkManager4d_unloadChunkByPosition_internal_search_done
+	chunkManager4d_unloadChunkByPosition_internal_loop_start:
+		mov eax, dword[esi]				;chunk* in eax
+		
+		;check for chunk x
+		mov ecx, dword[eax]
+		cmp ecx, dword[ebp+20]
+		jne chunkManager4d_unloadChunkByPosition_internal_loop_continue
+		
+		;check for chunk z
+		mov ecx, dword[eax+4]
+		cmp ecx, dword[ebp+24]
+		jne chunkManager4d_unloadChunkByPosition_internal_loop_continue
+		
+		;check for chunk w
+		mov ecx, dword[eax+8]
+		cmp ecx, dword[ebp+28]
+		jne chunkManager4d_unloadChunkByPosition_internal_loop_continue
+		
+			;unload chunk
+			push eax
+			push dword[ebp+16]
+			call chunkManager4d_unloadChunk_internal
+			add esp, 8
+			jmp chunkManager4d_unloadChunkByPosition_internal_search_done
+		
+		chunkManager4d_unloadChunkByPosition_internal_loop_continue:
+		add esi, 4
+		dec edi
+		test edi, edi
+		jnz chunkManager4d_unloadChunkByPosition_internal_loop_start
+	
+	chunkManager4d_unloadChunkByPosition_internal_search_done:
+	
+	;unlock vector mutex
+	mov eax, dword[ebp+16]
+	push dword[eax+16]
+	call mutex_unlock
+	add esp, 4
+	
+	chunkManager4d_unloadChunkByPosition_internal_end:
+	mov esp, ebp
+	pop edi
+	pop esi
 	pop ebp
 	ret
 	
