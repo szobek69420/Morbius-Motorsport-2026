@@ -672,6 +672,7 @@ chunkManager4d_unload:
 	je chunkManager4d_unload_end
 	
 		;unload chunk
+		push 69				;chunk should be registered
 		push dword[ebp-16]
 		push dword[ebp+20]
 		call chunkManager4d_unloadChunk_internal
@@ -976,8 +977,7 @@ chunkManager4d_processChangedBlock:
 	push dword[ebp-24]
 	push dword[ebp-28]
 	push dword[ebp+8]
-	call chunkManager4d_unloadChunkByPosition_internal
-	call chunkManager4d_loadChunk_internal
+	call chunkManager4d_reloadChunkByPosition_internal
 	add esp, 16
 	
 	;is the block at the neg x border?
@@ -1010,8 +1010,7 @@ chunkManager4d_processChangedBlock:
 		push dword[ebp-56]
 		push dword[ebp-60]
 		push dword[ebp+8]
-		call chunkManager4d_unloadChunkByPosition_internal
-		call chunkManager4d_loadChunk_internal
+		call chunkManager4d_reloadChunkByPosition_internal
 		add esp, 16
 	
 	chunkManager4d_processChangedBlock_not_neg_x:
@@ -1047,8 +1046,7 @@ chunkManager4d_processChangedBlock:
 		push dword[ebp-56]
 		push dword[ebp-60]
 		push dword[ebp+8]
-		call chunkManager4d_unloadChunkByPosition_internal
-		call chunkManager4d_loadChunk_internal
+		call chunkManager4d_reloadChunkByPosition_internal
 		add esp, 16
 	
 	chunkManager4d_processChangedBlock_not_pos_x:
@@ -1084,8 +1082,7 @@ chunkManager4d_processChangedBlock:
 		push dword[ebp-56]
 		push dword[ebp-60]
 		push dword[ebp+8]
-		call chunkManager4d_unloadChunkByPosition_internal
-		call chunkManager4d_loadChunk_internal
+		call chunkManager4d_reloadChunkByPosition_internal
 		add esp, 16
 	
 	chunkManager4d_processChangedBlock_not_neg_z:
@@ -1121,8 +1118,7 @@ chunkManager4d_processChangedBlock:
 		push dword[ebp-56]
 		push dword[ebp-60]
 		push dword[ebp+8]
-		call chunkManager4d_unloadChunkByPosition_internal
-		call chunkManager4d_loadChunk_internal
+		call chunkManager4d_reloadChunkByPosition_internal
 		add esp, 16
 	
 	chunkManager4d_processChangedBlock_not_pos_z:
@@ -1158,8 +1154,7 @@ chunkManager4d_processChangedBlock:
 		push dword[ebp-56]
 		push dword[ebp-60]
 		push dword[ebp+8]
-		call chunkManager4d_unloadChunkByPosition_internal
-		call chunkManager4d_loadChunk_internal
+		call chunkManager4d_reloadChunkByPosition_internal
 		add esp, 16
 	
 	chunkManager4d_processChangedBlock_not_neg_w:
@@ -1195,8 +1190,7 @@ chunkManager4d_processChangedBlock:
 		push dword[ebp-56]
 		push dword[ebp-60]
 		push dword[ebp+8]
-		call chunkManager4d_unloadChunkByPosition_internal
-		call chunkManager4d_loadChunk_internal
+		call chunkManager4d_reloadChunkByPosition_internal
 		add esp, 16
 	
 	chunkManager4d_processChangedBlock_not_pos_w:
@@ -1277,7 +1271,8 @@ chunkManager4d_loadChunk_internal:
 	
 ;unloads a selected chunk
 ;shouldn't be called under vector mutex lock
-;void chunkManager4d_unloadChunk_internal(ChunkManager4D* cm, Chunk4D* chunk)
+;isChunkRegistered is non-zero, if the chunk should be only unloaded if it is registered in the chunk manager
+;void chunkManager4d_unloadChunk_internal(ChunkManager4D* cm, Chunk4D* chunk, int isChunkRegistered)
 chunkManager4d_unloadChunk_internal:
 	push ebp
 	mov ebp, esp
@@ -1285,27 +1280,33 @@ chunkManager4d_unloadChunk_internal:
 	sub esp, 4		;graphics update				;4
 	sub esp, 4		;vector_remove return value		;8
 	
-	;remove chunk from loaded chunks
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax+16]
-	call mutex_lock
-	add esp, 8
+	;do we need to remove the chunk from the loaded chunks vector?
+	cmp dword[ebp+16], 0
+	je chunkManager4d_unloadChunk_internal_skip_remove
 	
-	push dword[ebp+12]
-	push dword[ebp+8]
-	call vector_remove
-	mov dword[ebp-8], eax
-	add esp, 8
+		;remove chunk from loaded chunks
+		mov eax, dword[ebp+8]
+		push -1
+		push dword[eax+16]
+		call mutex_lock
+		add esp, 8
+		
+		push dword[ebp+12]
+		push dword[ebp+8]
+		call vector_remove
+		mov dword[ebp-8], eax
+		add esp, 8
+		
+		mov eax, dword[ebp+8]
+		push dword[eax+16]
+		call mutex_unlock
+		add esp, 4
+		
+		;flee if the removal from the loadedChunks vector was unsuccessful
+		cmp dword[ebp-8], 0
+		je chunkManager4d_unloadChunk_internal_end
 	
-	mov eax, dword[ebp+8]
-	push dword[eax+16]
-	call mutex_unlock
-	add esp, 4
-	
-	;flee if the removal from the loadedChunks vector was unsuccessful
-	cmp dword[ebp-8], 0
-	je chunkManager4d_unloadChunk_internal_end
+	chunkManager4d_unloadChunk_internal_skip_remove:
 	
 	;create graphics update and add it to the queue if there is a renderable
 	mov eax, dword[ebp+12]
@@ -1387,10 +1388,11 @@ chunkManager4d_unloadChunkByPosition_internal:
 		jne chunkManager4d_unloadChunkByPosition_internal_loop_continue
 		
 			;unload chunk
+			push 69
 			push eax
 			push dword[ebp+16]
 			call chunkManager4d_unloadChunk_internal
-			add esp, 8
+			add esp, 12
 			jmp chunkManager4d_unloadChunkByPosition_internal_search_done
 		
 		chunkManager4d_unloadChunkByPosition_internal_loop_continue:
@@ -1408,6 +1410,34 @@ chunkManager4d_unloadChunkByPosition_internal:
 	add esp, 4
 	
 	chunkManager4d_unloadChunkByPosition_internal_end:
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+;unloads a selected chunk
+;shouldn't be called under vector mutex lock
+;NOTE: this function heavily relies on two things:
+;	- unloadChunkByPosition always picks to first occurence of a chunk with matching chunkPos in the loaded chunks vector
+;	- loadChunk always puts the newly loaded chunks at the end of the loaded chunks vector
+;void chunkManager4d_reloadChunkByPosition_internal(ChunkManager4D* cm, int chunkX, int chunkZ, int chunkW)
+chunkManager4d_reloadChunkByPosition_internal:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	;load the new chunk first
+	push dword[ebp+28]
+	push dword[ebp+24]
+	push dword[ebp+20]
+	push dword[ebp+16]
+	call chunkManager4d_loadChunk_internal
+	call chunkManager4d_unloadChunkByPosition_internal
+	add esp, 16
+	
 	mov esp, ebp
 	pop edi
 	pop esi
