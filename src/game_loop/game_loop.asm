@@ -226,6 +226,7 @@ section .text use32
 	extern chunkManager4d_unload
 	extern chunkManager4d_processUpdate
 	extern chunkManager4d_processGraphicsUpdate
+	extern chunkManager4d_processChangedBlock
 	extern chunkManager4d_render
 	
 game_loop:
@@ -577,6 +578,11 @@ gameLoop_chunkLoader:
 		jl gameLoop_chunk_loader_loop_no_load
 		
 			mov dword[ebp-4], eax			;update the last chunk update time
+			
+			;reload chunks if necessary
+			push dword[chunk_manager_4d]
+			call chunkManager4d_processChangedBlock
+			add esp, 4
 		
 			;do chunk update things		
 			mov eax, dword[pplayer]

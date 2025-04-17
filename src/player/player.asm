@@ -118,6 +118,7 @@ section .text use32
 	extern camera_right
 	
 	extern input_keyHeld
+	extern input_mouseButtonReleased
 	extern input_mouseDeltaPosition
 	extern input_mouseScrollDelta
 	extern GLFW_KEY_W
@@ -126,6 +127,7 @@ section .text use32
 	extern GLFW_KEY_D
 	extern GLFW_KEY_SPACE
 	extern GLFW_KEY_LEFT_SHIFT
+	extern GLFW_MOUSE_BUTTON_LEFT
 	
 	extern aabb4d_create
 	extern aabb4d_destroy
@@ -148,7 +150,10 @@ section .text use32
 	extern hyperPlane_positionTo3d
 	extern hyperPlane_positionTo4d
 	
+	extern BLOCK_AIR
+	extern chunk4d_vec4ToBlockPos
 	extern chunkManager4d_getHyperPlane
+	extern chunkManager4d_registerChangedBlock
 	
 	extern renderable_createCustom
 	extern renderable_destroy
@@ -314,14 +319,21 @@ player_update:
 	push ebp
 	mov ebp, esp
 	
+	;check for block break
+	push dword[ebp+8]
+	call player_breakBlock
+	add esp, 4
+	
+	;check for hyperplane rotation
+	push dword[ebp+8]
+	call player_rotatePlane
+	add esp, 4
+	
+	;process mouse movement
 	push dword[ebp+12]
 	push dword[ebp+8]
 	call player_look
 	add esp, 8
-	
-	push dword[ebp+8]
-	call player_rotatePlane
-	add esp, 4
 	
 	mov esp, ebp
 	pop ebp
@@ -990,6 +1002,55 @@ player_gaycast:
 		jmp player_raycast_end
 	
 	player_raycast_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;void player_breakBlock(Player* player)
+player_breakBlock:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 16		;ivec4 chunkLocalBlockPos		16
+	sub esp, 12		;ivec3 chunkPos					28
+	
+	
+	;check if there the raycast hit anything
+	mov eax, dword[ebp+8]
+	cmp dword[eax+56], 0
+	je player_breakBlock_end
+	
+	;check if there was a mouse click
+	push dword[GLFW_MOUSE_BUTTON_LEFT]
+	call input_mouseButtonReleased
+	add esp, 4
+	test eax, eax
+	jz player_breakBlock_end
+	
+	;calculate the block pos
+	lea eax, [ebp-16]
+	push eax
+	lea eax, [ebp-28]
+	push eax
+	mov eax, dword[ebp+8]
+	push dword[eax+56]
+	call chunk4d_vec4ToBlockPos
+	add esp, 12
+	
+	;register the changed block
+	lea eax, [ebp-16]
+	push eax
+	lea eax, [ebp-28]
+	push eax
+	push dword[BLOCK_AIR]
+	mov eax, dword[ebp+8]
+	push dword[eax+28]
+	call chunkManager4d_registerChangedBlock
+	add esp, 16
+	
+	
+	player_breakBlock_end:
 	mov esp, ebp
 	pop ebp
 	ret

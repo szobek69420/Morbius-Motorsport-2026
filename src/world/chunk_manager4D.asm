@@ -87,6 +87,8 @@ section .text use32
 	;adds a block that needs to be changed to the pending changed blocks queue
 	global chunkManager4d_registerChangedBlock	;void chunkManager4d_registerChangedBlock(ChunkManager4D* cm, int blockType, ivec3* chunkPos, ivec4* chunkLocalBlockPos)
 	
+	global chunkManager4d_processChangedBlock	;void chunkManager4d_processChangedBlock(ChunkManager4D* cm)
+	
 	extern my_printf
 	extern my_malloc
 	extern my_free
@@ -927,8 +929,6 @@ chunkManager4d_registerChangedBlock:
 	pop ebp
 	ret
 	
-
-;void chunkManager4d_processChangedBlock(ChunkManager4D* cm)
 chunkManager4d_processChangedBlock:
 	push ebp
 	mov ebp, esp
@@ -964,7 +964,9 @@ chunkManager4d_processChangedBlock:
 	push eax
 	call my_memcpy
 	add esp, 12
-	push dword[ebp+8]
+	mov eax, dword[ebp+8]
+	add eax, 96
+	push eax
 	call vector_push_back
 	add esp, 36
 	
