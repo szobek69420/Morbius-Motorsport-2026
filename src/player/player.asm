@@ -129,7 +129,16 @@ section .text use32
 	extern GLFW_KEY_SPACE
 	extern GLFW_KEY_LEFT_SHIFT
 	extern GLFW_MOUSE_BUTTON_LEFT
+	extern GLFW_MOUSE_BUTTON_RIGHT
 	
+	extern AABB4D_POS_X
+	extern AABB4D_NEG_X
+	extern AABB4D_POS_Y
+	extern AABB4D_NEG_Y
+	extern AABB4D_POS_Z
+	extern AABB4D_NEG_Z
+	extern AABB4D_POS_W
+	extern AABB4D_NEG_W
 	extern aabb4d_create
 	extern aabb4d_destroy
 	extern aabb4d_getPosition
@@ -152,6 +161,7 @@ section .text use32
 	extern hyperPlane_positionTo4d
 	
 	extern BLOCK_AIR
+	extern BLOCK_STONE
 	extern chunk4d_vec4ToBlockPos
 	extern chunkManager4d_getHyperPlane
 	extern chunkManager4d_registerChangedBlock
@@ -320,9 +330,10 @@ player_update:
 	push ebp
 	mov ebp, esp
 	
-	;check for block break
+	;check for block break and place
 	push dword[ebp+8]
 	call player_breakBlock
+	call player_placeBlock
 	add esp, 4
 	
 	;check for hyperplane rotation
@@ -1054,6 +1065,136 @@ player_breakBlock:
 	
 	
 	player_breakBlock_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;void player_placeBlock(Player* player)
+player_placeBlock:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 16		;block position vec4			16
+	sub esp, 16		;ivec4 chunkLocalBlockPos		32
+	sub esp, 12		;ivec3 chunkPos					44
+	
+	
+	;check if there the raycast hit anything
+	mov eax, dword[ebp+8]
+	cmp dword[eax+56], 0
+	je player_placeBlock_end
+	
+	;check if there was a mouse click
+	push dword[GLFW_MOUSE_BUTTON_RIGHT]
+	call input_mouseButtonReleased
+	add esp, 4
+	test eax, eax
+	jz player_placeBlock_end
+	
+	;copy the collider position
+	mov eax, dword[ebp+8]
+	mov eax, dword[eax+56]
+	
+	mov ecx, dword[eax]
+	mov dword[ebp-16], ecx
+	mov ecx, dword[eax+4]
+	mov dword[ebp-12], ecx
+	mov ecx, dword[eax+8]
+	mov dword[ebp-8], ecx
+	mov ecx, dword[eax+12]
+	mov dword[ebp-4], ecx
+	
+	;set the block position
+	mov eax, dword[ebp+8]
+	mov eax, dword[eax+60]		;raycast direction in eax
+	movss xmm1, dword[ONE]
+	
+	cmp eax, dword[AABB4D_POS_X]
+	jne player_placeBlock_direction_not_pos_x
+		movss xmm0, dword[ebp-16]
+		addss xmm0, xmm1
+		movss dword[ebp-16], xmm0
+		jmp player_placeBlock_direction_done
+	player_placeBlock_direction_not_pos_x:
+	cmp eax, dword[AABB4D_NEG_X]
+	jne player_placeBlock_direction_not_neg_x
+		movss xmm0, dword[ebp-16]
+		subss xmm0, xmm1
+		movss dword[ebp-16], xmm0
+		jmp player_placeBlock_direction_done
+	player_placeBlock_direction_not_neg_x:
+	cmp eax, dword[AABB4D_POS_Y]
+	jne player_placeBlock_direction_not_pos_y
+		movss xmm0, dword[ebp-12]
+		addss xmm0, xmm1
+		movss dword[ebp-12], xmm0
+		jmp player_placeBlock_direction_done
+	player_placeBlock_direction_not_pos_y:
+	cmp eax, dword[AABB4D_NEG_Y]
+	jne player_placeBlock_direction_not_neg_y
+		movss xmm0, dword[ebp-12]
+		subss xmm0, xmm1
+		movss dword[ebp-12], xmm0
+		jmp player_placeBlock_direction_done
+	player_placeBlock_direction_not_neg_y:
+	cmp eax, dword[AABB4D_POS_Z]
+	jne player_placeBlock_direction_not_pos_z
+		movss xmm0, dword[ebp-8]
+		addss xmm0, xmm1
+		movss dword[ebp-8], xmm0
+		jmp player_placeBlock_direction_done
+	player_placeBlock_direction_not_pos_z:
+	cmp eax, dword[AABB4D_NEG_Z]
+	jne player_placeBlock_direction_not_neg_z
+		movss xmm0, dword[ebp-8]
+		subss xmm0, xmm1
+		movss dword[ebp-8], xmm0
+		jmp player_placeBlock_direction_done
+	player_placeBlock_direction_not_neg_z:
+	cmp eax, dword[AABB4D_POS_W]
+	jne player_placeBlock_direction_not_pos_w
+		movss xmm0, dword[ebp-4]
+		addss xmm0, xmm1
+		movss dword[ebp-4], xmm0
+		jmp player_placeBlock_direction_done
+	player_placeBlock_direction_not_pos_w:
+	cmp eax, dword[AABB4D_NEG_W]
+	jne player_placeBlock_direction_not_neg_w
+		movss xmm0, dword[ebp-4]
+		subss xmm0, xmm1
+		movss dword[ebp-4], xmm0
+		jmp player_placeBlock_direction_done
+	player_placeBlock_direction_not_neg_w:
+	
+	player_placeBlock_direction_done:
+	
+	
+	;calculate the block pos
+	lea eax, [ebp-32]
+	push eax
+	lea eax, [ebp-44]
+	push eax
+	lea eax, [ebp-16]
+	push eax
+	call chunk4d_vec4ToBlockPos
+	add esp, 12
+	
+	;register the changed block
+	lea eax, [ebp-32]
+	push eax
+	lea eax, [ebp-44]
+	push eax
+	xor ecx, ecx
+	mov cl, byte[BLOCK_STONE]
+	push ecx
+	mov eax, dword[ebp+8]
+	push dword[eax+28]
+	call chunkManager4d_registerChangedBlock
+	add esp, 16
+	
+	
+	player_placeBlock_end:
 	mov esp, ebp
 	pop ebp
 	ret
