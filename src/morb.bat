@@ -3,6 +3,7 @@ mkdir build
 ..\build_tools\nasm.exe -fobj main.asm -o build/main.o
 ..\build_tools\nasm.exe -fobj window/window.asm -o build/window.o
 ..\build_tools\nasm.exe -fobj game_loop/game_loop.asm -o build/game_loop.o
+..\build_tools\nasm.exe -fobj sun/sun.asm -o build/sun.o
 ..\build_tools\nasm.exe -fobj world/chunk_manager4d.asm -o build/chunk_manager4d.o
 ..\build_tools\nasm.exe -fobj world/chunk4d.asm -o build/chunk4d.o
 ..\build_tools\nasm.exe -fobj world/block.asm -o build/block.o
@@ -39,6 +40,7 @@ mkdir build
 ..\build_tools\alink.exe -subsys console -oPE ^
 build/main.o ^
 build/window.o ^
+build/sun.o ^
 build/player.o ^
 build/game_loop.o ^
 build/chunk_manager4d.o ^

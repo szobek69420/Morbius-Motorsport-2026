@@ -99,6 +99,8 @@ section .data use32
 	delta_time_milliseconds_physics dd 0		;int (it is just for monitoring purposes)
 	delta_time_milliseconds_chunk_loader dd 0	;int (it is just for monitoring purposes)
 
+	SUN_DIRECTION dd 0.4147, 0.8296, 0.2074, 0.3111
+
 section .text use32
 
 	dll_import kernel32.dll, GetTickCount
@@ -228,6 +230,13 @@ section .text use32
 	extern chunkManager4d_processGraphicsUpdate
 	extern chunkManager4d_processChangedBlock
 	extern chunkManager4d_render
+	extern chunkManager4d_getHyperPlane
+	
+	extern sun_init
+	extern sun_deinit
+	extern sun_render
+	extern sun_setDirection
+	extern sun_setDistance
 	
 game_loop:
 	push ebp
@@ -298,6 +307,13 @@ game_loop:
 	call player_init
 	mov dword[pplayer], eax
 	add esp, 8
+	
+	;init sun
+	call sun_init
+	
+	push SUN_DIRECTION
+	call sun_setDirection
+	add esp, 4
 	
 	;enable depth test and face cull
 	push dword[GL_DEPTH_TEST]
@@ -397,6 +413,15 @@ game_loop:
 		call camera_viewProjection
 		add esp, 8
 		
+		;render sun (this should be drawn first)
+		mov eax, dword[pplayer]
+		push dword[eax+24]
+		push dword[chunk_manager_4d]
+		call chunkManager4d_getHyperPlane
+		mov dword[esp], eax
+		push pv_matrix
+		call sun_render
+		add esp, 12
 		
 		;draw the raycast hypercube
 		push pv_matrix
@@ -456,6 +481,8 @@ game_loop:
 	call thread_join
 	add esp, 8
 	
+	;deinit sun
+	call sun_deinit
 	
 	;destroy player
 	push dword[pplayer]

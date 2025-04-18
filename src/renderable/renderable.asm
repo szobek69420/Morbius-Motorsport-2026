@@ -130,6 +130,9 @@ section .text use32
 	;it is a system state setting function
 	global renderable_setPrimitive		;void renderable_setPrimitive(GLuint primitive)
 	
+	;it is a system state setting function
+	;enable should be 0, if the depth test should be disabled
+	global renderable_enableDepthTest	;void renderable_enableDepthTest(int enable)
 	
 	extern glGenVertexArrays
 	extern glGenBuffers
@@ -171,6 +174,10 @@ section .text use32
 	extern GL_TEXTURE1
 	extern GL_REPEAT
 	extern GL_NEAREST
+	
+	extern glEnable
+	extern glDisable
+	extern GL_DEPTH_TEST
 	
 	extern my_printf
 	
@@ -1262,4 +1269,24 @@ renderable_setUniform:
 renderable_setPrimitive:
 	mov eax, dword[esp+4]
 	mov dword[renderable_primitive], eax
+	ret
+	
+	
+renderable_enableDepthTest:
+	push ebp
+	mov ebp, esp
+	
+	cmp dword[ebp+8], 0
+	je renderable_enableDepthTest_disable
+		push dword[GL_DEPTH_TEST]
+		call [glEnable]
+		jmp renderable_enableDepthTest_end
+	
+	renderable_enableDepthTest_disable:
+		push dword[GL_DEPTH_TEST]
+		call [glDisable]
+	
+	renderable_enableDepthTest_end:
+	mov esp, ebp
+	pop ebp
 	ret
