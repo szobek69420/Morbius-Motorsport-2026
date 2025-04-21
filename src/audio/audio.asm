@@ -10,9 +10,19 @@
 ;	uint16 numberOfChannels;	;22
 ;	uint32 sampleRate;			;24
 ;	uint32 byteRate;			;28
-;	uint16 bytesPerSampleFrame;	;32
+;	uint16 bytesPerSampleFrame;	;32 //(blockAlign)
 ;	uint16 bitsPerSample;		;34
 ;}	36 bytes overall
+
+;struct WAVEFORMATEX{
+;	uint16  wFormatTag;			;0
+;	uint16  nChannels;			;2
+;	uint32 nSamplesPerSec;		;4
+;	uint32 nAvgBytesPerSec;		;8
+;	uint16  nBlockAlign;		;12
+;	uint16  wBitsPerSample;		;14
+;	uint16  cbSize;				;16
+;}	18 bytes overall
 
 section .rodata use32
 	file_open_mode db "r",0
@@ -38,8 +48,73 @@ section .text use32
 	
 	extern my_memcmp
 	extern my_memcpy
+	
+	
+;retrieves the WAVEFORMATEX struct corresponding to the file
+;returns zero if there were no problems
+;int audio_getWAVEFORMATEX(const char* filePath, WAVEFORMATEX* buffer)
+audio_getWAVEFORMATEX:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 36			;wave header		;36
+	sub esp, 4			;return value		;4
+	
+	mov dword[ebp-40], 0
+	
+	;read the header file
+	lea eax, [ebp-36]
+	push eax
+	push dword[ebp+8]
+	call audio_readWaveHeader
+	add esp, 8
+	
+	;was it successful?
+	test eax, eax
+	jz audio_getWAVEFORMATEX_read_gg
+		mov dword[ebp-40], 69
+		jmp audio_getWAVEFORMATEX_end
+		
+	audio_getWAVEFORMATEX_read_gg:
+	
+	;set the values
+	mov eax, dword[ebp+12]
+	
+	;wFormatTag
+	mov cx, word[ebp-16]
+	mov word[eax], cx
+	
+	;nChannels
+	mov cx, word[ebp-14]
+	mov word[eax+2], cx
+	
+	;nSamplesPerSec
+	mov ecx, dword[ebp-12]
+	mov dword[eax+4], ecx
+	
+	;nAvgBytesPerSec
+	mov ecx, dword[ebp-8]
+	mov dword[eax+8], ecx
+	
+	;nBlockAlign
+	mov cx, word[ebp-4]
+	mov word[eax+12], cx
+	
+	;wBitsPerSample
+	mov cx, word[ebp-2]
+	mov word[eax+14], cx
+	
+	;cbSize
+	mov word[eax+16], 0
+	
+	audio_getWAVEFORMATEX_end:
+	mov eax, dword[ebp-40]		;set return value
+	
+	mov esp, ebp
+	pop ebp
+	ret
 
-;returns zero, if there was no problem
+;returns zero if there were no problems
 ;int audio_readWaveHeader(const char* filePath, WaveHeader* headerBuffer)
 audio_readWaveHeader:
 	push ebp
