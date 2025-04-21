@@ -16,7 +16,7 @@ section .bss use32
 section .text use32
 
 	global my_fopen			;FILE* my_fopen(const char* filePath, const char* mode)		//mode can only be "r" or "w"
-	global my_fclose		;int my_fclose(FILE* file)		;returns 0 if there is gebasz
+	global my_fclose		;int my_fclose(FILE* file)		;returns 0 if there is gebasz (it is a deviation from the c standard)
 	
 	global my_fgets			;char* my_fgets(char* buffer, int numBytes, FILE* file)
 	global my_fprintf		;void my_fprintf(FILE* file, const char* format, ...args)
