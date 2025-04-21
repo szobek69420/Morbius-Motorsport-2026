@@ -9,12 +9,19 @@ section .rodata use32
 	my_fopen_mode_read db "r",0
 	my_fopen_mode_write db "w",0
 	my_fopen_error_1 db "my_fopen: Invalid mode bozo",10,0
+	my_fopen_error_2 db "my_fopen: Failed with code %d",10,0
+	my_fclose_error_1 db "my_fclose: Failed with code %d",10,0
+	
+	INVALID_HANDLE_VALUE dd -1
 	
 section .bss use32
 	my_fprintf_buffer resb 10000
 
 section .text use32
+	;fopen and fclose error codes:
+	;https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes
 
+	;returns 0 if there was a problem
 	global my_fopen			;FILE* my_fopen(const char* filePath, const char* mode)		//mode can only be "r" or "w"
 	global my_fclose		;int my_fclose(FILE* file)		;returns 0 if there is gebasz (it is a deviation from the c standard)
 	
@@ -41,6 +48,8 @@ section .text use32
 	
 	dll_import kernel32.dll, SetFilePointer
 	
+	dll_import kernel32.dll, GetLastError
+	
 	extern my_printf
 	
 	extern my_memcpy
@@ -53,6 +62,10 @@ section .text use32
 my_fopen:
 	push ebp
 	mov ebp, esp
+	
+	sub esp, 4			;HANDLE		;4
+	
+	mov dword[ebp-4], 0
 	
 	;check whether the mode ist koser
 	push dword[ebp+12]		;mode
@@ -85,7 +98,8 @@ my_fopen:
 		push 0x80000000			;GENERIC_READ
 		push dword[ebp+8]		;path
 		call [CreateFileA]
-		jmp my_fopen_end
+		mov dword[ebp-4], eax
+		jmp my_fopen_check_for_valid_handle
 	
 	my_fopen_write:
 		push 0
@@ -96,9 +110,28 @@ my_fopen:
 		push 0x40000000			;GENERIC_WRITE
 		push dword[ebp+8]		;path
 		call [CreateFileA]
-		jmp my_fopen_end
+		mov dword[ebp-4], eax
+		jmp my_fopen_check_for_valid_handle
+		
+	my_fopen_check_for_valid_handle:
+	
+	;was it successful?
+	mov eax, dword[ebp-4]
+	cmp eax, dword[INVALID_HANDLE_VALUE]
+	jne my_fopen_end
+	
+		;print error code
+		call [GetLastError]
+		push eax
+		push my_fopen_error_2
+		call my_printf
+		add esp, 8
+		
+		mov dword[ebp-4], 0
 		
 	my_fopen_end:
+	mov eax, dword[ebp-4]
+	
 	mov esp, ebp
 	pop ebp
 	ret
@@ -108,8 +141,26 @@ my_fclose:
 	push ebp
 	mov ebp, esp
 	
+	sub esp, 4	;return value		;4
+	
 	push dword[ebp+8]
 	call [CloseHandle]
+	mov dword[ebp-4], eax
+	add esp, 4
+	
+	;was it successful?
+	test eax, eax
+	jnz my_fclose_end
+	
+		;print error code
+		call [GetLastError]
+		push eax
+		push my_fclose_error_1
+		call my_printf
+		add esp, 8
+	
+	my_fclose_end:
+	mov eax, dword[ebp-4]
 	
 	mov esp, ebp
 	pop ebp

@@ -36,9 +36,14 @@ section .rodata use32
 	error_invalid_file_type db "audio_readWaveHeader: couldn't read wave header of %s due to an invalid file type",10,0
 	error_invalid_format_chunk_marker db "audio_readWaveHeader: couldn't read wave header of %s due to missing format chunk marker",10,0
 
+	print_seven_ints_nl db "%d %d %d %d %d %d %d",10,0
+	
+	test_text db "hog rider",10,0
+
 section .text use32
 	
 	global audio_playSound
+	global audio_testGetWAVEFORMATEX
 	
 	extern my_printf
 	
@@ -48,6 +53,48 @@ section .text use32
 	
 	extern my_memcmp
 	extern my_memcpy
+	
+;void audio_testGetWAVEFORMATEX(const char* filePath)
+audio_testGetWAVEFORMATEX:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 18			;WAVEFORMATEX		18
+	
+	lea eax, [ebp-18]
+	push eax
+	push dword[ebp+8]
+	call audio_getWAVEFORMATEX
+	add esp, 4
+	test eax, eax
+	jnz audio_testGetWAVEFORMATEX_end
+	
+	;print it
+	xor ecx, ecx
+	mov cx, word[ebp-18]
+	push ecx
+	xor ecx, ecx
+	mov cx, word[ebp-16]
+	push ecx
+	push dword[ebp-14]
+	push dword[ebp-10]
+	xor ecx, ecx
+	mov cx, word[ebp-6]
+	push ecx
+	xor ecx, ecx
+	mov cx, word[ebp-4]
+	push ecx
+	xor ecx, ecx
+	mov cx, word[ebp-2]
+	push ecx
+	push print_seven_ints_nl
+	call my_printf
+	add esp, 32
+	
+	audio_testGetWAVEFORMATEX_end:
+	mov esp, ebp
+	pop ebp
+	ret
 	
 	
 ;retrieves the WAVEFORMATEX struct corresponding to the file
@@ -130,12 +177,12 @@ audio_readWaveHeader:
 	push file_open_mode
 	push dword[ebp+8]
 	call my_fopen
-	mov dword[ebp-4], eax
+	mov dword[ebp-40], eax
 	test eax, eax
 	jz audio_readWaveHeader_error_read_failure
 	
 	;read data
-	push dword[ebp-4]
+	push dword[ebp-40]
 	push 1
 	push 36
 	lea eax, [ebp-36]
@@ -147,12 +194,14 @@ audio_readWaveHeader:
 	cmp eax, 1
 	jne audio_readWaveHeader_error_read_failure
 	
+	
 	;close the file
-	push dword[ebp-4]
+	push dword[ebp-40]
 	call my_fclose
 	add esp, 4
 	test eax, eax
-	jz audio_readWaveHeader_error_read_failure
+	;jz audio_readWaveHeader_error_read_failure
+	
 	
 	;is the chunk id kosher?
 	lea eax, [ebp-36]

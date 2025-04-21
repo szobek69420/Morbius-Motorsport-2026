@@ -44,6 +44,8 @@ section .rodata use32
 	
 	image_path db "./sprites/morbussin.bmp",0
 	
+	sound_path db "./sfx/battlecry.wav",0
+	
 	test_text_main db "main",10,0
 	test_text_physics db "physics",10,0
 	
@@ -238,6 +240,8 @@ section .text use32
 	extern sun_setDirection
 	extern sun_setDistance
 	
+	extern audio_testGetWAVEFORMATEX
+	
 game_loop:
 	push ebp
 	mov ebp, esp
@@ -323,6 +327,11 @@ game_loop:
 	call [glFrontFace]
 	push dword[GL_CULL_FACE]
 	call [glEnable]
+	
+	;test audio
+	push sound_path
+	call audio_testGetWAVEFORMATEX
+	add esp, 4
 	
 	;init last frame time
 	call [GetTickCount]

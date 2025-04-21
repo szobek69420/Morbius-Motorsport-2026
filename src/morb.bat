@@ -8,6 +8,7 @@ mkdir build
 ..\build_tools\nasm.exe -fobj world/chunk4d.asm -o build/chunk4d.o
 ..\build_tools\nasm.exe -fobj world/block.asm -o build/block.o
 ..\build_tools\nasm.exe -fobj camera/camera.asm -o build/camera.o
+..\build_tools\nasm.exe -fobj audio/audio.asm -o build/audio.o
 ..\build_tools\nasm.exe -fobj input/input.asm -o build/input.o
 ..\build_tools\nasm.exe -fobj glfw/glfw.asm -o build/glfw.o
 ..\build_tools\nasm.exe -fobj opengl/opengl.asm -o build/opengl.o
@@ -66,6 +67,7 @@ build/mat4.o ^
 build/mat3.o ^
 build/vec4.o ^
 build/vec3.o ^
+build/audio.o ^
 build/qsort.o ^
 build/thread_safe_queue.o ^
 build/thread_safe_value.o ^
