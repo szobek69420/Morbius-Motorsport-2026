@@ -22,6 +22,13 @@ section .text use32
 	global my_fprintf		;void my_fprintf(FILE* file, const char* format, ...args)
 	global my_fgetc			;int my_fgetc(FILE* file)
 	
+	;ptr: the buffer in which the read data will go
+	;size: the size of each element
+	;nmemb: the number of elements to read
+	;stream: the file
+	;returns the number of elements read
+	global my_fread			;int my_size_t fread(void *ptr, int size, int nmemb, FILE *stream)
+	
 	;jumps numBytes from the specified position
 	;if fromCurrent is zero, the new position of the file pointer will be numBytes, otherwise it will be the current position of the file pointer + numBytes
 	global my_fjmp			;void my_fjmp(FILE* file, int numBytes, int fromCurrent)
@@ -305,6 +312,53 @@ my_fgetc:
 		mov eax, -1
 	my_fgetc_end:
 	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+my_fread:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	sub esp, 4					;return value
+	
+	mov dword[ebp-4], 0
+	
+	;is nmemb>0?
+	cmp dword[ebp+24], 0
+	jle my_fread_end
+	
+	mov esi, dword[ebp+16]		;buffer in esi
+	mov edi, dword[ebp+24]		;index in edi
+	my_fread_loop_start:
+		;read the next memory block
+		push 0				;not overlapped
+		push 0
+		push dword[ebp+20]	;number of bytes to read
+		push esi			;buffer
+		push dword[ebp+28]	;file
+		call [ReadFile]
+		
+		;was it successful?
+		test eax, eax
+		jz my_fread_end
+		
+		;increment the successful block count
+		inc dword[ebp-4]
+	
+		add esi, dword[ebp+20]
+		dec edi
+		test edi, edi
+		jnz my_fread_loop_start
+	
+	my_fread_end:
+	mov eax, dword[ebp-4]		;set return value
+	
+	mov esp, ebp
+	pop edi
+	pop esi
 	pop ebp
 	ret
 	
