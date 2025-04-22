@@ -241,6 +241,8 @@ section .text use32
 	extern sun_setDistance
 	
 	extern audio_loadSound
+	extern audio_unloadSound
+	extern audio_playSound
 	
 game_loop:
 	push ebp
@@ -332,6 +334,11 @@ game_loop:
 	push sound_path
 	call audio_loadSound
 	add esp, 4
+	
+	push 1000000
+	push eax
+	call audio_playSound
+	add esp, 8
 	
 	;init last frame time
 	call [GetTickCount]

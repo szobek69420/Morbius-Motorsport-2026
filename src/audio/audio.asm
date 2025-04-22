@@ -33,14 +33,14 @@
 ;	int dwLoops;				;20
 ;	wavehdr_tag* lpNext;		;24
 ;	int* reserved;				;28
-;} 	32 bytes overall; only lpData, dwBufferLength and dwFlags are important for us
+;} 	32 bytes overall; only lpData, dwBufferLength, dwFlags and dwLoops are important for us
 
 ;struct Sound{
 ;	HANDLE handle;					;0
 ;	int dataSizeInBytes;			;4
 ;	char* data;						;8
 ;	WAVEFORMATEX* formatDescriptor;	;12
-;	uint loopsLeft;					;16	//0xffffffff means infinite playback
+;	uint loopsLeft;					;16	//if you want an infinite playback, just give it a very large number
 ;	WAVEHDR* currentlyPlayingBlock;	;20
 ;}	24 bytes overall
 
@@ -54,6 +54,8 @@ section .rodata use32
 	MMSYSERR_NOERROR dd 0
 	CALLBACK_FUNCTION dd 0x00030000
 	WAVE_MAPPED_DEFAULT_COMMUNICATION_DEVICE dd 0x0010
+	WHDR_BEGINLOOP dd 0x00000004
+	WHDR_ENDLOOP dd 0x00000008
 
 	file_open_mode db "r",0
 	
@@ -68,6 +70,8 @@ section .rodata use32
 	error_invalid_file_type db "audio_readWaveHeader: couldn't read wave header of %s due to an invalid file type",10,0
 	error_invalid_format_chunk_marker db "audio_readWaveHeader: couldn't read wave header of %s due to missing format chunk marker",10,0
 	error_device_could_not_be_created db "audio_loadSound: audio device could not be created",10,0
+	error_header_could_not_be_prepared db "audio_playSound: block header couldn't be prepared",10,0
+	error_data_could_not_be_written db "audio_playSound: data couldn't be written to device",10,0
 
 	print_seven_ints_nl db "%d %d %d %d %d %d %d",10,0
 	
@@ -79,6 +83,9 @@ section .text use32
 	;returns NULL if there was a problem
 	;Sound* audio_loadSound(const char* filePath)
 	global audio_loadSound
+	
+	;void audio_unloadSound(Sound* sound)
+	global audio_unloadSound
 	
 	;Sound* audio_playSound(Sound* sound, unsigned int loopCount)
 	global audio_playSound
@@ -183,8 +190,7 @@ audio_loadSound:
 	
 	;create device
 	mov eax, dword[CALLBACK_FUNCTION]
-	or eax, dword[WAVE_MAPPED_DEFAULT_COMMUNICATION_DEVICE]
-	push eax			;the dwCallback is a function pointer and the device should be the default communication device
+	push eax			;the dwCallback is a function pointer
 	push dword[ebp-4]	;the sound should be passed as a parameter for the callback funciton
 	push audio_callback	;the callback function
 	push dword[ebp-12]	;WAVEFORMATEX info
@@ -226,6 +232,108 @@ audio_loadSound:
 	audio_loadSound_end:
 	mov eax, dword[ebp-4]		;set return value
 	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+audio_unloadSound:
+	push ebp
+	mov ebp, esp
+	
+	;destroy audio device
+	mov eax, dword[ebp+8]
+	push dword[eax]		;HANDLE
+	call [waveOutClose]
+	
+	;free things
+	mov eax, dword[ebp+8]
+	push eax
+	push dword[eax+8]
+	push dword[eax+12]
+	call my_free
+	add esp, 4
+	call my_free
+	add esp, 4
+	call my_free
+	add esp, 4
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+audio_playSound:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4	;WAVEHDR*			4
+	
+	;set loop count in the sound struct (unused)
+	mov eax, dword[ebp+8]
+	mov ecx, dword[ebp+12]
+	mov dword[eax+16], ecx
+	
+	;alloc header
+	push 32
+	call my_malloc
+	mov dword[ebp-4], eax
+	add esp, 4
+	
+	;set the lpData, dwBufferLength, dwFlags and dwLoops values of the header
+	mov eax, dword[ebp-4]	;header in eax
+	mov ecx, dword[ebp+8]	;sound in ecx
+	
+	mov edx, dword[ecx+8]
+	mov dword[eax], edx		;lpData
+	mov edx, dword[ecx+4]
+	mov dword[eax+4], edx	;dwBufferLength
+	mov edx, dword[WHDR_BEGINLOOP]
+	or edx, dword[WHDR_ENDLOOP]
+	mov dword[eax+16], edx	;dwFlags (the flags are for looping)
+	mov edx, [ebp+12]
+	mov dword[eax+20], edx
+	
+	;prepare the header
+	push 32
+	push dword[ebp-4]
+	mov eax, dword[ebp+8]
+	push dword[eax]			;HANDLE
+	call [waveOutPrepareHeader]
+	cmp eax, dword[MMSYSERR_NOERROR]
+	jne audio_playSound_prepare_unsuccessful
+	
+	;save the header
+	mov eax, dword[ebp+8]	;sound in eax
+	mov ecx, dword[ebp-4]	;header in ecx
+	mov dword[eax+20], ecx
+	
+	;play the sound
+	mov eax, dword[ebp+8]
+	push 32
+	push dword[eax+20]
+	push dword[eax]
+	call [waveOutWrite]
+	cmp eax, dword[MMSYSERR_NOERROR]
+	jne audio_playSound_write_unsuccessful
+	
+	jmp audio_playSound_end
+	
+	audio_playSound_prepare_unsuccessful:
+		push dword[ebp-4]
+		call my_free
+		
+		push error_header_could_not_be_prepared
+		call my_printf
+		jmp audio_playSound_end
+		
+	audio_playSound_write_unsuccessful:
+		push dword[ebp-4]
+		call my_free
+		
+		push error_data_could_not_be_written
+		call my_printf
+		jmp audio_playSound_end
+	
+	audio_playSound_end:
 	mov esp, ebp
 	pop ebp
 	ret
