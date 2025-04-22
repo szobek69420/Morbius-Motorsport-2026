@@ -67,6 +67,7 @@ section .rodata use32
 	error_invalid_chunk_id db "audio_readWaveHeader: couldn't read wave header of %s due to an invalid chunk ID",10,0
 	error_invalid_file_type db "audio_readWaveHeader: couldn't read wave header of %s due to an invalid file type",10,0
 	error_invalid_format_chunk_marker db "audio_readWaveHeader: couldn't read wave header of %s due to missing format chunk marker",10,0
+	error_device_could_not_be_created db "audio_loadSound: audio device could not be created",10,0
 
 	print_seven_ints_nl db "%d %d %d %d %d %d %d",10,0
 	
@@ -191,6 +192,22 @@ audio_loadSound:
 	lea eax, [ebp-8]
 	push eax			;HANDLE buffer
 	call [waveOutOpen]
+	cmp eax, dword[MMSYSERR_NOERROR]
+	je audio_loadSound_open_successful
+		push dword[ebp-4]
+		call my_free
+		push dword[ebp-12]
+		call my_free
+		push dword[ebp-16]
+		call my_free
+		
+		push error_device_could_not_be_created
+		call my_printf
+		
+		mov dword[ebp-4], 0
+		jmp audio_loadSound_end
+		
+	audio_loadSound_open_successful:
 	
 	;init the Sound struct
 	mov eax, dword[ebp-4]

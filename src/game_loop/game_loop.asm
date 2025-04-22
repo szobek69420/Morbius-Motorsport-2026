@@ -240,6 +240,8 @@ section .text use32
 	extern sun_setDirection
 	extern sun_setDistance
 	
+	extern audio_loadSound
+	
 game_loop:
 	push ebp
 	mov ebp, esp
@@ -325,6 +327,11 @@ game_loop:
 	call [glFrontFace]
 	push dword[GL_CULL_FACE]
 	call [glEnable]
+	
+	;test audio
+	push sound_path
+	call audio_loadSound
+	add esp, 4
 	
 	;init last frame time
 	call [GetTickCount]
