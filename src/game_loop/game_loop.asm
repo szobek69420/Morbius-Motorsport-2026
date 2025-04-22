@@ -45,6 +45,7 @@ section .rodata use32
 	image_path db "./sprites/morbussin.bmp",0
 	
 	sound_path db "./sfx/battlecry.wav",0
+	music_path db "./sfx/music.wav",0
 	
 	test_text_main db "main",10,0
 	test_text_physics db "physics",10,0
@@ -330,12 +331,12 @@ game_loop:
 	push dword[GL_CULL_FACE]
 	call [glEnable]
 	
-	;test audio
-	push sound_path
+	;audio things
+	push music_path
 	call audio_loadSound
 	add esp, 4
 	
-	push 1000000
+	push 100000000
 	push eax
 	call audio_playSound
 	add esp, 8

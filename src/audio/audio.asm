@@ -50,12 +50,19 @@
 %endmacro
 
 section .rodata use32
-	WAVE_MAPPER dd 0xffffffff
 	MMSYSERR_NOERROR dd 0
+
+	WAVE_MAPPER dd 0xffffffff
+	
 	CALLBACK_FUNCTION dd 0x00030000
 	WAVE_MAPPED_DEFAULT_COMMUNICATION_DEVICE dd 0x0010
+	
 	WHDR_BEGINLOOP dd 0x00000004
 	WHDR_ENDLOOP dd 0x00000008
+	
+	WOM_OPEN dd 0x3bb
+	WOM_CLOSE dd 0x3bc
+	WOM_DONE dd 0x3bd
 
 	file_open_mode db "r",0
 	
@@ -89,10 +96,19 @@ section .text use32
 	
 	;Sound* audio_playSound(Sound* sound, unsigned int loopCount)
 	global audio_playSound
+	;void audio_stopSound(Sound* sound)
+	global audio_stopSound
+	;void audio_pauseSound(Sound* sound)
+	global audio_pauseSound
+	;void audio_resumeSound(Sound* sound)
+	global audio_resumeSound
 	
 	dll_import winmm.dll, waveOutOpen				;creates an audio device
 	dll_import winmm.dll, waveOutClose				;destroys an audio device
 	dll_import winmm.dll, waveOutWrite				;writes (plays) a playback block into an audio device
+	dll_import winmm.dll, waveOutReset				;stops the currently playing sound on the given audio device
+	dll_import winmm.dll, waveOutPause				;pauses the currently playing sound on the given audio device
+	dll_import winmm.dll, waveOutRestart			;resumes the currently playing sound on the given audio device
 	dll_import winmm.dll, waveOutPrepareHeader		;prepares a playback block to be played
 	dll_import winmm.dll, waveOutUnprepareHeader	;undoes the PrepareHeader func
 	
@@ -338,8 +354,94 @@ audio_playSound:
 	pop ebp
 	ret
 	
+	
+	
+audio_stopSound:
+	push ebp
+	mov ebp, esp
+	
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	call [waveOutReset]
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+	
+audio_pauseSound:
+	push ebp
+	mov ebp, esp
+	
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	call [waveOutPause]
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+	
+audio_resumeSound:
+	push ebp
+	mov ebp, esp
+	
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	call [waveOutRestart]
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
 ;void audio_callback(HANDLE hwo, uint32 uMsg, Sound* sound, int* dwParam1, int* dwParam2 );
 audio_callback:
+	push ebp
+	mov ebp, esp
+	
+	mov eax, dword[ebp+12]
+	cmp eax, dword[WOM_OPEN]
+	je audio_callback_device_opened
+	cmp eax, dword[WOM_CLOSE]
+	je audio_callback_device_closed
+	cmp eax, dword[WOM_DONE]
+	je audio_callback_playback_ended
+	jmp audio_callback_end
+	
+	audio_callback_device_opened:
+		jmp audio_callback_end
+		
+	audio_callback_device_closed:
+		jmp audio_callback_end
+		
+	audio_callback_playback_ended:
+		;is there a freeable block?
+		mov eax, dword[ebp+16]
+		cmp dword[eax+20], 0
+		je audio_callback_end
+			;unprepare header
+			mov eax, dword[ebp+16]
+			push 32
+			push dword[eax+20]
+			push dword[eax]
+			call [waveOutUnprepareHeader]
+			
+			;free the memory
+			mov eax, dword[ebp+16]
+			push dword[eax+20]
+			mov dword[eax+20], 0
+			call my_free
+			add esp, 4
+			
+		jmp audio_callback_end
+	
+
+	audio_callback_end:
+	mov esp, ebp
+	pop ebp
 	ret
 
 ;retrieves the WAVEFORMATEX struct corresponding to the file
