@@ -146,7 +146,6 @@ my_fclose:
 	push dword[ebp+8]
 	call [CloseHandle]
 	mov dword[ebp-4], eax
-	add esp, 4
 	
 	;was it successful?
 	test eax, eax
