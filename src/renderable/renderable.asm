@@ -134,6 +134,10 @@ section .text use32
 	;enable should be 0, if the depth test should be disabled
 	global renderable_enableDepthTest	;void renderable_enableDepthTest(int enable)
 	
+	;it is a system state setting function
+	;enable should be 0, if the blending should be disabled
+	global renderable_enableBlending	;void renderable_enableBlending(int enable)
+	
 	extern glGenVertexArrays
 	extern glGenBuffers
 	extern glDeleteVertexArrays
@@ -178,6 +182,10 @@ section .text use32
 	extern glEnable
 	extern glDisable
 	extern GL_DEPTH_TEST
+	extern GL_BLEND
+	extern GL_SRC_ALPHA
+	extern GL_ONE_MINUS_SRC_ALPHA
+	extern glBlendFunc
 	
 	extern my_printf
 	
@@ -1287,6 +1295,30 @@ renderable_enableDepthTest:
 		call [glDisable]
 	
 	renderable_enableDepthTest_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+renderable_enableBlending:
+	push ebp
+	mov ebp, esp
+	
+	cmp dword[ebp+8], 0
+	je renderable_enableBlending_disable
+		push dword[GL_ONE_MINUS_SRC_ALPHA]
+		push dword[GL_SRC_ALPHA]
+		call [glBlendFunc]
+	
+		push dword[GL_BLEND]
+		call [glEnable]
+		jmp renderable_enableBlending_end
+	
+	renderable_enableBlending_disable:
+		push dword[GL_BLEND]
+		call [glDisable]
+	
+	renderable_enableBlending_end:
 	mov esp, ebp
 	pop ebp
 	ret

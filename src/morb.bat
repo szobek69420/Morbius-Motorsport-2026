@@ -17,6 +17,7 @@ mkdir build
 ..\build_tools\nasm.exe -fobj physics/physics4D.asm -o build/physics4D.o
 ..\build_tools\nasm.exe -fobj physics/collider_group_4D.asm -o build/collider_group_4D.o
 ..\build_tools\nasm.exe -fobj physics/aabb4D.asm -o build/aabb4D.o
+..\build_tools\nasm.exe -fobj utils/math.asm -o build/math.o
 ..\build_tools\nasm.exe -fobj utils/qsort.asm -o build/qsort.o
 ..\build_tools\nasm.exe -fobj utils/thread_safe_queue.asm -o build/thread_safe_queue.o
 ..\build_tools\nasm.exe -fobj utils/thread_safe_value.asm -o build/thread_safe_value.o
@@ -70,6 +71,7 @@ build/mat3.o ^
 build/vec4.o ^
 build/vec3.o ^
 build/audio.o ^
+build/math.o ^
 build/qsort.o ^
 build/thread_safe_queue.o ^
 build/thread_safe_value.o ^

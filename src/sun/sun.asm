@@ -3,8 +3,8 @@
 section .rodata use32
 	texture_path db "sprites/sun.bmp",0
 	
-	sun_rotational_plane_1 dd 0.0, 1.0, 0.0, 0.0
-	sun_rotational_plane_2 dd 0.196116, 0.0, 0.58835, 0.784465
+	sun_rotational_plane_1 dd -0.16013, 0.80064, 0.32026, -0.48038
+	sun_rotational_plane_2 dd 0.27975, 0.0, 0.83925, 0.46626
 	
 	deg2rad dd 0.0174533
 	
@@ -26,6 +26,7 @@ section .text use32
 	;direction is multiplied by the distance when calculating the sun's position
 	global sun_setAngle		;void sun_setAngle(float angleInDegrees)
 	global sun_setDistance	;void sun_setDistance(float distance)
+	global sun_getDirection ;void sun_getDirection(vec4* buffer)
 	
 	extern my_printf
 	
@@ -54,6 +55,11 @@ sun_init:
 	push dword[renderable]
 	call renderable_setAlbedo
 	add esp, 8
+	
+	;set angle
+	push 0
+	call sun_setAngle
+	add esp, 4
 	
 	;set initialized flag
 	mov dword[is_initialized], 69
@@ -181,4 +187,20 @@ sun_setAngle:
 sun_setDistance:
 	mov eax, dword[esp+4]
 	mov dword[distance], eax
+	ret
+	
+	
+sun_getDirection:
+	mov eax, dword[esp+4]
+	mov ecx, direction
+	
+	mov edx, dword[ecx]
+	mov dword[eax], edx
+	mov edx, dword[ecx+4]
+	mov dword[eax+4], edx
+	mov edx, dword[ecx+8]
+	mov dword[eax+8], edx
+	mov edx, dword[ecx+12]
+	mov dword[eax+12], edx
+	
 	ret

@@ -48,6 +48,7 @@ section .rodata use32
 	uniform_name_hyperPlaneDir2 db "hyperPlaneDir2",0
 	uniform_name_hyperPlaneDir3 db "hyperPlaneDir3",0
 	uniform_name_hyperPlaneNormal db "hyperPlaneNormal",0
+	uniform_name_sunDirection db "sunDirection",0
 	
 	test_text db "you're so portuguese",10,0
 	test_text2 db "you're so portuguese2",10,0
@@ -124,6 +125,7 @@ section .text use32
 	extern tsQueue_at
 	extern tsQueue_size
 	
+	extern vec3_normalize
 	extern vec4_add
 	extern vec4_scale
 	extern vec4_dot
@@ -138,11 +140,16 @@ section .text use32
 	extern renderable_useShader
 	extern renderable_setUniform
 	extern renderable_setPrimitive
+	extern RENDERABLE_UNIFORM_VEC3
 	extern RENDERABLE_UNIFORM_VEC4
 	
 	extern GL_POINTS
 	extern glGetUniformLocation
 	extern glUniform4f
+	
+	extern hyperPlane_directionTo3d
+	
+	extern sun_getDirection
 
 chunkManager4d_create:
 	push ebp
@@ -223,6 +230,7 @@ chunkManager4d_render:
 	sub esp, 16					;hyperplane normal				16
 	sub esp, 4					;hyperplane equation E			20
 	sub esp, 4					;hyperplane pointer				24
+	sub esp, 16					;sun direction 4d and then 3d	40
 	
 	
 	;obtain hyperplane, hyperplane normal and E
@@ -240,6 +248,20 @@ chunkManager4d_render:
 	fstp dword[ebp-20]
 	xor dword[ebp-20], 0x80000000
 	
+	;calculate the sun direction
+	lea eax, [ebp-40]
+	push eax
+	call sun_getDirection
+	pop eax
+	
+	push eax
+	push eax
+	push dword[ebp-24]
+	call hyperPlane_directionTo3d
+	add esp, 8
+	call vec3_normalize
+	add esp, 4
+	
 	;set renderable primitive
 	push dword[GL_POINTS]
 	call renderable_setPrimitive
@@ -250,6 +272,17 @@ chunkManager4d_render:
 	push dword[eax+28]
 	call renderable_useShader
 	add esp, 4
+	
+	;set sun direction uniform
+	push dword[ebp-32]
+	push dword[ebp-36]
+	push dword[ebp-40]
+	push dword[RENDERABLE_UNIFORM_VEC3]
+	push uniform_name_sunDirection
+	mov eax, dword[ebp+16]
+	push dword[eax+28]
+	call renderable_setUniform
+	add esp, 24
 	
 	;set hyperplane pos uniform
 	mov eax, dword[ebp+16]

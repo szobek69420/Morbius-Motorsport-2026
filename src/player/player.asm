@@ -49,7 +49,7 @@ section .rodata use32
 	
 	CUM_NORMAL_FOV dd 60.0
 	CUM_ZOOM_FOV dd 10.0
-	CUM_FOV_INTERPOLATION_STRENGTH dd 0.05
+	CUM_FOV_INTERPOLATION_STRENGTH dd 0.2
 	
 	raycast_hypercube_texture db "sprites/player_hypercube.bmp",0
 	
@@ -108,6 +108,8 @@ section .text use32
 	extern my_malloc
 	extern my_free
 	extern my_printf
+	
+	extern math_basedLerp
 	
 	extern vec3_normalize
 	extern vec3_scale
@@ -356,6 +358,7 @@ player_update:
 	add esp, 8
 	
 	;zoom
+	push dword[ebp+12]
 	push dword[ebp+8]
 	call player_optifineZoom
 	add esp, 4
@@ -1213,7 +1216,7 @@ player_placeBlock:
 	ret
 	
 	
-;void player_optifineZoom(Player* player)
+;void player_optifineZoom(Player* player, float deltaTime)
 player_optifineZoom:
 	push ebp
 	mov ebp, esp
@@ -1241,13 +1244,13 @@ player_optifineZoom:
 	mov dword[ebp-8], ecx
 	
 	;calculate fov
-	movss xmm0, dword[ebp-4]
-	movss xmm1, dword[ebp-8]
-	movss xmm2, dword[CUM_FOV_INTERPOLATION_STRENGTH]
-	subss xmm1, xmm0
-	mulss xmm1, xmm2
-	addss xmm0, xmm1
-	movss dword[ebp-4], xmm0
+	push dword[ebp+12]
+	push dword[CUM_FOV_INTERPOLATION_STRENGTH]
+	push dword[ebp-8]
+	push dword[ebp-4]
+	call math_basedLerp
+	fstp dword[ebp-4]
+	add esp, 16
 	
 	;change camera fov
 	mov eax, dword[ebp+8]
