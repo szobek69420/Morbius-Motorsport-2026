@@ -16,7 +16,8 @@ uniform vec4 hyperPlaneDir2;
 uniform vec4 hyperPlaneDir3;
 uniform vec4 hyperPlaneNormal;
 
-const vec4 edgePositionsPosX[]={
+const vec4 edgePositions[]={
+	//edgePositionsPosX
 	//upper horizontal sides
 	vec4(0.5,0.5,-0.5,0.5), vec4(0.5,0.5,-0.5,-0.5),
 	vec4(0.5,0.5,-0.5,-0.5), vec4(0.5,0.5,0.5,-0.5),
@@ -31,10 +32,9 @@ const vec4 edgePositionsPosX[]={
 	vec4(0.5,-0.5,-0.5,0.5), vec4(0.5,-0.5,0.5,0.5),
 	vec4(0.5,-0.5,0.5,0.5), vec4(0.5,-0.5,0.5,-0.5),
 	vec4(0.5,-0.5,0.5,-0.5), vec4(0.5,-0.5,-0.5,-0.5),
-	vec4(0.5,-0.5,-0.5,-0.5), vec4(0.5,-0.5,-0.5,0.5)
-	};
+	vec4(0.5,-0.5,-0.5,-0.5), vec4(0.5,-0.5,-0.5,0.5),
 	
-const vec4 edgePositionsNegX[]={
+	//edgePositionsNegX
 	//upper horizontal sides
 	vec4(-0.5,0.5,0.5,0.5), vec4(-0.5,0.5,-0.5,0.5),
 	vec4(-0.5,0.5,0.5,-0.5), vec4(-0.5,0.5,0.5,0.5),
@@ -49,10 +49,9 @@ const vec4 edgePositionsNegX[]={
 	vec4(-0.5,-0.5,-0.5,-0.5), vec4(-0.5,-0.5,-0.5,0.5),
 	vec4(-0.5,-0.5,0.5,-0.5), vec4(-0.5,-0.5,-0.5,-0.5),
 	vec4(-0.5,-0.5,0.5,0.5), vec4(-0.5,-0.5,0.5,-0.5),
-	vec4(-0.5,-0.5,-0.5,0.5), vec4(-0.5,-0.5,0.5,0.5)
-	};
-		
-const vec4 edgePositionsPosY[]={
+	vec4(-0.5,-0.5,-0.5,0.5), vec4(-0.5,-0.5,0.5,0.5),
+	
+	//edgePositionsPosY
 	//upper horizontal sides	
 	vec4(0.5,0.5,0.5,-0.5), vec4(-0.5,0.5,0.5,-0.5),
 	vec4(0.5,0.5,-0.5,-0.5), vec4(0.5,0.5,0.5,-0.5),
@@ -67,10 +66,9 @@ const vec4 edgePositionsPosY[]={
 	vec4(-0.5,0.5,-0.5,0.5), vec4(-0.5,0.5,0.5,0.5),
 	vec4(0.5,0.5,-0.5,0.5), vec4(-0.5,0.5,-0.5,0.5),
 	vec4(0.5,0.5,0.5,0.5), vec4(0.5,0.5,-0.5,0.5),
-	vec4(-0.5,0.5,0.5,0.5), vec4(0.5,0.5,0.5,0.5)
-	};
-		
-const vec4 edgePositionsNegY[]={
+	vec4(-0.5,0.5,0.5,0.5), vec4(0.5,0.5,0.5,0.5),
+	
+	//edgePositionsNegY
 	//upper horizontal sides
 	vec4(-0.5,-0.5,0.5,-0.5), vec4(-0.5,-0.5,-0.5,-0.5),
 	vec4(-0.5,-0.5,-0.5,-0.5), vec4(0.5,-0.5,-0.5,-0.5),
@@ -85,10 +83,9 @@ const vec4 edgePositionsNegY[]={
 	vec4(-0.5,-0.5,0.5,0.5), vec4(0.5,-0.5,0.5,0.5),
 	vec4(0.5,-0.5,0.5,0.5), vec4(0.5,-0.5,-0.5,0.5),
 	vec4(0.5,-0.5,-0.5,0.5), vec4(-0.5,-0.5,-0.5,0.5),
-	vec4(-0.5,-0.5,-0.5,0.5), vec4(-0.5,-0.5,0.5,0.5)
-	};
+	vec4(-0.5,-0.5,-0.5,0.5), vec4(-0.5,-0.5,0.5,0.5),
 	
-const vec4 edgePositionsPosZ[]={
+	//edgePositionsPosZ
 	//upper horizontal sides
 	vec4(0.5,0.5,0.5,0.5), vec4(-0.5,0.5,0.5,0.5),
 	vec4(0.5,0.5,0.5,-0.5), vec4(0.5,0.5,0.5,0.5),
@@ -103,10 +100,9 @@ const vec4 edgePositionsPosZ[]={
 	vec4(0.5,-0.5,0.5,-0.5), vec4(-0.5,-0.5,0.5,-0.5),
 	vec4(-0.5,-0.5,0.5,-0.5), vec4(-0.5,-0.5,0.5,0.5),
 	vec4(0.5,-0.5,0.5,0.5), vec4(0.5,-0.5,0.5,-0.5),
-	vec4(-0.5,-0.5,0.5,0.5), vec4(0.5,-0.5,0.5,0.5)
-	};
+	vec4(-0.5,-0.5,0.5,0.5), vec4(0.5,-0.5,0.5,0.5),
 	
-const vec4 edgePositionsNegZ[]={
+	//edgePositionsNegZ
 	//upper horizontal sides
 	vec4(-0.5,0.5,-0.5,0.5), vec4(-0.5,0.5,-0.5,-0.5),
 	vec4(-0.5,0.5,-0.5,-0.5), vec4(0.5,0.5,-0.5,-0.5),
@@ -121,10 +117,9 @@ const vec4 edgePositionsNegZ[]={
 	vec4(-0.5,-0.5,-0.5,0.5), vec4(0.5,-0.5,-0.5,0.5),
 	vec4(0.5,-0.5,-0.5,0.5), vec4(0.5,-0.5,-0.5,-0.5),
 	vec4(0.5,-0.5,-0.5,-0.5), vec4(-0.5,-0.5,-0.5,-0.5),
-	vec4(-0.5,-0.5,-0.5,-0.5), vec4(-0.5,-0.5,-0.5,0.5)
-	};
-			
-const vec4 edgePositionsPosW[]={
+	vec4(-0.5,-0.5,-0.5,-0.5), vec4(-0.5,-0.5,-0.5,0.5),
+	
+	//edgePositionsPosW
 	//upper horizontal sides
 	vec4(-0.5,0.5,0.5,0.5), vec4(-0.5,0.5,-0.5,0.5),
 	vec4(-0.5,0.5,-0.5,0.5), vec4(0.5,0.5,-0.5,0.5),
@@ -140,9 +135,8 @@ const vec4 edgePositionsPosW[]={
 	vec4(0.5,-0.5,0.5,0.5), vec4(0.5,-0.5,-0.5,0.5),
 	vec4(0.5,-0.5,-0.5,0.5), vec4(-0.5,-0.5,-0.5,0.5),
 	vec4(-0.5,-0.5,-0.5,0.5), vec4(-0.5,-0.5,0.5,0.5),
-	};
-			
-const vec4 edgePositionsNegW[]={
+	
+	//edgePositionsNegW
 	//upper horizontal sides
 	vec4(-0.5,0.5,0.5,-0.5), vec4(-0.5,0.5,-0.5,-0.5),
 	vec4(-0.5,0.5,-0.5,-0.5), vec4(0.5,0.5,-0.5,-0.5),
@@ -160,7 +154,8 @@ const vec4 edgePositionsNegW[]={
 	vec4(-0.5,-0.5,-0.5,-0.5), vec4(-0.5,-0.5,0.5,-0.5)
 	};
 
-const vec2 edgeUvsPosX[]={
+const vec2 edgeUvs[]={
+	//edgeUvsPosX
 	//upper horizontal sides
 	vec2(0.0,1.0), vec2(1.0,1.0),
 	vec2(1.0,1.0), vec2(0.0,1.0),
@@ -175,10 +170,9 @@ const vec2 edgeUvsPosX[]={
 	vec2(0.0,0.0), vec2(1.0,0.0),
 	vec2(1.0,0.0), vec2(0.0,0.0),
 	vec2(0.0,0.0), vec2(1.0,0.0),
-	vec2(1.0,0.0), vec2(0.0,0.0)
-	};
+	vec2(1.0,0.0), vec2(0.0,0.0),
 	
-const vec2 edgeUvsNegX[]={
+	//edgeUvsNegX
 	//upper horizontal sides
 	vec2(1.0,1.0), vec2(0.0,1.0),
 	vec2(0.0,1.0), vec2(1.0,1.0),
@@ -193,10 +187,9 @@ const vec2 edgeUvsNegX[]={
 	vec2(0.0,0.0), vec2(1.0,0.0),
 	vec2(1.0,0.0), vec2(0.0,0.0),
 	vec2(0.0,0.0), vec2(1.0,0.0),
-	vec2(1.0,0.0), vec2(0.0,0.0)
-	};
-		
-const vec2 edgeUvsPosY[]={
+	vec2(1.0,0.0), vec2(0.0,0.0),
+	
+	//edgeUvsPosY
 	//upper horizontal sides	
 	vec2(0.0,1.0), vec2(1.0,1.0),
 	vec2(1.0,1.0), vec2(0.0,1.0),
@@ -211,10 +204,9 @@ const vec2 edgeUvsPosY[]={
 	vec2(1.0,0.0), vec2(0.0,0.0),
 	vec2(0.0,0.0), vec2(1.0,0.0),
 	vec2(1.0,0.0), vec2(0.0,0.0),
-	vec2(0.0,0.0), vec2(1.0,0.0)
-	};
-		
-const vec2 edgeUvsNegY[]={
+	vec2(0.0,0.0), vec2(1.0,0.0),
+	
+	//edgeUvsNegY
 	//upper horizontal sides
 	vec2(1.0,1.0), vec2(0.0,1.0),
 	vec2(0.0,1.0), vec2(1.0,1.0),
@@ -229,10 +221,9 @@ const vec2 edgeUvsNegY[]={
 	vec2(0.0,0.0), vec2(1.0,0.0),
 	vec2(1.0,0.0), vec2(0.0,0.0),
 	vec2(0.0,0.0), vec2(1.0,0.0),
-	vec2(1.0,0.0), vec2(0.0,0.0)
-	};
+	vec2(1.0,0.0), vec2(0.0,0.0),
 	
-const vec2 edgeUvsPosZ[]={
+	//edgeUvsPosZ
 	//upper horizontal sides	
 	vec2(1.0,1.0), vec2(0.0,1.0),
 	vec2(0.0,1.0), vec2(1.0,1.0),
@@ -247,10 +238,9 @@ const vec2 edgeUvsPosZ[]={
 	vec2(0.0,0.0), vec2(1.0,0.0),
 	vec2(1.0,0.0), vec2(0.0,0.0),
 	vec2(1.0,0.0), vec2(0.0,0.0),
-	vec2(0.0,0.0), vec2(1.0,0.0)
-	};
+	vec2(0.0,0.0), vec2(1.0,0.0),
 	
-const vec2 edgeUvsNegZ[]={
+	//edgeUvsNegZ
 	//upper horizontal sides	
 	vec2(0.0,1.0), vec2(1.0,1.0),
 	vec2(1.0,1.0), vec2(0.0,1.0),
@@ -265,10 +255,26 @@ const vec2 edgeUvsNegZ[]={
 	vec2(0.0,0.0), vec2(1.0,0.0),
 	vec2(1.0,0.0), vec2(0.0,0.0),
 	vec2(0.0,0.0), vec2(1.0,0.0),
-	vec2(1.0,0.0), vec2(0.0,0.0)
-	};
-		
-const vec2 edgeUvsPosW[]={
+	vec2(1.0,0.0), vec2(0.0,0.0),
+	
+	//edgeUvsPosW
+	//upper horizontal sides
+	vec2(0.0,1.0), vec2(1.0,1.0),
+	vec2(1.0,1.0), vec2(0.0,1.0),
+	vec2(0.0,1.0), vec2(1.0,1.0),
+	vec2(1.0,1.0), vec2(0.0,1.0),
+	//vertical sides
+	vec2(0.0,0.0), vec2(0.0,1.0),
+	vec2(1.0,0.0), vec2(1.0,1.0),
+	vec2(0.0,0.0), vec2(0.0,1.0),
+	vec2(1.0,0.0), vec2(1.0,1.0),
+	//lower horizontal sides
+	vec2(0.0,0.0), vec2(1.0,0.0),
+	vec2(1.0,0.0), vec2(0.0,0.0),
+	vec2(0.0,0.0), vec2(1.0,0.0),
+	vec2(1.0,0.0), vec2(0.0,0.0),
+	
+	//edgeUvsNegW
 	//upper horizontal sides
 	vec2(0.0,1.0), vec2(1.0,1.0),
 	vec2(1.0,1.0), vec2(0.0,1.0),
@@ -285,46 +291,6 @@ const vec2 edgeUvsPosW[]={
 	vec2(0.0,0.0), vec2(1.0,0.0),
 	vec2(1.0,0.0), vec2(0.0,0.0)
 	};
-			
-const vec2 edgeUvsNegW[]={
-	//upper horizontal sides
-	vec2(0.0,1.0), vec2(1.0,1.0),
-	vec2(1.0,1.0), vec2(0.0,1.0),
-	vec2(0.0,1.0), vec2(1.0,1.0),
-	vec2(1.0,1.0), vec2(0.0,1.0),
-	//vertical sides
-	vec2(0.0,0.0), vec2(0.0,1.0),
-	vec2(1.0,0.0), vec2(1.0,1.0),
-	vec2(0.0,0.0), vec2(0.0,1.0),
-	vec2(1.0,0.0), vec2(1.0,1.0),
-	//lower horizontal sides
-	vec2(0.0,0.0), vec2(1.0,0.0),
-	vec2(1.0,0.0), vec2(0.0,0.0),
-	vec2(0.0,0.0), vec2(1.0,0.0),
-	vec2(1.0,0.0), vec2(0.0,0.0)
-	};
-
-const vec4 edgePositions[][]={
-	edgePositionsPosX,
-	edgePositionsNegX,
-	edgePositionsPosY,
-	edgePositionsNegY,
-	edgePositionsPosZ,
-	edgePositionsNegZ,
-	edgePositionsPosW,
-	edgePositionsNegW,
-	}; 
-
-const vec2 edgeUvs[][]={
-	edgeUvsPosX,
-	edgeUvsNegX,
-	edgeUvsPosY,
-	edgeUvsNegY,
-	edgeUvsPosZ,
-	edgeUvsNegZ,
-	edgeUvsPosW,
-	edgeUvsNegW
-};
 
 const vec4 cellNormals[]={
 	vec4(1.0, 0.0, 0.0, 0.0),
@@ -357,17 +323,20 @@ void main()
 	uint cell= cellData[0];
 	cell &= 0xFFFFu;
 
+	uint startIndex=24*cell;
+	uint endIndex=startIndex+24;
+
 	//calculate 4d intersection points
-	for(int i=0;i<24;i+=2)
+	for(uint i=startIndex;i<endIndex;i+=2)
 	{
 		float edgeDistance1=dot(
-			edgePositions[cell][i],
+			edgePositions[i],
 			hyperPlaneNormal
 			) +
 			localHyperPlaneEquationE;
 
 		float edgeDistance2=dot(
-			edgePositions[cell][i+1],
+			edgePositions[i+1],
 			hyperPlaneNormal
 			) +
 			localHyperPlaneEquationE;
@@ -390,7 +359,7 @@ void main()
 		float interpolationParam=edgeDistance1/(edgeDistance1+edgeDistance2);
 
 		//register 4d point (it is in the local space of the block)
-		intersections4D[intersectionCount]=mix(edgePositions[cell][i], edgePositions[cell][i+1], interpolationParam);
+		intersections4D[intersectionCount]=mix(edgePositions[i], edgePositions[i+1], interpolationParam);
 
 		//convert it to 3d
 		vec4 temp=intersections4D[intersectionCount]-localHyperPlanePos;
@@ -401,7 +370,7 @@ void main()
 			);
 
 		//get the uv of the point
-		intersectionsUV[intersectionCount] = mix(edgeUvs[cell][i], edgeUvs[cell][i+1], interpolationParam);
+		intersectionsUV[intersectionCount] = mix(edgeUvs[i], edgeUvs[i+1], interpolationParam);
 
 		intersectionCount++;
 	}
