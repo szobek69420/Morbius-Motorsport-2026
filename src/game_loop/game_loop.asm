@@ -17,6 +17,7 @@
 
 section .rodata use32
 	PHYSICS_UPDATE_INTERVAL_MS dd 15
+	TIME_COEFFICIENT dd 0.01		;100 seconds long days
 
 	ZERO dd 0.0
 	ONE dd 1.0
@@ -24,11 +25,7 @@ section .rodata use32
 	ONE_PER_THOUSAND dd 0.001
 	P15 dd 0.15
 	P6 dd 0.6
-	
-	SKY_COLOUR_R dd 0.5294
-	SKY_COLOUR_G dd 0.8078
-	SKY_COLOUR_B dd 0.9215
-	SKY_COLOUR_A dd 1.0
+	D360 dd 360.0
 	
 	PRETTY_YELLOW dd 1.0, 0.85, 0.0, 1.0
 	BLACK dd 0.0, 0.0, 0.0, 1.0
@@ -102,7 +99,7 @@ section .data use32
 	delta_time_milliseconds_physics dd 0		;int (it is just for monitoring purposes)
 	delta_time_milliseconds_chunk_loader dd 0	;int (it is just for monitoring purposes)
 
-	SUN_DIRECTION dd 0.4147, 0.8296, 0.2074, 0.3111
+	TIME_OF_DAY dd 0.0	;values are in [0;1], 0 and 1 are dawn
 
 section .text use32
 
@@ -238,12 +235,14 @@ section .text use32
 	extern sun_init
 	extern sun_deinit
 	extern sun_render
-	extern sun_setDirection
+	extern sun_setAngle
 	extern sun_setDistance
 	
 	extern audio_loadSound
 	extern audio_unloadSound
 	extern audio_playSound
+	
+	extern sky_getColour
 	
 game_loop:
 	push ebp
@@ -318,10 +317,6 @@ game_loop:
 	;init sun
 	call sun_init
 	
-	push SUN_DIRECTION
-	call sun_setDirection
-	add esp, 4
-	
 	;enable depth test and face cull
 	push dword[GL_DEPTH_TEST]
 	call [glEnable]
@@ -338,7 +333,7 @@ game_loop:
 	
 	push 100000000
 	push eax
-	call audio_playSound
+	;call audio_playSound
 	add esp, 8
 	
 	;init last frame time
@@ -403,6 +398,18 @@ game_loop:
 		call chunkManager4d_processGraphicsUpdate
 		add esp, 4
 		
+		;update time of day
+		movss xmm0, dword[delta_time_seconds]
+		movss xmm1, dword[TIME_COEFFICIENT]
+		mulss xmm0, xmm1
+		movss xmm1, dword[TIME_OF_DAY]
+		addss xmm0, xmm1
+		ucomiss xmm0, dword[ONE]
+		jbe gameLoop_loop_time_no_overflow
+			movss xmm1, dword[ONE]
+			subss xmm0, xmm1
+		gameLoop_loop_time_no_overflow:
+		movss dword[TIME_OF_DAY], xmm0
 
 		;update player
 		push dword[delta_time_seconds]
@@ -410,11 +417,13 @@ game_loop:
 		call player_update
 		add esp, 8
 	
-		;set clear color
-		push dword[SKY_COLOUR_A]
-		push dword[SKY_COLOUR_B]
-		push dword[SKY_COLOUR_G]
-		push dword[SKY_COLOUR_R]
+		;calculate and set clear color
+		sub esp, 16
+		mov eax, esp
+		push eax
+		push dword[TIME_OF_DAY]
+		call sky_getColour
+		add esp, 8
 		call [glClearColor]
 		
 		
@@ -431,6 +440,13 @@ game_loop:
 		add esp, 8
 		
 		;render sun (this should be drawn first)
+		fld dword[TIME_OF_DAY]
+		fmul dword[D360]
+		sub esp, 4
+		fstp dword[esp]
+		call sun_setAngle
+		add esp, 4
+		
 		mov eax, dword[pplayer]
 		push dword[eax+24]
 		push dword[chunk_manager_4d]

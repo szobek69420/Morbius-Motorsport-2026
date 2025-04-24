@@ -2,6 +2,13 @@
 
 section .rodata use32
 	texture_path db "sprites/sun.bmp",0
+	
+	sun_rotational_plane_1 dd 0.0, 1.0, 0.0, 0.0
+	sun_rotational_plane_2 dd 0.196116, 0.0, 0.58835, 0.784465
+	
+	deg2rad dd 0.0174533
+	
+	print_float_nl db "%f",10,0
 
 section .data use32
 	is_initialized dd 0
@@ -17,8 +24,10 @@ section .text use32
 	global sun_render		;void sun_render(mat4* pv, Hyperplane* hp, const vec4* playerPos)
 	
 	;direction is multiplied by the distance when calculating the sun's position
-	global sun_setDirection	;void sun_setDirection(vec4* direction)
+	global sun_setAngle		;void sun_setAngle(float angleInDegrees)
 	global sun_setDistance	;void sun_setDistance(float distance)
+	
+	extern my_printf
 	
 	extern vec4_scale
 	extern vec4_add
@@ -122,21 +131,47 @@ sun_render:
 	ret
 	
 	
-sun_setDirection:
+sun_setAngle:
 	push ebp
 	mov ebp, esp
 	
-	mov eax, direction
-	mov ecx, dword[ebp+8]
+	sub esp, 4			;angle in radians		4
+	sub esp, 16			;temp vector
 	
-	mov edx, dword[ecx]
-	mov dword[eax], edx
-	mov edx, dword[ecx+4]
-	mov dword[eax+4], edx
-	mov edx, dword[ecx+8]
-	mov dword[eax+8], edx
-	mov edx, dword[ecx+12]
-	mov dword[eax+12], edx
+	;convert the angle to radians
+	movss xmm0, dword[ebp+8]
+	movss xmm1, dword[deg2rad]
+	mulss xmm0, xmm1
+	movss dword[ebp-4], xmm0
+	
+	;get the projection to the plane vector 1
+	fld dword[ebp-4]
+	fsin
+	sub esp, 4
+	fstp dword[esp]
+	push sun_rotational_plane_1
+	lea eax, [ebp-20]
+	push eax
+	call vec4_scale
+	add esp, 12
+	
+	;get the projection to the plane vector 2
+	fld dword[ebp-4]
+	fcos
+	sub esp, 4
+	fstp dword[esp]
+	push sun_rotational_plane_2
+	push direction
+	call vec4_scale
+	add esp, 12
+	
+	;add the projections
+	lea eax, [ebp-20]
+	push eax
+	push direction 
+	push direction
+	call vec4_add
+	add esp, 12
 	
 	mov esp, ebp
 	pop ebp

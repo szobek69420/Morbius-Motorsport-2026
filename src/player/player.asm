@@ -47,6 +47,10 @@ section .rodata use32
 	
 	RAYCAST_MAX_DISTANCE dd 5.0
 	
+	CUM_NORMAL_FOV dd 60.0
+	CUM_ZOOM_FOV dd 10.0
+	CUM_FOV_INTERPOLATION_STRENGTH dd 0.05
+	
 	raycast_hypercube_texture db "sprites/player_hypercube.bmp",0
 	
 	debug_normal_vertex_shader db "shaders/player/debug_normal.vag",0
@@ -90,6 +94,7 @@ section .rodata use32
 	
 	print_raycast_collider_pos db "raycast hit at: (%f, %f, %f, %f)",10,0
 	print_raycast_no_hit db "kein raycast hit",10,0
+	
 
 section .text use32
 
@@ -182,6 +187,9 @@ section .text use32
 	
 	extern GL_LINES
 	extern GL_TRIANGLES
+	
+	extern input_keyHeld
+	extern GLFW_KEY_C
 	
 player_init:
 	push ebp
@@ -346,6 +354,11 @@ player_update:
 	push dword[ebp+8]
 	call player_look
 	add esp, 8
+	
+	;zoom
+	push dword[ebp+8]
+	call player_optifineZoom
+	add esp, 4
 	
 	mov esp, ebp
 	pop ebp
@@ -1195,6 +1208,53 @@ player_placeBlock:
 	
 	
 	player_placeBlock_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;void player_optifineZoom(Player* player)
+player_optifineZoom:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;fov				;4
+	sub esp, 4			;target fov			;8
+	
+	;get current fov
+	mov eax, dword[ebp+8]
+	mov eax, dword[eax]
+	mov eax, dword[eax+28]
+	mov dword[ebp-4], eax
+	
+	;get target fov
+	push dword[GLFW_KEY_C]
+	call input_keyHeld
+	add esp, 4
+	test eax, eax
+	jnz player_optifineZoom_target_zoom
+		mov ecx, dword[CUM_NORMAL_FOV]
+		jmp player_optifineZoom_target_done
+	player_optifineZoom_target_zoom:
+		mov ecx, dword[CUM_ZOOM_FOV]
+	player_optifineZoom_target_done:
+	mov dword[ebp-8], ecx
+	
+	;calculate fov
+	movss xmm0, dword[ebp-4]
+	movss xmm1, dword[ebp-8]
+	movss xmm2, dword[CUM_FOV_INTERPOLATION_STRENGTH]
+	subss xmm1, xmm0
+	mulss xmm1, xmm2
+	addss xmm0, xmm1
+	movss dword[ebp-4], xmm0
+	
+	;change camera fov
+	mov eax, dword[ebp+8]
+	mov eax, dword[eax]
+	mov ecx, dword[ebp-4]
+	mov dword[eax+28], ecx
+	
 	mov esp, ebp
 	pop ebp
 	ret
