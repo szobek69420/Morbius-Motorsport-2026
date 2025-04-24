@@ -182,6 +182,8 @@ section .text use32
 	extern renderable_destroyShader
 	extern renderable_useShader
 	extern renderable_setPrimitive
+	extern renderable_enableBlending
+	extern renderable_setDepthFunc
 	extern hyperCubeRenderable_create
 	extern hyperCubeRenderable_destroy
 	extern hyperCubeRenderable_render
@@ -189,6 +191,8 @@ section .text use32
 	
 	extern GL_LINES
 	extern GL_TRIANGLES
+	extern GL_LESS
+	extern GL_LEQUAL
 	
 	extern input_keyHeld
 	extern GLFW_KEY_C
@@ -449,6 +453,16 @@ player_drawRaycastHypercube:
 	mov dword[ebp-4], eax
 	add esp, 4
 	
+	;enable blending
+	push 69
+	call renderable_enableBlending
+	add esp, 4
+	
+	;set depth function to lequal
+	push dword[GL_LEQUAL]
+	call renderable_setDepthFunc
+	add esp, 4
+	
 	;draw the hypercube
 	mov eax, dword[ebp+8]
 	push dword[eax+56]
@@ -537,6 +551,17 @@ player_drawRaycastHypercube:
 	call renderable_renderCustom
 	add esp, 16
 	
+	;set depth function to less
+	push dword[GL_LESS]
+	call renderable_setDepthFunc
+	add esp, 4
+	
+	;disable blending
+	push 0
+	call renderable_enableBlending
+	add esp, 4
+	
+	;set primitive to triangles
 	push dword[GL_TRIANGLES]
 	call renderable_setPrimitive
 	add esp, 4

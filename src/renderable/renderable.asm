@@ -135,6 +135,10 @@ section .text use32
 	global renderable_enableDepthTest	;void renderable_enableDepthTest(int enable)
 	
 	;it is a system state setting function
+	;for example GL_LESS
+	global renderable_setDepthFunc		;void renderable_setDepthFunc(Glenum func)
+	
+	;it is a system state setting function
 	;enable should be 0, if the blending should be disabled
 	global renderable_enableBlending	;void renderable_enableBlending(int enable)
 	
@@ -182,6 +186,7 @@ section .text use32
 	extern glEnable
 	extern glDisable
 	extern GL_DEPTH_TEST
+	extern glDepthFunc
 	extern GL_BLEND
 	extern GL_SRC_ALPHA
 	extern GL_ONE_MINUS_SRC_ALPHA
@@ -1295,6 +1300,18 @@ renderable_enableDepthTest:
 		call [glDisable]
 	
 	renderable_enableDepthTest_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+renderable_setDepthFunc:
+	push ebp
+	mov ebp, esp
+	
+	push dword[ebp+8]
+	call [glDepthFunc]
+	
 	mov esp, ebp
 	pop ebp
 	ret
