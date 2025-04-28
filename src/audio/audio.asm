@@ -49,6 +49,7 @@
     extern %2
 %endmacro
 
+
 section .rodata use32
 	MMSYSERR_NOERROR dd 0
 
@@ -85,7 +86,6 @@ section .rodata use32
 	test_text db "hog rider",10,0
 
 section .text use32
-	
 	;loads the given sound
 	;returns NULL if there was a problem
 	;Sound* audio_loadSound(const char* filePath)
@@ -124,7 +124,6 @@ section .text use32
 	extern my_free
 	extern my_memcmp
 	extern my_memcpy
-	
 	
 audio_loadSound:
 	push ebp
