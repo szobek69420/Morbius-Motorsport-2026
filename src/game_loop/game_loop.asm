@@ -244,6 +244,8 @@ section .text use32
 	
 	extern sky_getColour
 	
+	extern framebuffer_test
+	
 game_loop:
 	push ebp
 	mov ebp, esp
@@ -335,6 +337,9 @@ game_loop:
 	push eax
 	;call audio_playSound
 	add esp, 8
+	
+	;test framebuffer
+	call framebuffer_test
 	
 	;init last frame time
 	call [GetTickCount]

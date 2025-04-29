@@ -34,6 +34,7 @@ section .rodata use32
 	glDefine GL_BLEND, 0xbe2
 	glDefine GL_CCW, 0x901
 	glDefine GL_CLAMP, 0x2900
+	glDefine GL_CLAMP_TO_EDGE, 0x812f
 	glDefine GL_COLOR_ATTACHMENT0, 0x8ce0
 	glDefine GL_COLOR_ATTACHMENT1, 0x8ce1
 	glDefine GL_COLOR_ATTACHMENT2, 0x8ce2

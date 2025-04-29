@@ -19,13 +19,15 @@ section .rodata use32
 	;depth attachment types
 	FRAMEBUFFER_DEPTH dd GL_DEPTH24_STENCIL8
 	
+	print_status db "framebuffer is complete: %d",10,0
 	
+	test_text db "drip chungus",10,0
 	
 
 section .text use32
 
 	global framebuffer_create		;FrameBuffer* framebuffer_create(int width, int height)
-	global framebuffer_destroy		;void framebuffer_destroy(FrameBuffer* framebuufer++)
+	global framebuffer_destroy		;void framebuffer_destroy(FrameBuffer* framebuffer)
 	
 	global framebuffer_isFramebufferComplete	;int framebuffer_isFramebufferComplete(Framebuffer* framebuffer)
 	
@@ -33,7 +35,11 @@ section .text use32
 	global framebuffer_colourAttachment1	;void framebuffer_colourAttachment1(Framebuffer* framebuffer, int attachmentType)
 	global framebuffer_depthAttachment		;void framebuffer_depthAttachment(Framebuffer* framebuffer, int attachmentType)
 	
+	global framebuffer_test			;void framebuffer_test()
+	
+	extern my_printf
 	extern my_malloc
+	extern my_free
 	
 	extern glGenFramebuffers
 	extern glDeleteFramebuffers
@@ -61,7 +67,7 @@ section .text use32
 	
 	extern GL_RGB
 	extern GL_RGBA
-	extern GL_DEPTH_STENCIL
+	extern GL_DEPTH24_STENCIL8
 	extern GL_UNSIGNED_BYTE
 	extern GL_FLOAT
 
@@ -72,13 +78,14 @@ framebuffer_create:
 	sub esp, 4	;FrameBuffer		;4
 	
 	;alloc space for framebuffer struct
-	push 16
+	push 24
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
 	
 	;gen framebuffer
 	push dword[ebp-4]
+	push 1
 	call [glGenFramebuffers]
 	
 	;init the other colour attachments
@@ -111,7 +118,8 @@ framebuffer_destroy:
 	mov eax, dword[ebp+8]
 	cmp dword[eax+4], 0
 	je framebuffer_destroy_no_colour0
-		push dword[eax+4]
+		lea ecx, [eax+4]
+		push ecx
 		push 1
 		call [glDeleteTextures]
 	framebuffer_destroy_no_colour0:
@@ -119,7 +127,8 @@ framebuffer_destroy:
 	mov eax, dword[ebp+8]
 	cmp dword[eax+8], 0
 	je framebuffer_destroy_no_colour1
-		push dword[eax+8]
+		lea ecx, [eax+8]
+		push ecx
 		push 1
 		call [glDeleteTextures]
 	framebuffer_destroy_no_colour1:
@@ -127,14 +136,14 @@ framebuffer_destroy:
 	mov eax, dword[ebp+8]
 	cmp dword[eax+12], 0
 	je framebuffer_destroy_no_depth
-		push dword[eax+12]
+		lea ecx, [eax+12]
+		push ecx
 		push 1
 		call [glDeleteTextures]
 	framebuffer_destroy_no_depth:
 	
 	;delete framebuffer
-	mov eax, dword[ebp+8]
-	push dword[eax]
+	push dword[ebp+8]
 	push 1
 	call [glDeleteFramebuffers]
 	
@@ -461,6 +470,48 @@ framebuffer_depthAttachment:
 	mov eax, dword[ebp+8]
 	mov ecx, dword[ebp-4]
 	mov dword[eax+12], ecx
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+framebuffer_test:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4
+	
+	;create framebuffer
+	push 69
+	push 420
+	call framebuffer_create
+	mov dword[ebp-4], eax
+	add esp, 8
+	
+	;create attachments
+	push dword[FRAMEBUFFER_RGBA]
+	push dword[ebp-4]
+	call framebuffer_colourAttachment0
+	add esp, 8
+	
+	push dword[FRAMEBUFFER_DEPTH]
+	push dword[ebp-4]
+	call framebuffer_depthAttachment
+	add esp, 8
+	
+	;check status
+	push dword[ebp-4]
+	call framebuffer_isFramebufferComplete
+	mov dword[esp], eax
+	push print_status
+	call my_printf
+	add esp, 8
+	
+	;destroy framebuffer
+	push dword[ebp-4]
+	call framebuffer_destroy
+	add esp, 4
 	
 	mov esp, ebp
 	pop ebp
