@@ -113,6 +113,7 @@ section .text use32
 	extern glEnable
 	extern glFrontFace
 	extern glViewport
+	extern glGetError
 	
 	extern GL_DEPTH_TEST
 	extern GL_COLOR_BUFFER_BIT
@@ -328,6 +329,7 @@ game_loop:
 	push dword[GL_CULL_FACE]
 	call [glEnable]
 	
+	
 	;audio things
 	push music_path
 	call audio_loadSound
@@ -337,9 +339,6 @@ game_loop:
 	push eax
 	;call audio_playSound
 	add esp, 8
-	
-	;test framebuffer
-	call framebuffer_test
 	
 	;init last frame time
 	call [GetTickCount]

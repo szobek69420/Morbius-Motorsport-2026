@@ -22,7 +22,7 @@ global TEXT_PIVOT_BOTTOM_RIGHT
 
 
 section .rodata use32
-	print_int db "%d",10,0
+	print_int_nl db "%d",10,0
 	print_two_floats db "%f %f",10,0
 
 	ZERO dd 0.0
@@ -171,6 +171,8 @@ section .text use32
 	extern GL_UNSIGNED_BYTE
 	extern GL_UNPACK_ALIGNMENT
 	
+	extern glGetError
+	
 	
 textRenderer_init:
 	push ebp
@@ -255,6 +257,9 @@ textRenderer_init:
 	mov dword[shader], eax
 	add esp, 12
 	
+	push dword[shader]
+	call [glUseProgram]
+	
 	push uniform_pv_name
 	push dword[shader]
 	call [glGetUniformLocation]
@@ -272,12 +277,17 @@ textRenderer_init:
 	call [glGetUniformLocation]
 	mov dword[uniform_colour_location], eax
 	
+	
 	push uniform_tex_name
 	push dword[shader]
 	call [glGetUniformLocation]
 	push 0
 	push eax
 	call [glUniform1i]			;sets the "tex" as it is always 0
+	
+	
+	push 0
+	call [glUseProgram]
 	
 	
 	;calculate texture data size
