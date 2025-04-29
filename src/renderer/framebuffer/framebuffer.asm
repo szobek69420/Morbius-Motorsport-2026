@@ -11,14 +11,12 @@
 section .rodata use32
 	global FRAMEBUFFER_RGB
 	global FRAMEBUFFER_RGBA
-	global FRAMEBUFFER_DEPTH
 
 	;colour attachment types
 	FRAMEBUFFER_RGB dd GL_RGB
 	FRAMEBUFFER_RGBA dd GL_RGBA
-	;depth attachment types
-	FRAMEBUFFER_DEPTH dd GL_DEPTH24_STENCIL8
 	
+	print_int_nl db "%d",10,0
 	print_status db "framebuffer is complete: %d",10,0
 	
 	test_text db "drip chungus",10,0
@@ -33,7 +31,7 @@ section .text use32
 	
 	global framebuffer_colourAttachment0	;void framebuffer_colourAttachment0(Framebuffer* framebuffer, int attachmentType)
 	global framebuffer_colourAttachment1	;void framebuffer_colourAttachment1(Framebuffer* framebuffer, int attachmentType)
-	global framebuffer_depthAttachment		;void framebuffer_depthAttachment(Framebuffer* framebuffer, int attachmentType)
+	global framebuffer_depthAttachment		;void framebuffer_depthAttachment(Framebuffer* framebuffer)
 	
 	global framebuffer_test			;void framebuffer_test()
 	
@@ -67,9 +65,13 @@ section .text use32
 	
 	extern GL_RGB
 	extern GL_RGBA
+	extern GL_DEPTH_STENCIL
 	extern GL_DEPTH24_STENCIL8
 	extern GL_UNSIGNED_BYTE
 	extern GL_FLOAT
+	extern GL_UNSIGNED_INT_24_8
+	
+	extern glGetError
 
 framebuffer_create:
 	push ebp
@@ -412,14 +414,13 @@ framebuffer_depthAttachment:
 	
 	;specify texture format
 	push 0
-	push dword[GL_FLOAT]
-	mov eax, dword[ebp+12]
-	push dword[eax]
+	push dword[GL_UNSIGNED_INT_24_8]
+	push dword[GL_DEPTH_STENCIL]
 	push 0
 	mov ecx, dword[ebp+8]
 	push dword[ecx+20]
 	push dword[ecx+16]
-	push dword[eax]
+	push dword[GL_DEPTH24_STENCIL8]
 	push 0
 	push dword[GL_TEXTURE_2D]
 	call [glTexImage2D]
@@ -482,11 +483,23 @@ framebuffer_test:
 	
 	sub esp, 4
 	
+	call [glGetError]
+	push eax
+	push print_int_nl
+	call my_printf
+	add esp, 8
+	
 	;create framebuffer
 	push 69
 	push 420
 	call framebuffer_create
 	mov dword[ebp-4], eax
+	add esp, 8
+	
+	call [glGetError]
+	push eax
+	push print_int_nl
+	call my_printf
 	add esp, 8
 	
 	;create attachments
@@ -495,9 +508,20 @@ framebuffer_test:
 	call framebuffer_colourAttachment0
 	add esp, 8
 	
-	push dword[FRAMEBUFFER_DEPTH]
+	call [glGetError]
+	push eax
+	push print_int_nl
+	call my_printf
+	add esp, 8
+	
 	push dword[ebp-4]
 	call framebuffer_depthAttachment
+	add esp, 4
+	
+	call [glGetError]
+	push eax
+	push print_int_nl
+	call my_printf
 	add esp, 8
 	
 	;check status
@@ -512,6 +536,12 @@ framebuffer_test:
 	push dword[ebp-4]
 	call framebuffer_destroy
 	add esp, 4
+	
+	call [glGetError]
+	push eax
+	push print_int_nl
+	call my_printf
+	add esp, 8
 	
 	mov esp, ebp
 	pop ebp
