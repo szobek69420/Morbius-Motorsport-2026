@@ -131,6 +131,7 @@ section .rodata use32
 	glDefine GL_STENCIL_ATTACHMENT, 0x8d20
 	glDefine GL_STENCIL_INDEX, 0x1901
 	glDefine GL_TEXTURE_2D, 0xde1
+	glDefine GL_TEXTURE_2D_ARRAY, 0x8c1a
 	glDefine GL_TEXTURE_MAG_FILTER, 0x2800
 	glDefine GL_TEXTURE_MIN_FILTER, 0x2801
 	glDefine GL_TEXTURE_WRAP_S, 0x2802
@@ -241,6 +242,7 @@ section .rodata use32
 	name_glShaderSource db "glShaderSource",0
 	name_glTexImage2D db "glTexImage2D",0
 	name_glTexParameteri db "glTexParameteri",0
+	name_glTexStorage3D db "glTexStorage3D",0
 	name_glUniform1f db "glUniform1f",0
 	name_glUniform1fv db "glUniform1fv",0
 	name_glUniform1i db "glUniform1i",0
@@ -329,6 +331,7 @@ section .bss use32
 	glFunc glShaderSource
 	glFunc glTexImage2D
 	glFunc glTexParameteri
+	glFunc glTexStorage3D
 	glFunc glUniform1f
 	glFunc glUniform1fv
 	glFunc glUniform1i
@@ -425,6 +428,7 @@ load_gl_functions:
 	load dword[ebp+8], glShaderSource
 	load dword[ebp+8], glTexImage2D
 	load dword[ebp+8], glTexParameteri
+	load dword[ebp+8], glTexStorage3D
 	load dword[ebp+8], glUniform1i
 	load dword[ebp+8], glUniform1iv
 	load dword[ebp+8], glUniform1f

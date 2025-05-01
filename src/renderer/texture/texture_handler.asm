@@ -10,6 +10,16 @@
 ;	int importCount;	;20
 ;}		24 bytes overall
 
+;layout
+;struct TextureArrayInfo{
+;	GLuint textureArray;	;0
+;	int width, height;		;4
+;	GLint wrap;				;12
+;	GLint filter;			;16
+;	int numLayers;			;20
+;	int mipmapGenerated		;24
+;}		28 bytes overall
+
 section .rodata use32
 	error_init db "textureHandler_init: fuck",10,0
 	error_not_initialized db "texture handler is not initialized bozo",10,0
@@ -33,8 +43,14 @@ section .text use32
 	global textureHandler_deinit					;void textureHandler_deinit()
 	
 	;supports textures up to 10MB
-	global textureHandler_load						;GLuint textureHandler(const char* imagePath, GLint wrap, GLint filter, int flipped)
-	global textureHandler_unload					;void textureHandler(GLuint texture)
+	global textureHandler_load						;GLuint textureHandler_load(const char* imagePath, GLint wrap, GLint filter, int flipped)
+	global textureHandler_unload					;void textureHandler_unload(GLuint texture)
+	
+	global textureHandler_loadArray					;TextureArrayInfo* texture(int width, int height, int numLayers, GLint wrap, GLint filter)
+	global textureHandler_unloadArray
+	global textureHandler_addImage
+	;NOTE: this function should only be called once every image has been added to the array
+	global textureHandler_generateMipmap
 	
 	extern vector_init
 	extern vector_destroy
@@ -63,6 +79,7 @@ section .text use32
 	
 	extern GL_TEXTURE0
 	extern GL_TEXTURE_2D
+	extern GL_TEXTURE_2D_ARRAY
 	extern GL_REPEAT
 	extern GL_NEAREST
 	extern GL_TEXTURE_WRAP_S
@@ -409,6 +426,86 @@ textureHandler_unload:
 		call vector_remove_at
 	
 	textureHandler_unload_end:
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+textureHandler_loadArray:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	sub esp, 4		;TextureArrayInfo		;4
+	
+	;alloc info
+	push 28
+	call my_malloc
+	mov dword[ebp-4], eax
+	add esp, 4
+	
+	;set the values
+	mov ecx, dword[ebp+16]
+	mov dword[eax+4], ecx		;width
+	mov ecx, dword[ebp+20]
+	mov dword[eax+8], ecx		;height
+	mov ecx, dword[ebp+24]
+	mov dword[eax+20], ecx		;numLayers
+	mov ecx, dword[ebp+28]
+	mov dword[eax+12], ecx		;wrap
+	mov ecx, dword[ebp+32]
+	mov dword[eax+16], ecx		;filter
+	
+	mov dword[eax+24], 0		;mipmap has not been generated yet
+	
+	;generate and bind texture
+	push dword[ebp-4]
+	push 1
+	call [glGenTextures]
+	
+	mov edx, dword[ebp-4]
+	push dword[edx]
+	push dword[GL_TEXTURE_2D_ARRAY]
+	call [glBindTextures]
+	
+	;init the texture
+	mov eax, dword[ebp-4]
+	push dword[eax+20]			;numLayers
+	push dword[eax+8]			;height
+	push dword[eax+4]			;width
+	push dword[GL_RGBA]
+	push 1						;mipmap levels
+	push [GL_TEXTURE_2D_ARRAY]
+	call [glTexStorage3D]
+	
+	;set the texture parameters
+	mov eax, dword[ebp-4]
+	push dword[eax+12]
+	push dword[GL_TEXTURE_WRAP_S]
+	push dword[GL_TEXTURE_2D_ARRAY]
+	call [glTexParameteri]
+	mov eax, dword[ebp-4]
+	push dword[eax+12]
+	push dword[GL_TEXTURE_WRAP_T]
+	push dword[GL_TEXTURE_2D_ARRAY]
+	call [glTexParameteri]
+	mov eax, dword[ebp-4]
+	push dword[eax+16]
+	push dword[GL_TEXTURE_MIN_FILTER]
+	push dword[GL_TEXTURE_2D_ARRAY]
+	call [glTexParameteri]
+	mov eax, dword[ebp-4]
+	push dword[eax+16]
+	push dword[GL_TEXTURE_MAG_FILTER]
+	push dword[GL_TEXTURE_2D_ARRAY]
+	call [glTexParameteri]
+	
+	;set return value
+	mov eax, dword[ebp-4]
+	
 	mov esp, ebp
 	pop edi
 	pop esi
