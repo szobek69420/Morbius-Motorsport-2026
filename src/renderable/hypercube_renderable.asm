@@ -37,6 +37,8 @@ section .rodata use32
 	
 	test_text db "marx verstappen",10,0
 	
+	print_int_nl db "%d",10,0
+	
 section .data use32
 	shader dd 0
 	active_hypercubes dd 0
@@ -61,6 +63,8 @@ section .text use32
 	extern RENDERABLE_UNIFORM_VEC4
 	
 	extern hyperPlane_getNormal
+	
+	extern glGetError
 	
 hyperCubeRenderable_create:
 	push ebp
@@ -144,6 +148,7 @@ hyperCubeRenderable_render:
 	push dword[shader]
 	call renderable_useShader
 	add esp, 4
+	
 	
 	;set position
 	mov eax, dword[ebp+20]

@@ -8,6 +8,7 @@ section .rodata use32
 	
 	deg2rad dd 0.0174533
 	
+	print_int_nl db "%d",10,0
 	print_float_nl db "%f",10,0
 
 section .data use32
@@ -41,6 +42,8 @@ section .text use32
 	extern renderable_enableDepthTest
 	
 	extern camera_viewProjection
+	
+	extern glGetError
 	
 sun_init:
 	push ebp

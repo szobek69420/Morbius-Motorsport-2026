@@ -27,11 +27,15 @@ section .text use32
 	global framebuffer_create		;FrameBuffer* framebuffer_create(int width, int height)
 	global framebuffer_destroy		;void framebuffer_destroy(FrameBuffer* framebuffer)
 	
-	global framebuffer_isFramebufferComplete	;int framebuffer_isFramebufferComplete(Framebuffer* framebuffer)
+	global framebuffer_isComplete	;int framebuffer_isComplete(Framebuffer* framebuffer)
 	
 	global framebuffer_colourAttachment0	;void framebuffer_colourAttachment0(Framebuffer* framebuffer, int attachmentType)
 	global framebuffer_colourAttachment1	;void framebuffer_colourAttachment1(Framebuffer* framebuffer, int attachmentType)
 	global framebuffer_depthAttachment		;void framebuffer_depthAttachment(Framebuffer* framebuffer)
+	
+	;if framebuffer is 0, the default framebuffer is bound
+	;void framebuffer_bind(Framebuffer* framebuffer)
+	global framebuffer_bind
 	
 	global framebuffer_test			;void framebuffer_test()
 	
@@ -160,7 +164,7 @@ framebuffer_destroy:
 	
 	
 	
-framebuffer_isFramebufferComplete:
+framebuffer_isComplete:
 	push ebp
 	mov ebp, esp
 	
@@ -477,6 +481,29 @@ framebuffer_depthAttachment:
 	ret
 	
 	
+framebuffer_bind:
+	push ebp
+	mov ebp, esp
+	
+	cmp dword[ebp+8], 0
+	je framebuffer_bind_default
+		mov eax, dword[ebp+8]
+		push dword[eax]
+		push dword[GL_FRAMEBUFFER]
+		call [glBindFramebuffer]
+		jmp framebuffer_bind_done
+	
+	framebuffer_bind_default:
+		push 0
+		push dword[GL_FRAMEBUFFER]
+		call [glBindFramebuffer]
+	framebuffer_bind_done:
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
 framebuffer_test:
 	push ebp
 	mov ebp, esp
@@ -526,7 +553,7 @@ framebuffer_test:
 	
 	;check status
 	push dword[ebp-4]
-	call framebuffer_isFramebufferComplete
+	call framebuffer_isComplete
 	mov dword[esp], eax
 	push print_status
 	call my_printf

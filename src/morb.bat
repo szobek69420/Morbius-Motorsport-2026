@@ -38,6 +38,7 @@ mkdir build
 ..\build_tools\nasm.exe -fobj renderable/renderable.asm -o build/renderable.o
 ..\build_tools\nasm.exe -fobj renderer/text/font.asm -o build/font.o
 ..\build_tools\nasm.exe -fobj renderer/text/text_renderer.asm -o build/text_renderer.o
+..\build_tools\nasm.exe -fobj renderer/post_processing/post_processing.asm -o build/post_processing.o
 ..\build_tools\nasm.exe -fobj renderer/framebuffer/framebuffer.asm -o build/framebuffer.o
 ..\build_tools\nasm.exe -fobj image/image.asm -o build/image.o
 ..\build_tools\nasm.exe -fobj renderer/texture/texture_handler.asm -o build/texture_handler.o
@@ -54,6 +55,7 @@ build/block.o ^
 build/camera.o ^
 build/input.o ^
 build/glfw.o ^
+build/post_processing.o ^
 build/framebuffer.o ^
 build/texture_handler.o ^
 build/image.o ^

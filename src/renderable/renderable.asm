@@ -192,6 +192,8 @@ section .text use32
 	extern GL_ONE_MINUS_SRC_ALPHA
 	extern glBlendFunc
 	
+	extern glGetError
+	
 	extern my_printf
 	
 	extern my_malloc

@@ -266,6 +266,7 @@ chunkManager4d_render:
 	push dword[GL_POINTS]
 	call renderable_setPrimitive
 	add esp, 4
+
 	
 	;use shader
 	mov eax, dword[ebp+16]
@@ -283,6 +284,7 @@ chunkManager4d_render:
 	push dword[eax+28]
 	call renderable_setUniform
 	add esp, 24
+	
 	
 	;set hyperplane pos uniform
 	mov eax, dword[ebp+16]

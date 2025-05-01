@@ -18,6 +18,9 @@
 section .rodata use32
 	PHYSICS_UPDATE_INTERVAL_MS dd 15
 	TIME_COEFFICIENT dd 0.01		;100 seconds long days
+	
+	RENDER_WIDTH dd 1920
+	RENDER_HEIGHT dd 1200
 
 	ZERO dd 0.0
 	ONE dd 1.0
@@ -43,6 +46,8 @@ section .rodata use32
 	
 	sound_path db "./sfx/battlecry.wav",0
 	music_path db "./sfx/music.wav",0
+	
+	error_incomplete_framebuffer db "game_loop: L framebuffer",10,0
 	
 	test_text_main db "main",10,0
 	test_text_physics db "physics",10,0
@@ -80,6 +85,8 @@ section .bss use32
 	
 	chunk_manager resb 4
 	chunk_manager_4d resb 4
+	
+	framebuffer resb 4
 	
 section .data use32
 	render_distance dd 4
@@ -217,6 +224,22 @@ section .text use32
 	extern tsValue_set
 	extern tsValue_isEqual
 	
+	extern audio_loadSound
+	extern audio_unloadSound
+	extern audio_playSound
+	
+	extern framebuffer_create
+	extern framebuffer_destroy
+	extern framebuffer_colourAttachment0
+	extern framebuffer_depthAttachment
+	extern framebuffer_isComplete
+	extern framebuffer_bind
+	extern FRAMEBUFFER_RGBA
+	
+	extern postProcessing_init
+	extern postProcessing_deinit
+	extern postProcessing_drawToScreen
+	
 	extern chunkManager_create
 	extern chunkManager_load
 	extern chunkManager_unload
@@ -239,13 +262,7 @@ section .text use32
 	extern sun_setAngle
 	extern sun_setDistance
 	
-	extern audio_loadSound
-	extern audio_unloadSound
-	extern audio_playSound
-	
 	extern sky_getColour
-	
-	extern framebuffer_test
 	
 game_loop:
 	push ebp
@@ -300,6 +317,31 @@ game_loop:
 	
 	;init texture handler
 	call textureHandler_init
+	
+	;init pp
+	call postProcessing_init
+	
+	;create framebuffer
+	push dword[RENDER_HEIGHT]
+	push dword[RENDER_WIDTH]
+	call framebuffer_create
+	mov dword[framebuffer], eax
+	add esp, 4
+	
+	push dword[FRAMEBUFFER_RGBA]
+	push dword[framebuffer]
+	call framebuffer_colourAttachment0
+	call framebuffer_depthAttachment
+	call framebuffer_isComplete
+	add esp, 8
+	
+	test eax, eax
+	jnz game_loop_framebuffer_gg
+		;send error message (even though it will crash anyway skull emoji)
+		push error_incomplete_framebuffer
+		call my_printf
+		add esp, 4
+	game_loop_framebuffer_gg:
 	
 	;create hyperplane
 	push hyperplane
@@ -420,6 +462,18 @@ game_loop:
 		push dword[pplayer]
 		call player_update
 		add esp, 8
+		
+		;bind framebuffer and set viewport
+		push dword[framebuffer]
+		call framebuffer_bind
+		add esp, 4
+		
+		push dword[RENDER_HEIGHT]
+		push dword[RENDER_WIDTH]
+		push 0
+		push 0
+		call [glViewport]
+		
 	
 		;calculate and set clear color
 		sub esp, 16
@@ -443,6 +497,7 @@ game_loop:
 		call camera_viewProjection
 		add esp, 8
 		
+		
 		;render sun (this should be drawn first)
 		fld dword[TIME_OF_DAY]
 		fmul dword[D360]
@@ -450,6 +505,7 @@ game_loop:
 		fstp dword[esp]
 		call sun_setAngle
 		add esp, 4
+		
 		
 		mov eax, dword[pplayer]
 		push dword[eax+24]
@@ -459,6 +515,7 @@ game_loop:
 		push pv_matrix
 		call sun_render
 		add esp, 12
+		
 		
 		;render 4d chunks
 		push pv_matrix
@@ -473,6 +530,21 @@ game_loop:
 		call player_drawRaycastHypercube
 		add esp, 8
 		
+		;bind the screen framebuffer and set viewport
+		push 0
+		call framebuffer_bind
+		add esp, 4
+
+		push dword[WINDOW_SIZE_Y]
+		push dword[WINDOW_SIZE_X]
+		push 0
+		push 0
+		call [glViewport]
+
+		;draw the render framebuffer to the screen
+		push dword[framebuffer]
+		call postProcessing_drawToScreen
+		add esp, 4
 		
 		;draw infos
 		call gameLoop_drawData
@@ -525,6 +597,11 @@ game_loop:
 	;destroy player
 	push dword[pplayer]
 	call player_destroy
+	add esp, 4
+	
+	;destroy framebuffer
+	push dword[framebuffer]
+	call framebuffer_destroy
 	add esp, 4
 	
 	;deinit texture handler
