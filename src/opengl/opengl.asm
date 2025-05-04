@@ -243,6 +243,7 @@ section .rodata use32
 	name_glTexImage2D db "glTexImage2D",0
 	name_glTexParameteri db "glTexParameteri",0
 	name_glTexStorage3D db "glTexStorage3D",0
+	name_glTexSubImage3D db "glTexSubImage3D",0
 	name_glUniform1f db "glUniform1f",0
 	name_glUniform1fv db "glUniform1fv",0
 	name_glUniform1i db "glUniform1i",0
@@ -332,6 +333,7 @@ section .bss use32
 	glFunc glTexImage2D
 	glFunc glTexParameteri
 	glFunc glTexStorage3D
+	glFunc glTexSubImage3D
 	glFunc glUniform1f
 	glFunc glUniform1fv
 	glFunc glUniform1i
@@ -429,6 +431,7 @@ load_gl_functions:
 	load dword[ebp+8], glTexImage2D
 	load dword[ebp+8], glTexParameteri
 	load dword[ebp+8], glTexStorage3D
+	load dword[ebp+8], glTexSubImage3D
 	load dword[ebp+8], glUniform1i
 	load dword[ebp+8], glUniform1iv
 	load dword[ebp+8], glUniform1f

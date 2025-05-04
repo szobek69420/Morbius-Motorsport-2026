@@ -27,6 +27,8 @@ section .rodata use32
 	error_invalid_color_depth db "textureHandler_load: only RGB and RGBA formats are supported",10,0
 	
 	error_texture_not_registered db "textureHandler_unload: function only handles textures that has been loaded with textureHandler_load",10,0
+	error_texture_array_image_wrong_size db "textureHandler_addImageToArray: the image size of %s does not correspond with the size of the bound framebuffer", 10, 0
+	error_texture_array_image_wrong_format db "textureHandler_addImageToArray: the image format of %s is invalid",10,0
 	
 	file_extension_bmp db ".bmp",0
 
@@ -46,11 +48,15 @@ section .text use32
 	global textureHandler_load						;GLuint textureHandler_load(const char* imagePath, GLint wrap, GLint filter, int flipped)
 	global textureHandler_unload					;void textureHandler_unload(GLuint texture)
 	
-	global textureHandler_loadArray					;TextureArrayInfo* texture(int width, int height, int numLayers, GLint wrap, GLint filter)
+	global textureHandler_loadArray					;TextureArrayInfo* textureHandler_loadArray(int width, int height, int numLayers, GLint wrap, GLint filter)
 	global textureHandler_unloadArray
-	global textureHandler_addImage
+	
+	;returns zero on no error (non-zero is only returned on incompatible image type, opengl errors are ignored)
+	;int textureHandler_addImageToArray(TextureArrayInfo* texture, const char* imagePath, int layer)
+	global textureHandler_addImageToArray
 	;NOTE: this function should only be called once every image has been added to the array
-	global textureHandler_generateMipmap
+	;void textureHandler_generateArrayMipmap(TextureArrayInfo* tai)
+	global textureHandler_generateArrayMipmap
 	
 	extern vector_init
 	extern vector_destroy
@@ -76,6 +82,8 @@ section .text use32
 	extern glGenerateMipmap
 	extern glTexParameteri
 	extern glPixelStorei
+	extern glTexStorage3D
+	extern glTexSubImage3D
 	
 	extern GL_TEXTURE0
 	extern GL_TEXTURE_2D
@@ -469,7 +477,7 @@ textureHandler_loadArray:
 	mov edx, dword[ebp-4]
 	push dword[edx]
 	push dword[GL_TEXTURE_2D_ARRAY]
-	call [glBindTextures]
+	call [glBindTexture]
 	
 	;init the texture
 	mov eax, dword[ebp-4]
@@ -478,7 +486,7 @@ textureHandler_loadArray:
 	push dword[eax+4]			;width
 	push dword[GL_RGBA]
 	push 1						;mipmap levels
-	push [GL_TEXTURE_2D_ARRAY]
+	push dword[GL_TEXTURE_2D_ARRAY]
 	call [glTexStorage3D]
 	
 	;set the texture parameters
@@ -509,5 +517,137 @@ textureHandler_loadArray:
 	mov esp, ebp
 	pop edi
 	pop esi
+	pop ebp
+	ret
+	
+	
+textureHandler_addImageToArray:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	sub esp, 4		;width					;4
+	sub esp, 4		;height					;8
+	sub esp, 4		;bitsPerPixel			;12
+	sub esp, 4		;return value			;16
+	sub esp, 4		;source image format	;20
+	
+	mov dword[ebp-16], 0
+	
+	;import texture layer
+	lea eax, [ebp-12]
+	push eax
+	lea eax, [ebp-8]
+	push eax
+	lea eax, [ebp-4]
+	push eax
+	push dword[import_buffer]
+	push dword[ebp+20]
+	call image_loadBMP
+	add esp, 20
+	
+	;check if there are mismatching sizes
+	mov eax, dword[ebp+16]
+	
+	mov ecx, dword[ebp-4]
+	cmp dword[eax+4], ecx
+	jne textureHandler_addImageToArray_wrong_size
+	mov ecx, dword[ebp-8]
+	cmp dword[eax+8], ecx
+	jne textureHandler_addImageToArray_wrong_size
+	jmp textureHandler_addImageToArray_wrong_size_skip
+	
+	textureHandler_addImageToArray_wrong_size:
+		push dword[ebp+20]
+		push error_texture_array_image_wrong_size
+		call my_printf
+		add esp, 8
+		
+		mov dword[ebp-16], 69
+		jmp textureHandler_addImageToArray_end
+		
+	
+	textureHandler_addImageToArray_wrong_size_skip:
+	
+	;determine the source image format
+	cmp dword[ebp-12], 3
+	je textureHandler_addImageToArray_rgb
+	cmp dword[ebp-12], 4
+	je textureHandler_addImageToArray_rgba
+		;unsupported format
+		push dword[ebp+20]
+		push error_texture_array_image_wrong_format
+		call my_printf
+		add esp, 4
+		
+		mov dword[ebp-16], 69
+		jmp textureHandler_addImageToArray_end
+		
+	textureHandler_addImageToArray_rgb:
+		mov eax, dword[GL_RGB]
+		mov dword[ebp-20], eax
+		jmp textureHandler_addImageToArray_format_done
+		
+	textureHandler_addImageToArray_rgba:
+		mov eax, dword[GL_RGBA]
+		mov dword[ebp-20], eax
+		jmp textureHandler_addImageToArray_format_done
+		
+	textureHandler_addImageToArray_format_done:
+	
+	;bind texture array
+	mov eax, dword[ebp+16]
+	push dword[eax]
+	push dword[GL_TEXTURE_2D_ARRAY]
+	call [glBindTexture]
+	
+	;add layer to the texture
+	push dword[import_buffer]
+	push dword[GL_UNSIGNED_BYTE]
+	push dword[ebp-20]				;format
+	push 1							;depth?
+	push dword[ebp-8]				;height
+	push dword[ebp-4]				;widht
+	push dword[ebp+24]				;layer
+	push 0
+	push 0
+	push 0
+	push dword[GL_TEXTURE_2D_ARRAY]
+	call [glTexSubImage3D]
+	
+	;unbind texture array
+	push 0
+	push dword[GL_TEXTURE_2D_ARRAY]
+	call [glBindTexture]
+	
+	textureHandler_addImageToArray_end:
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+textureHandler_generateArrayMipmap:
+	push ebp
+	mov ebp, esp
+	
+	;bind texture array
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	push dword[GL_TEXTURE_2D_ARRAY]
+	call [glBindTexture]
+	
+	;generate mipmap
+	push dword[GL_TEXTURE_2D_ARRAY]
+	call [glGenerateMipmap]
+	
+	;unbind texture array
+	push 0
+	push dword[GL_TEXTURE_2D_ARRAY]
+	call [glBindTexture]
+	
+	mov esp, ebp
 	pop ebp
 	ret
