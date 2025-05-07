@@ -125,6 +125,7 @@ section .rodata use32
 	glDefine GL_RGB, 0x1907
 	glDefine GL_RGB8, 0x8051
 	glDefine GL_RGBA, 0x1908
+	glDefine GL_RGBA8, 0x8058
 	glDefine GL_SRC_ALPHA, 0x302
 	glDefine GL_SRC_COLOR, 0x300
 	glDefine GL_STATIC_DRAW, 0x88e4

@@ -9,7 +9,8 @@
 ;	HyperPlane hyperPlane;										32
 ;	vector<ChangedBlockInfo> changedBlocks;						96 //doesn't need a mutex as it is used only on the chunk generation thread
 ;	tsQueue<ChangedBlockInfo> pendingChangedBlocks;				112
-;}			120 bytes overall
+;	TextureArrayInfo* blockTextures;							120
+;}			124 bytes overall
 
 ;layout:
 ;struct ChunkGraphicsUpdate4D{
@@ -54,6 +55,7 @@ section .rodata use32
 	test_text2 db "you're so portuguese2",10,0
 	test_text3 db "you're so portuguese3",10,0
 	
+	print_int_nl db "%d",10,0
 	print_float_nl db "%f",10,0
 	print_four_floats_nl db "%f %f %f %f",10,0
 	
@@ -96,6 +98,7 @@ section .text use32
 	extern my_memcpy
 	extern my_qsort
 	
+	extern block_importTextures
 	extern chunk4d_generate
 	extern chunk4d_destroy
 	extern CHUNK_WIDTH
@@ -146,6 +149,7 @@ section .text use32
 	extern GL_POINTS
 	extern glGetUniformLocation
 	extern glUniform4f
+	extern glGetError
 	
 	extern hyperPlane_directionTo3d
 	
@@ -212,6 +216,12 @@ chunkManager4d_create:
 	push 32
 	push eax
 	call tsQueue_init
+	
+	;import textures
+	call block_importTextures
+	mov ecx, dword[ebp-4]
+	mov dword[ecx+120], eax
+	
 	
 	;set return value
 	mov eax, dword[ebp-4]

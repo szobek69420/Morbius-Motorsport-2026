@@ -31,6 +31,8 @@ section .rodata use32
 	error_texture_array_image_wrong_format db "textureHandler_addImageToArray: the image format of %s is invalid",10,0
 	
 	file_extension_bmp db ".bmp",0
+	
+	print_int_nl db "%d",10,0
 
 section .data use32
 	is_initialized dd 0
@@ -49,7 +51,7 @@ section .text use32
 	global textureHandler_unload					;void textureHandler_unload(GLuint texture)
 	
 	global textureHandler_loadArray					;TextureArrayInfo* textureHandler_loadArray(int width, int height, int numLayers, GLint wrap, GLint filter)
-	global textureHandler_unloadArray
+	global textureHandler_unloadArray				;void textureHandler_unloadArray(TextureArrayInfo* ta)
 	
 	;returns zero on no error (non-zero is only returned on incompatible image type, opengl errors are ignored)
 	;int textureHandler_addImageToArray(TextureArrayInfo* texture, const char* imagePath, int layer)
@@ -84,6 +86,7 @@ section .text use32
 	extern glPixelStorei
 	extern glTexStorage3D
 	extern glTexSubImage3D
+	extern glGetError
 	
 	extern GL_TEXTURE0
 	extern GL_TEXTURE_2D
@@ -96,6 +99,7 @@ section .text use32
 	extern GL_TEXTURE_MAG_FILTER
 	extern GL_RGBA
 	extern GL_RGB
+	extern GL_RGBA8
 	extern GL_UNSIGNED_BYTE
 	extern GL_UNPACK_ALIGNMENT
 
@@ -484,7 +488,7 @@ textureHandler_loadArray:
 	push dword[eax+20]			;numLayers
 	push dword[eax+8]			;height
 	push dword[eax+4]			;width
-	push dword[GL_RGBA]
+	push dword[GL_RGBA8]
 	push 1						;mipmap levels
 	push dword[GL_TEXTURE_2D_ARRAY]
 	call [glTexStorage3D]
@@ -517,6 +521,25 @@ textureHandler_loadArray:
 	mov esp, ebp
 	pop edi
 	pop esi
+	pop ebp
+	ret
+	
+	
+textureHandler_unloadArray:
+	push ebp
+	mov ebp, esp
+	
+	;delete opengl texture
+	push dword[ebp+8]
+	push 1
+	call [glDeleteTextures]
+	
+	;dealloc texture info
+	push dword[ebp+8]
+	call my_free
+	add esp, 4
+	
+	mov esp, ebp
 	pop ebp
 	ret
 	
@@ -571,9 +594,9 @@ textureHandler_addImageToArray:
 	textureHandler_addImageToArray_wrong_size_skip:
 	
 	;determine the source image format
-	cmp dword[ebp-12], 3
+	cmp dword[ebp-12], 24
 	je textureHandler_addImageToArray_rgb
-	cmp dword[ebp-12], 4
+	cmp dword[ebp-12], 32
 	je textureHandler_addImageToArray_rgba
 		;unsupported format
 		push dword[ebp+20]
@@ -595,6 +618,11 @@ textureHandler_addImageToArray:
 		jmp textureHandler_addImageToArray_format_done
 		
 	textureHandler_addImageToArray_format_done:
+	
+	;set the data alignment
+	push 1
+	push dword[GL_UNPACK_ALIGNMENT]
+	call [glPixelStorei]
 	
 	;bind texture array
 	mov eax, dword[ebp+16]
