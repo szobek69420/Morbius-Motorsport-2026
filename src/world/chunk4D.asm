@@ -76,6 +76,8 @@ section .text use32
 	extern vec4_add
 	
 	extern BLOCK_AIR
+	extern BLOCK_GRASS
+	extern BLOCK_DIRT
 	extern BLOCK_STONE
 	
 	extern aabb4d_create
@@ -286,19 +288,33 @@ chunk4d_generate:
 					
 					mov eax, dword[esp+8]					;y index in eax
 					cmp al, byte[ebx]
-					jbe chunk4d_generate_block_types_loop_stone
-						;air
+					ja chunk4d_generate_block_types_loop_air
+					inc eax
+					cmp al, byte[ebx]
+					ja chunk4d_generate_block_types_loop_grass
+					add eax, 2
+					cmp al, byte[ebx]
+					ja chunk4d_generate_block_types_loop_dirt
+					jmp chunk4d_generate_block_types_loop_stone
+					
+					chunk4d_generate_block_types_loop_air:
 						mov cl, byte[BLOCK_AIR]
-						mov byte[esi], cl
+						jmp chunk4d_generate_block_types_loop_block_chosen
+						
+					chunk4d_generate_block_types_loop_grass:
+						mov cl, byte[BLOCK_GRASS]
+						jmp chunk4d_generate_block_types_loop_block_chosen
+						
+					chunk4d_generate_block_types_loop_dirt:
+						mov cl, byte[BLOCK_DIRT]
 						jmp chunk4d_generate_block_types_loop_block_chosen
 						
 					chunk4d_generate_block_types_loop_stone:
-						;stone
 						mov cl, byte[BLOCK_STONE]
-						mov byte[esi], cl
 						jmp chunk4d_generate_block_types_loop_block_chosen
 					
 					chunk4d_generate_block_types_loop_block_chosen:
+					mov byte[esi], cl
 					
 					inc esi
 					inc ebx
@@ -465,7 +481,11 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
-						mov dword[esp+4], SIDE_POS_X	;block type and side normal
+						xor eax, eax
+						mov al, byte[esi]
+						shl eax, 16
+						or eax, SIDE_POS_X
+						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
 						mov dword[ebp-56], 69			;block is visible
@@ -495,7 +515,11 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
-						mov dword[esp+4], SIDE_NEG_X	;block type and side normal
+						xor eax, eax
+						mov al, byte[esi]
+						shl eax, 16
+						or eax, SIDE_NEG_X
+						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
 						mov dword[ebp-56], 69			;block is visible
@@ -523,7 +547,11 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
-						mov dword[esp+4], SIDE_POS_Y	;block type and side normal
+						xor eax, eax
+						mov al, byte[esi]
+						shl eax, 16
+						or eax, SIDE_POS_Y
+						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
 						mov dword[ebp-56], 69			;block is visible
@@ -553,7 +581,11 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
-						mov dword[esp+4], SIDE_NEG_Y	;block type and side normal
+						xor eax, eax
+						mov al, byte[esi]
+						shl eax, 16
+						or eax, SIDE_NEG_Y
+						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
 						mov dword[ebp-56], 69			;block is visible
@@ -581,7 +613,11 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
-						mov dword[esp+4], SIDE_POS_Z	;block type and side normal
+						xor eax, eax
+						mov al, byte[esi]
+						shl eax, 16
+						or eax, SIDE_POS_Z
+						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
 						mov dword[ebp-56], 69			;block is visible
@@ -611,7 +647,11 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
-						mov dword[esp+4], SIDE_NEG_Z	;block type and side normal
+						xor eax, eax
+						mov al, byte[esi]
+						shl eax, 16
+						or eax, SIDE_NEG_Z
+						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
 						mov dword[ebp-56], 69			;block is visible
@@ -638,7 +678,11 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
-						mov dword[esp+4], SIDE_POS_W	;block type and side normal
+						xor eax, eax
+						mov al, byte[esi]
+						shl eax, 16
+						or eax, SIDE_POS_W
+						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
 						mov dword[ebp-56], 69			;block is visible
@@ -666,7 +710,11 @@ chunk4d_generate:
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
-						mov dword[esp+4], SIDE_NEG_W	;block type and side normal
+						xor eax, eax
+						mov al, byte[esi]
+						shl eax, 16
+						or eax, SIDE_NEG_W
+						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
 						mov dword[ebp-56], 69			;block is visible

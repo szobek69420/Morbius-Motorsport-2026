@@ -1,6 +1,6 @@
 #version 460 core
 in vec3 normal;
-in vec2 uv;
+in vec3 uv;
 
 out vec4 fragmentColour;
 
@@ -10,5 +10,5 @@ uniform vec3 sunDirection;
 
 void main()
 {
-	fragmentColour=(0.4+0.6*max(0.0, dot(normal, sunDirection)))*texture(blockTextures, vec3(uv, 1.0));
+	fragmentColour=(0.4+0.6*max(0.0, dot(normal, sunDirection)))*texture(blockTextures, uv);
 }
