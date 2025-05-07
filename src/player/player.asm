@@ -22,6 +22,11 @@ section .rodata use32
 	MINUS_ONE dd -1.0
 	HALF dd 0.5
 	
+	NEG_88P9 dd -88.9
+	POS_88P9 dd 88.9
+	
+	POS_360 dd 360.0
+	
 	GRAV_ACC dd -9.80625
 	
 	START_POSITION dd 0.0, 100.0, 0.0, 0.0
@@ -109,6 +114,8 @@ section .text use32
 	extern my_free
 	extern my_printf
 	
+	extern math_clamp
+	extern math_repeat
 	extern math_basedLerp
 	
 	extern vec3_normalize
@@ -859,11 +866,26 @@ player_look:		;void player_look(player* pplayer, float deltaTime)
 	addss xmm2, dword[ebp-4]
 	movss dword[ebp-4], xmm2
 	
+	push dword[POS_88P9]
+	push dword[NEG_88P9]
+	push dword[ebp-4]
+	call math_clamp
+	fstp dword[ebp-4]
+	add esp, 12
+	
+	
+	
 	movss xmm0, dword[LOOK_SENSITIVITY_Y]
 	movss xmm2, dword[ebp-16]
 	mulss xmm2, xmm0
 	addss xmm2, dword[ebp-8]
 	movss dword[ebp-8], xmm2
+	
+	push dword[POS_360]
+	push dword[ebp-8]
+	call math_repeat
+	fstp dword[ebp-8]
+	add esp, 8
 	
 	
 	;set the values of the player

@@ -910,7 +910,6 @@ renderable_renderCustom:
 	push 0
 	call [glBindVertexArray]
 	
-	
 	mov esp, ebp
 	pop ebp
 	ret

@@ -10,6 +10,8 @@ section .rodata use32
 	
 	print_int_nl db "%d",10,0
 	print_float_nl db "%f",10,0
+	
+	test_text db "bombardino crocodilo",10,0
 
 section .data use32
 	is_initialized dd 0
@@ -40,9 +42,12 @@ section .text use32
 	extern hyperCubeRenderable_render
 	extern renderable_setAlbedo
 	extern renderable_enableDepthTest
+	extern renderable_setPrimitive
 	
 	extern camera_viewProjection
 	
+	extern GL_POINTS
+	extern GL_TRIANGLES
 	extern glGetError
 	
 sun_init:
@@ -119,7 +124,12 @@ sun_render:
 	push 0
 	call renderable_enableDepthTest
 	add esp, 4
-	
+
+	;set render primitive to points
+	push dword[GL_POINTS]
+	call renderable_setPrimitive
+	add esp, 4
+
 	;render the sun
 	lea eax, [ebp-16]
 	push eax
@@ -128,6 +138,11 @@ sun_render:
 	push dword[renderable]
 	call hyperCubeRenderable_render
 	add esp, 16
+	
+	;reset render primitive to triangles
+	push dword[GL_TRIANGLES]
+	call renderable_setPrimitive
+	add esp, 4
 	
 	;re-enable depth test
 	push 69
