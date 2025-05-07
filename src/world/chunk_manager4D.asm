@@ -37,8 +37,6 @@
 ;the unload function can only yeet a chunk if its chunkAlreadyProcessed flag is non-nulla
 
 section .rodata use32
-	texture_path db "./sprites/texture.bmp",0
-	
 	vertex_shader_path db "./shaders/chunk/chunk4D.vag",0
 	fragment_shader_path db "./shaders/chunk/chunk4D.fag",0
 	geometry_shader_path db "./shaders/chunk/chunk4D.gag",0
@@ -98,7 +96,6 @@ section .text use32
 	extern my_memcpy
 	extern my_qsort
 	
-	extern block_importTextures
 	extern chunk4d_generate
 	extern chunk4d_destroy
 	extern CHUNK_WIDTH
@@ -146,6 +143,9 @@ section .text use32
 	extern RENDERABLE_UNIFORM_VEC3
 	extern RENDERABLE_UNIFORM_VEC4
 	
+	extern textureHandler_bindArray
+	extern block_importTextures
+	
 	extern GL_POINTS
 	extern glGetUniformLocation
 	extern glUniform4f
@@ -154,6 +154,11 @@ section .text use32
 	extern hyperPlane_directionTo3d
 	
 	extern sun_getDirection
+	
+	extern GL_TEXTURE0
+	extern GL_TEXTURE_2D_ARRAY
+	extern glActiveTexture
+	extern glBindTexture
 
 chunkManager4d_create:
 	push ebp
@@ -277,6 +282,12 @@ chunkManager4d_render:
 	call renderable_setPrimitive
 	add esp, 4
 
+	;bind block textures
+	push 0
+	mov eax, dword[ebp+16]
+	push dword[eax+120]
+	call textureHandler_bindArray
+	add esp, 8
 	
 	;use shader
 	mov eax, dword[ebp+16]
@@ -379,6 +390,7 @@ chunkManager4d_render:
 	push dword[eax+28]
 	call renderable_setUniform
 	add esp, 28
+	
 	
 	mov edi, dword[ebp+16]
 	mov esi, dword[edi]				;chunk count in esi
@@ -788,11 +800,6 @@ chunkManager4d_processGraphicsUpdate:
 			call renderable_createCustom
 			mov dword[ebp-24], eax
 			add esp, 20
-			
-			push texture_path
-			push eax
-			call renderable_setAlbedo
-			add esp, 8
 			
 			;destroy the vertex and index data in the chunk
 			mov eax, dword[ebp-4]

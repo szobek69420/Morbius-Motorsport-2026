@@ -516,13 +516,11 @@ game_loop:
 		call sun_render
 		add esp, 12
 		
-		
 		;render 4d chunks
 		push pv_matrix
 		push dword[chunk_manager_4d]
 		call chunkManager4d_render
 		add esp, 8
-		
 		
 		;draw the raycast hypercube
 		push pv_matrix
@@ -557,6 +555,7 @@ game_loop:
 		;poll events and update input
 		call [glfwPollEvents]
 		call input_update
+		
 
 		;check if the user is trying to escape
 		push dword[GLFW_KEY_ESCAPE]

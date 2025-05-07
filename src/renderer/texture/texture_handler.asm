@@ -30,10 +30,19 @@ section .rodata use32
 	error_texture_array_image_wrong_size db "textureHandler_addImageToArray: the image size of %s does not correspond with the size of the bound framebuffer", 10, 0
 	error_texture_array_image_wrong_format db "textureHandler_addImageToArray: the image format of %s is invalid",10,0
 	
+	error_texture_array_mipmap_already_generated db "textureHandler_generateArrayMipmap: a mipmap is already generated for this texture",10,0
+	
 	file_extension_bmp db ".bmp",0
 	
 	print_int_nl db "%d",10,0
-
+	print_two_ints_nl db "%d %d",10,0
+	
+	test_text db "tralalero tralala",10,0
+	
+	GL_TEXTURES:
+	dd GL_TEXTURE0, GL_TEXTURE1, GL_TEXTURE2, GL_TEXTURE3
+	dd GL_TEXTURE4, GL_TEXTURE5, GL_TEXTURE6, GL_TEXTURE7
+	
 section .data use32
 	is_initialized dd 0
 	import_buffer dd 0					;unsigned char*
@@ -59,6 +68,10 @@ section .text use32
 	;NOTE: this function should only be called once every image has been added to the array
 	;void textureHandler_generateArrayMipmap(TextureArrayInfo* tai)
 	global textureHandler_generateArrayMipmap
+	
+	;glTexture is like GL_TEXTURE0 to GL_TEXTURE7
+	;void textureHandler_bindArray(TextureArrayInfo* ta, uint glTexture)
+	global textureHandler_bindArray
 	
 	extern vector_init
 	extern vector_destroy
@@ -88,7 +101,6 @@ section .text use32
 	extern glTexSubImage3D
 	extern glGetError
 	
-	extern GL_TEXTURE0
 	extern GL_TEXTURE_2D
 	extern GL_TEXTURE_2D_ARRAY
 	extern GL_REPEAT
@@ -99,9 +111,19 @@ section .text use32
 	extern GL_TEXTURE_MAG_FILTER
 	extern GL_RGBA
 	extern GL_RGB
+	extern GL_RGB8
 	extern GL_RGBA8
 	extern GL_UNSIGNED_BYTE
 	extern GL_UNPACK_ALIGNMENT
+	
+	extern GL_TEXTURE0
+	extern GL_TEXTURE1
+	extern GL_TEXTURE2
+	extern GL_TEXTURE3
+	extern GL_TEXTURE4
+	extern GL_TEXTURE5
+	extern GL_TEXTURE6
+	extern GL_TEXTURE7
 
 textureHandler_init:
 	push ebp
@@ -619,22 +641,22 @@ textureHandler_addImageToArray:
 		
 	textureHandler_addImageToArray_format_done:
 	
-	;set the data alignment
-	push 1
-	push dword[GL_UNPACK_ALIGNMENT]
-	call [glPixelStorei]
-	
 	;bind texture array
 	mov eax, dword[ebp+16]
 	push dword[eax]
 	push dword[GL_TEXTURE_2D_ARRAY]
 	call [glBindTexture]
 	
+	;set the data alignment
+	push 1
+	push dword[GL_UNPACK_ALIGNMENT]
+	call [glPixelStorei]
+	
 	;add layer to the texture
 	push dword[import_buffer]
 	push dword[GL_UNSIGNED_BYTE]
 	push dword[ebp-20]				;format
-	push 1							;depth?
+	push 1							;uploaded layer count
 	push dword[ebp-8]				;height
 	push dword[ebp-4]				;widht
 	push dword[ebp+24]				;layer
@@ -661,6 +683,17 @@ textureHandler_generateArrayMipmap:
 	push ebp
 	mov ebp, esp
 	
+	mov eax, dword[ebp+8]
+	cmp dword[eax+24], 0
+	je textureHandler_generateArrayMipmap_not_yet_generated
+		;print error
+		push error_texture_array_mipmap_already_generated
+		call my_printf
+		add esp, 4
+		jmp textureHandler_generateArrayMipmap_end
+		
+	textureHandler_generateArrayMipmap_not_yet_generated:
+	
 	;bind texture array
 	mov eax, dword[ebp+8]
 	push dword[eax]
@@ -673,6 +706,28 @@ textureHandler_generateArrayMipmap:
 	
 	;unbind texture array
 	push 0
+	push dword[GL_TEXTURE_2D_ARRAY]
+	call [glBindTexture]
+	
+	textureHandler_generateArrayMipmap_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+
+textureHandler_bindArray:
+	push ebp
+	mov ebp, esp
+	
+	;set active texture
+	mov eax, dword[ebp+12]
+	mov eax, dword[GL_TEXTURES+4*eax]
+	push dword[eax]
+	call [glActiveTexture]
+	
+	;bind texture array
+	mov eax, dword[ebp+8]
+	push dword[eax]
 	push dword[GL_TEXTURE_2D_ARRAY]
 	call [glBindTexture]
 	

@@ -4,12 +4,11 @@ in vec2 uv;
 
 out vec4 fragmentColour;
 
-uniform sampler2D albedo;
-uniform sampler2D specular;
+layout (binding=0) uniform sampler2DArray blockTextures;
 
 uniform vec3 sunDirection;
 
 void main()
 {
-	fragmentColour=(0.4+0.6*max(0.0, dot(normal, sunDirection)))*texture(albedo, uv);
+	fragmentColour=(0.4+0.6*max(0.0, dot(normal, sunDirection)))*texture(blockTextures, vec3(uv, 1.0));
 }
