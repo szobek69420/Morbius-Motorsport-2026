@@ -373,13 +373,13 @@ game_loop:
 	
 	
 	;audio things
-	push music_path
+	push sound_path
 	call audio_loadSound
 	add esp, 4
 	
 	push 100000000
 	push eax
-	;call audio_playSound
+	call audio_playSound
 	add esp, 8
 	
 	;init last frame time

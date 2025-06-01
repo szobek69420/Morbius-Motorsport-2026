@@ -3,7 +3,10 @@
 section .rodata use32
 	
 	MAGIC_NUMBER dd 60.0
+	ZERO dd 0.0
 	ONE dd 1.0
+	TWO dd 2.0
+	THREE dd 3.0
 
 section .text use32
 	global math_powf		;float math_powf(float base, float power), pushes the return value onto the FPU stack
@@ -15,6 +18,8 @@ section .text use32
 	global math_repeat		;float math_repeat(float val, float length)
 	global math_clamp		;float math_clamp(float val, float min, float max)	//pushes the result onto the fpu stack
 	
+	global math_smoothstep1	;float math_smoothstep1(float val)		//smoothstep between 0 and 1, pushes the result onto the fpu stack
+	global math_smoothstep	;float math_smoothstep(float val, float lower, float upper)	//pushes the result onto the fpu stack
 	
 math_powf:		;https://stackoverflow.com/questions/44957136/x87-fpu-computing-e-powered-x-maybe-with-a-taylor-series
 	fld1
@@ -116,6 +121,58 @@ math_repeat:
 	jz math_repeat_non_negative
 		fadd dword[ebp+12]
 	math_repeat_non_negative:
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+math_smoothstep1:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;helper
+	
+	movss xmm0, dword[ebp+8]
+	movss xmm1, xmm0
+	mulss xmm1, xmm1
+	movss xmm2, dword[THREE]
+	movss xmm3, dword[TWO]
+	mulss xmm3, xmm0
+	subss xmm2, xmm3
+	mulss xmm1, xmm2
+	movss dword[ebp-4], xmm1
+	
+	push dword[ONE]
+	push dword[ZERO]
+	push dword[ebp-4]
+	call math_clamp
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+math_smoothstep:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4		;helper
+	sub esp, 4		;helper2
+	
+	movss xmm0, dword[ebp+16]
+	movss xmm1, dword[ebp+8]
+	movss xmm2, dword[ebp+12]
+	subss xmm0, xmm2
+	movss dword[ebp-8], xmm0	;save edge1-edge0 for l8er
+	subss xmm1, xmm2
+	divss xmm1, xmm0	;(val-edge0)/(edge1-edge0)
+	movss dword[ebp-4], xmm1
+	
+	push dword[ebp-4]
+	call math_smoothstep
+	fmul dword[ebp-8]
+	fadd dword[ebp+12]
 	
 	mov esp, ebp
 	pop ebp
