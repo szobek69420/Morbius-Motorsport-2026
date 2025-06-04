@@ -12,10 +12,16 @@ section .rodata use32
 	ZERO dd 0.0
 	ONE dd 1.0
 	
-	VERY_SMALL_NUMBER dd 0.000000001
+	VERY_SMALL_NUMBER dd 0.0000001
 	ALMOST_ONE dd 0.9999999
 	
 	error_2d_not_initialized db "perlin_sample2d: you have to call perlin_init2d before sampling",10,0
+	
+	print_two_ints_nl db "%d %d",10,0
+	print_float_nl db "%f",10,0
+	print_two_floats_nl db "%f %f",10,0
+	
+	test_text db "womb raider",10,0
 	
 section .bss use32
 	TEXTURE_2D_ANGLE_DATA resb 484	;row major order
@@ -82,8 +88,7 @@ perlin_init2d:
 		mov word[ebp-2], ax
 		
 		fild word[ebp-2]
-		fld dword[SCALER]
-		fdivp
+		fmul dword[SCALER]
 		fstp dword[esi]
 	
 		;update the random value in eax
@@ -95,6 +100,43 @@ perlin_init2d:
 		dec edi
 		test edi, edi
 		jnz perlin_init2d_angle_loop_start
+		
+	;set the values in the last row the same as the values in the first row (for vertical periodicity)
+	mov ebx, dword[TEXTURE_2D_ANGLE_RESOLUTION]		;index in ebx
+	mov esi, TEXTURE_2D_ANGLE_DATA					;current first row element in esi
+	mov edi, dword[TEXTURE_2D_ANGLE_RESOLUTION]
+	imul edi, edi
+	sub edi, dword[TEXTURE_2D_ANGLE_RESOLUTION]
+	shl edi, 2
+	add edi, esi									;current last row element in edi
+	perlin_init2d_angle_last_row_loop_start:
+		mov eax, dword[esi]
+		mov dword[edi], eax
+	
+		add esi, 4
+		add edi, 4
+		dec ebx
+		test ebx, ebx
+		jnz perlin_init2d_angle_last_row_loop_start
+		
+	;set the values in the last column the same as the values in the first column (for horizontal periodicity)
+	mov edx, dword[TEXTURE_2D_ANGLE_RESOLUTION] 
+	
+	mov ebx, edx									;index in ebx
+	mov esi, TEXTURE_2D_ANGLE_DATA					;current first column element in esi
+	mov edi, edx
+	dec edi
+	shl edi, 2
+	add edi, esi									;current last column element in edi
+	perlin_init2d_angle_last_column_loop_start:
+		mov eax, dword[esi]
+		mov dword[edi], eax
+		
+		lea esi, [esi+4*edx]
+		lea edi, [edi+4*edx]
+		dec ebx
+		test ebx, ebx
+		jnz perlin_init2d_angle_last_column_loop_start
 		
 	;init the sample texture variables
 	mov eax, dword[ebp+20]
@@ -328,7 +370,6 @@ perlin_sample2d:
 	
 	;calculate the projected values (remainder of one, and clamp it slightly below one)
 	push dword[ONE]
-	push dword[ZERO]
 	push dword[ebp+8]
 	call math_repeat
 	fstp dword[ebp-4]
@@ -336,7 +377,7 @@ perlin_sample2d:
 	mov dword[esp], eax
 	call math_repeat
 	fstp dword[ebp-8]
-	add esp, 12
+	add esp, 8
 	
 	push dword[ALMOST_ONE]
 	push dword[ZERO]
@@ -348,6 +389,7 @@ perlin_sample2d:
 	call math_clamp
 	fstp dword[ebp-8]
 	add esp, 12
+	
 	
 	;get sample indices and sample distances
 	fild dword[TEXTURE_2D_RESOLUTION]

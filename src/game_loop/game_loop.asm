@@ -30,6 +30,11 @@ section .rodata use32
 	P6 dd 0.6
 	D360 dd 360.0
 	
+	VERY_SMALL_NUMBER dd 0.0000001
+	
+	PERLIN_TEST_X dd 0.5
+	PERLIN_TEST_Y dd -0.04
+	
 	PRETTY_YELLOW dd 1.0, 0.85, 0.0, 1.0
 	BLACK dd 0.0, 0.0, 0.0, 1.0
 	
@@ -264,6 +269,11 @@ section .text use32
 	
 	extern sky_getColour
 	
+	extern perlin_init2d
+	extern perlin_sample2d
+	extern perlin_deinit2d
+	extern math_repeat
+	
 game_loop:
 	push ebp
 	mov ebp, esp
@@ -271,6 +281,23 @@ game_loop:
 	;save pwindow
 	mov eax, dword[ebp+8]
 	mov dword[current_window], eax
+	
+	;text perlin noise
+	push 100
+	call perlin_init2d
+	add esp, 4
+	
+	push dword[PERLIN_TEST_Y]
+	push dword[PERLIN_TEST_X]
+	call perlin_sample2d
+	add esp, 8
+	
+	sub esp, 4
+	fstp dword[esp]
+	push print_float_nl
+	call my_printf
+	add esp, 8
+	
 	
 	;init should_close
 	push 4

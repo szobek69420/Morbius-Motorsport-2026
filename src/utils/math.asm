@@ -7,6 +7,8 @@ section .rodata use32
 	ONE dd 1.0
 	TWO dd 2.0
 	THREE dd 3.0
+	
+	test_text db "starmew valley",10,0
 
 section .text use32
 	global math_powf		;float math_powf(float base, float power), pushes the return value onto the FPU stack
@@ -20,6 +22,8 @@ section .text use32
 	
 	global math_smoothstep1	;float math_smoothstep1(float val)		//smoothstep between 0 and 1, pushes the result onto the fpu stack
 	global math_smoothstep	;float math_smoothstep(float val, float lower, float upper)	//pushes the result onto the fpu stack
+	
+	extern my_printf
 	
 math_powf:		;https://stackoverflow.com/questions/44957136/x87-fpu-computing-e-powered-x-maybe-with-a-taylor-series
 	fld1
@@ -112,16 +116,31 @@ math_repeat:
 	push ebp
 	mov ebp, esp
 	
+	;check if the fprem is possible ( exponent(value)-exponent(length) < 64 )
+	mov eax, dword[ebp+8]
+	mov ecx, dword[ebp+12]
+	and eax, 0x7f800000
+	and ecx, 0x7f800000
+	sub eax, ecx
+	cmp eax, 0x20000000		;64<<23
+	jl math_repeat_kein_problem
+		fldz
+		jmp math_repeat_end
+	
+	math_repeat_kein_problem:
+	
 	fld dword[ebp+12]
 	fld dword[ebp+8]
 	fprem
 	fstp st1
 	
-	test dword[ebp+8], 0x70000000
+	test dword[ebp+8], 0x80000000
 	jz math_repeat_non_negative
 		fadd dword[ebp+12]
 	math_repeat_non_negative:
 	
+	
+	math_repeat_end:
 	mov esp, ebp
 	pop ebp
 	ret
