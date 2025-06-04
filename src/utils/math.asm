@@ -8,6 +8,9 @@ section .rodata use32
 	TWO dd 2.0
 	THREE dd 3.0
 	
+	ACOS_COEFF_1 dd 2.66667
+	ACOS_COEFF_2 dd 0.33334
+	
 	test_text db "starmew valley",10,0
 
 section .text use32
@@ -22,6 +25,8 @@ section .text use32
 	
 	global math_smoothstep1	;float math_smoothstep1(float val)		//smoothstep between 0 and 1, pushes the result onto the fpu stack
 	global math_smoothstep	;float math_smoothstep(float val, float lower, float upper)	//pushes the result onto the fpu stack
+	
+	global math_acos		;float math_acos(float val)				//pushes the return value onto the FPU stack
 	
 	extern my_printf
 	
@@ -192,6 +197,77 @@ math_smoothstep:
 	call math_smoothstep
 	fmul dword[ebp-8]
 	fadd dword[ebp+12]
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+math_acos:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4				;value in [-1;1)		;4
+	sub esp, 4				;helper1				;8
+	sub esp, 4				;helper2				;12
+	
+	;move the value in [-1;1)
+	movss xmm0, dword[ebp+8]
+	movss xmm1, dword[ONE]
+	addss xmm0, xmm1
+	movss dword[ebp-4], xmm0
+	
+	push dword[TWO]
+	push dword[ebp-4]
+	call math_repeat
+	fstp dword[ebp-4]
+	add esp, 8
+	
+	movss xmm0, dword[ebp-4]
+	movss xmm1, dword[ONE]
+	subss xmm0, xmm1
+	movss dword[ebp-4], xmm0
+	
+	;do approximation
+	;https://stackoverflow.com/questions/3380628/fast-arc-cos-algorithm
+	movss xmm0, dword[TWO]
+	movss xmm1, dword[ebp-4]
+	
+	
+	movss xmm2, xmm1
+	mulss xmm2, xmm0
+	addss xmm2, xmm0
+	movss dword[ebp-8], xmm2
+	fld dword[ebp-8]
+	fsqrt
+	fstp dword[ebp-8]
+	
+	movss xmm2, xmm1
+	mulss xmm2, xmm0
+	movss xmm3, xmm0
+	subss xmm3, xmm2
+	movss dword[ebp-12], xmm3
+	fld dword[ebp-12]
+	fsqrt
+	fstp dword[ebp-12]
+	
+	fld dword[TWO]
+	fsub dword[ebp-8]
+	fsqrt
+	fstp dword[ebp-8]
+	
+	
+	movss xmm0, dword[ebp-8]
+	movss xmm1, dword[ebp-12]
+	movss xmm2, dword[ACOS_COEFF_1]
+	mulss xmm0, xmm2
+	movss xmm2, dword[ACOS_COEFF_2]
+	mulss xmm1, xmm2
+	subss xmm0, xmm1
+	movss dword[ebp-8], xmm0
+	
+	;save return value
+	fld dword[ebp-8]
 	
 	mov esp, ebp
 	pop ebp

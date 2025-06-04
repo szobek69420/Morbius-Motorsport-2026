@@ -7,6 +7,10 @@ section .rodata use32
 	TEXTURE_2D_ANGLE_RESOLUTION_FLOAT dd 11.0
 	TEXTURE_2D_ANGLE_DATA_SIZE_BYTES equ 484		;sizeof(float)*11*11, each slot contains an angle
 	
+	TEXTURE_3D_VECTOR_RESOLUTION dd 11
+	TEXTURE_3D_VECTOR_RESOLUTION_FLOAT dd 11.0
+	TEXTURE_3D_VECTOR_DATA_SIZE_BYTES equ 15972		;sizeof(vec3)*TEXTURE_3D_VECTOR_RESOLUTION^3, each slot contains a 3d vector
+	
 	SCALER dd 0.0000958737993		;PI/2^15  //2^15 is the maximum absolute value of a 16 bit signed integer
 	
 	ZERO dd 0.0
@@ -15,7 +19,15 @@ section .rodata use32
 	VERY_SMALL_NUMBER dd 0.0000001
 	ALMOST_ONE dd 0.9999999
 	
+	POS_X dd 1.0, 0.0, 0.0
+	POS_Y dd 0.0, 1.0, 0.0
+	POS_Z dd 0.0, 0.0, 1.0
+	NEG_X dd -1.0, 0.0, 0.0
+	NEG_Y dd 0.0, -1.0, 0.0
+	NEG_Z dd 0.0, 0.0, -1.0
+	
 	error_2d_not_initialized db "perlin_sample2d: you have to call perlin_init2d before sampling",10,0
+	error_2d_not_initialized2 db "perlin_deinit2d: you have to call perlin_init2d before sampling",10,0
 	
 	print_two_ints_nl db "%d %d",10,0
 	print_float_nl db "%f",10,0
@@ -24,7 +36,8 @@ section .rodata use32
 	test_text db "womb raider",10,0
 	
 section .bss use32
-	TEXTURE_2D_ANGLE_DATA resb 484	;row major order
+	TEXTURE_2D_ANGLE_DATA resb TEXTURE_2D_ANGLE_DATA_SIZE_BYTES		;row major order
+	TEXTURE_3D_ANGLE_DATA resb TEXTURE_3D_VECTOR_DATA_SIZE_BYTES		;x,y,z order
 	
 section .data use32
 	;these variables are initialized by an init2d call
@@ -35,11 +48,21 @@ section .data use32
 	TEXTURE_2D_DATA_SIZE_BYTES dd 0		;the size of the sample texture
 	TEXTURE_2D_DATA dd 0				;the sampled values
 	
+	
+	TEXTURE_3D_INITIALIZED dd 0
+	
+	TEXTURE_3D_RESOLUTION dd 0
+	TEXTURE_3D_RESOLUTION_FLOAT dd 0.0
+	TEXTURE_3D_DATA_SIZE_BYTES dd 0
+	TEXTURE_3D_DATA dd 0
+	
 section .text use32
 
 	global perlin_init2d			;void perlin_init2d(int resolution)			//resolution is the number of points on the grid along one axis, not the number of squares
 	global perlin_deinit2d			;void perlin_deinit2d()
 	global perlin_sample2d			;float perlin_sample2d(float x, float y)	//pushes the return value onto the FPU stack
+	
+	global perlin_init3d			;void perlin_init3d(int resolution)			
 	
 	extern math_repeat
 	extern math_lerp
@@ -223,6 +246,7 @@ perlin_init2d:
 			fstp dword[ebp-8]
 			fmul dword[ebp-40]
 			fadd dword[ebp-8]
+			fchs					;x and y distance should be used as a negative amplitude
 			fstp dword[ebp-8]
 			
 			;calculate right1 angle value
@@ -232,6 +256,7 @@ perlin_init2d:
 			fmul dword[ebp-44]
 			fstp dword[ebp-12]
 			fmul dword[ebp-40]
+			fchs					;y distance should be used as a negative amplitude
 			fadd dword[ebp-12]
 			fstp dword[ebp-12]
 			
@@ -243,6 +268,7 @@ perlin_init2d:
 			fld dword[eax]
 			fsincos
 			fmul dword[ebp-36]
+			fchs					;x distance should be used as a negative amplitude
 			fstp dword[ebp-16]
 			fmul dword[ebp-48]
 			fadd dword[ebp-16]
@@ -328,6 +354,15 @@ perlin_deinit2d:
 	push ebp
 	mov ebp, esp
 	
+	test dword[TEXTURE_2D_INITIALIZED], 0xffffffff
+	jnz perlin_deinit2d_no_problem
+		push error_2d_not_initialized2
+		call my_printf
+		add esp, 4
+		jmp perlin_deinit2d_end
+	
+	perlin_deinit2d_no_problem:
+	
 	push dword[TEXTURE_2D_DATA]
 	call my_free
 	add esp, 4
@@ -335,6 +370,7 @@ perlin_deinit2d:
 	
 	mov dword[TEXTURE_2D_INITIALIZED], 0
 	
+	perlin_deinit2d_end:
 	mov esp, ebp
 	pop ebp
 	ret
@@ -454,6 +490,52 @@ perlin_sample2d:
 	fld dword[ebp-36]
 
 	perlin_sample2d_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+	
+perlin_init3d:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	
+	
+	mov dword[TEXTURE_3D_INITIALIZED], 69
+	
+	perlin_init3d_end:
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+;void perlin_init3d_gen_random_vec(vec3* buffer, int random1, int random2)
+;random1 and random2 are just two random integers
+;generates a random unit vector
+perlin_init3d_gen_random_vec:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;azimuth angle		;4
+	sub esp, 4			;polar angle		;8
+	
+	;generate azimuth angle [-pi; pi)
+	mov eax, dword[ebp+8]
+	and eax, 0x0000ffff
+	mov dword[ebp-4], eax
+	fild dword[ebp-4]
+	fmul dword[SCALER]
+	fstp dword[ebp-4]
+	
+	;generate polar angle
+	
 	mov esp, ebp
 	pop ebp
 	ret
