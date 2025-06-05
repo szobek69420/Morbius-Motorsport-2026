@@ -34,6 +34,9 @@ section .rodata use32
 	error_2d_not_initialized db "perlin_sample2d: you have to call perlin_init2d before sampling",10,0
 	error_2d_not_initialized2 db "perlin_deinit2d: you have to call perlin_init2d before sampling",10,0
 	
+	error_3d_not_initialized db "perlin_sample3d: you have to call perlin_init3d before sampling",10,0
+	error_3d_not_initialized2 db "perlin_deinit3d: you have to call perlin_init3d before sampling",10,0
+	
 	print_two_ints_nl db "%d %d",10,0
 	print_float_nl db "%f",10,0
 	print_two_floats_nl db "%f %f",10,0
@@ -68,6 +71,8 @@ section .text use32
 	global perlin_sample2d			;float perlin_sample2d(float x, float y)	//pushes the return value onto the FPU stack
 	
 	global perlin_init3d			;void perlin_init3d(int resolution)			
+	global perlin_deinit3d			;void perlin_deinit3d()
+	global perlin_sample3d			;float perlin_sample3d(float x, float y, float z)	//pushes the return value onto the FPU stack
 	
 	extern my_malloc
 	extern my_free
@@ -407,7 +412,7 @@ perlin_sample2d:
 		push error_2d_not_initialized
 		call my_printf
 		add esp, 4
-		fld1
+		fldz
 		jmp perlin_sample2d_end
 	
 	perlin_sample2d_initialized:
@@ -966,5 +971,140 @@ perlin_init3d_gen_random_vec:
 	fstp dword[eax+4]			;sin(polar)
 	
 	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+perlin_deinit3d:
+	push ebp
+	mov ebp, esp
+	
+	test dword[TEXTURE_3D_INITIALIZED], 0xffffffff
+	jnz perlin_deinit3d_initialized
+		push error_3d_not_initialized2
+		call my_printf
+		jmp perlin_deinit3d_end
+	
+	perlin_deinit3d_initialized:
+	
+	push dword[TEXTURE_3D_DATA]
+	call my_free
+	add esp, 4
+	mov dword[TEXTURE_3D_DATA], 0
+	
+	mov dword[TEXTURE_3D_INITIALIZED], 0
+	
+	perlin_deinit3d_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+perlin_sample3d:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 4		;padding
+	sub esp, 4		;projected x value		;8
+	sub esp, 4		;projected y value		;12
+	sub esp, 4		;projected z value		;16
+	
+	sub esp, 4		;padding
+	sub esp, 4		;vector000 x index		;24
+	sub esp, 4		;vector000 y index		;28
+	sub esp, 4		;vector000 z index		;32
+	
+	sub esp, 4		;padding
+	sub esp, 4		;x distance				;40
+	sub esp, 4		;y distance				;44
+	sub esp, 4		;z distance				;48
+	sub esp, 4		;padding
+	sub esp, 4		;one minus x distance	;56
+	sub esp, 4		;one minus y distance	;60
+	sub esp, 4		;one minus z distance	;64
+	
+	;check if the 3d noise is initialized
+	test dword[TEXTURE_3D_INITIALIZED], 0xffffffff
+	jnz perlin_sample3d_initialized
+		push error_3d_not_initialized
+		call my_printf
+		fldz
+		jmp perlin_sample3d_end
+	
+	perlin_sample3d_initialized:
+	
+	;calculate projected values
+	push dword[ONE]
+	push dword[ebp+20]
+	call math_repeat
+	fstp dword[ebp-8]
+	mov eax, dword[ebp+24]
+	mov dword[esp], eax
+	call math_repeat
+	fstp dword[ebp-12]
+	mov eax, dword[ebp+28]
+	mov dword[esp], eax
+	call math_repeat
+	fstp dword[ebp-16]
+	add esp, 8
+	
+	mov dword[ebp-4], 0		;make the padding 0, so that no exception occurs
+	
+	;calculate distances and indices
+	movss xmm0, dword[TEXTURE_3D_VECTOR_RESOLUTION_FLOAT]
+	movss xmm1, dword[ONE]
+	subss xmm0, xmm1
+	shufps xmm0, xmm0, 0b00000000
+	
+	movups xmm1, [ebp-16]
+	mulps xmm1, xmm0
+	movups [ebp-32], xmm1
+	
+	push dword[ONE]
+	push dword[ebp-24]
+	call math_repeat
+	fstp dword[ebp-40]			;x distance
+	mov eax, dword[ebp-28]
+	mov dword[esp], eax
+	call math_repeat
+	fstp dword[ebp-44]			;y distance
+	mov eax, dword[ebp-32]
+	mov dword[esp], eax
+	call math_repeat
+	fstp dword[ebp-48]			;z distance
+	mov dword[ebp-36], 0		;padding
+	add esp, 8
+	
+	movups xmm0, [ebp-32]
+	movups xmm1, [ebp-48]
+	subps xmm0, xmm1
+	movups [ebp-32], xmm0
+	
+	fld dword[ebp-24]
+	frndint
+	fistp dword[ebp-24]			;x index
+	fld dword[ebp-28]
+	frndint
+	fistp dword[ebp-28]			;y index
+	fld dword[ebp-32]
+	frndint
+	fistp dword[ebp-32]			;z index
+	
+	movups xmm0, [ebp-48]
+	movss xmm1, dword[ONE]
+	shufps xmm1, xmm1, 0b00000000
+	subps xmm1, xmm0
+	movups [ebp-64], xmm1
+	
+	
+	
+	perlin_sample3d_end:
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
 	pop ebp
 	ret
