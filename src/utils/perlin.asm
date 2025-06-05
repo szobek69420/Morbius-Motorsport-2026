@@ -1013,9 +1013,9 @@ perlin_sample3d:
 	sub esp, 4		;projected z value		;16
 	
 	sub esp, 4		;padding
-	sub esp, 4		;vector000 x index		;24
-	sub esp, 4		;vector000 y index		;28
-	sub esp, 4		;vector000 z index		;32
+	sub esp, 4		;value000 x index		;24
+	sub esp, 4		;value000 y index		;28
+	sub esp, 4		;value000 z index		;32
 	
 	sub esp, 4		;padding
 	sub esp, 4		;x distance				;40
@@ -1025,6 +1025,15 @@ perlin_sample3d:
 	sub esp, 4		;one minus x distance	;56
 	sub esp, 4		;one minus y distance	;60
 	sub esp, 4		;one minus z distance	;64
+	
+	sub esp, 4		;helper00z				;68
+	sub esp, 4		;helper01z				;72
+	sub esp, 4		;helper10z				;76
+	sub esp, 4		;helper11z				;80
+	
+	sub esp, 4		;value000 address		;84
+	sub esp, 4		;offsetx				;88
+	sub esp, 4		;offsety				;92
 	
 	;check if the 3d noise is initialized
 	test dword[TEXTURE_3D_INITIALIZED], 0xffffffff
@@ -1054,7 +1063,7 @@ perlin_sample3d:
 	mov dword[ebp-4], 0		;make the padding 0, so that no exception occurs
 	
 	;calculate distances and indices
-	movss xmm0, dword[TEXTURE_3D_VECTOR_RESOLUTION_FLOAT]
+	movss xmm0, dword[TEXTURE_3D_RESOLUTION_FLOAT]
 	movss xmm1, dword[ONE]
 	subss xmm0, xmm1
 	shufps xmm0, xmm0, 0b00000000
@@ -1099,7 +1108,90 @@ perlin_sample3d:
 	subps xmm1, xmm0
 	movups [ebp-64], xmm1
 	
+	;calculate offsets
+	mov eax, dword[TEXTURE_3D_RESOLUTION]
+	mov ecx, eax
+	shl eax, 2
+	mov dword[ebp-92], eax
+	imul eax, ecx
+	mov dword[ebp-88], eax
 	
+	mov eax, dword[ebp-24]
+	imul eax, dword[ebp-88]
+	mov ecx, dword[ebp-28]
+	imul ecx, dword[ebp-92]
+	add eax, ecx
+	mov ecx, dword[ebp-32]
+	shl ecx, 2
+	add eax, ecx
+	add eax, dword[TEXTURE_3D_DATA]
+	mov dword[ebp-84], eax
+	
+	;interpolate along the z axis
+	movss xmm0, dword[ebp-40]
+	movss xmm1, dword[ebp-56]
+	
+	movss xmm2, dword[eax]
+	movss xmm3, dword[eax+4]
+	mulss xmm2, xmm1
+	mulss xmm3, xmm0
+	addss xmm2, xmm3
+	movss dword[ebp-68], xmm2
+	
+	add eax, dword[ebp-92]
+	movss xmm2, dword[eax]
+	movss xmm3, dword[eax+4]
+	mulss xmm2, xmm1
+	mulss xmm3, xmm0
+	addss xmm2, xmm3
+	movss dword[ebp-72], xmm2
+	
+	add eax, dword[ebp-88]
+	movss xmm2, dword[eax]
+	movss xmm3, dword[eax+4]
+	mulss xmm2, xmm1
+	mulss xmm3, xmm0
+	addss xmm2, xmm3
+	movss dword[ebp-80], xmm2		;direkt ebp-80!!!!
+	
+	sub eax, dword[ebp-92]
+	movss xmm2, dword[eax]
+	movss xmm3, dword[eax+4]
+	mulss xmm2, xmm1
+	mulss xmm3, xmm0
+	addss xmm2, xmm3
+	movss dword[ebp-76], xmm2
+	
+	;interpolate along the y axis
+	movss xmm0, dword[ebp-44]
+	movss xmm1, dword[ebp-60]
+	
+	movss xmm2, dword[ebp-68]
+	movss xmm3, dword[ebp-72]
+	mulss xmm2, xmm1
+	mulss xmm3, xmm0
+	addss xmm2, xmm3
+	movss dword[ebp-68], xmm2
+	
+	movss xmm2, dword[ebp-76]
+	movss xmm3, dword[ebp-80]
+	mulss xmm2, xmm1
+	mulss xmm3, xmm0
+	addss xmm2, xmm3
+	movss dword[ebp-76], xmm2
+	
+	;interpolate along the z axis
+	movss xmm0, dword[ebp-48]
+	movss xmm1, dword[ebp-64]
+	movss xmm2, dword[ebp-68]
+	movss xmm3, dword[ebp-76]
+	mulss xmm2, xmm1
+	mulss xmm3, xmm0
+	addss xmm2, xmm3
+	movss dword[ebp-68], xmm2
+	
+	;set the return value
+	fld dword[ebp-68]
 	
 	perlin_sample3d_end:
 	mov esp, ebp
