@@ -275,8 +275,7 @@ game_loop:
 	;save pwindow
 	mov eax, dword[ebp+8]
 	mov dword[current_window], eax
-	
-	
+
 	
 	;init should_close
 	push 4
