@@ -14,6 +14,9 @@ section .rodata use32
 	SCALER dd 0.0000958737993		;PI/2^15  //2^15 is the maximum absolute value of a 16 bit signed integer
 	SCALER2 dd 0.00003051757		;1/2^15
 	
+	PERLIN_2D_SCALER dd 1.4142135623731		;so that the 2d perlin noise has possible values in about [-1;1]
+	PERLIN_3D_SCALER dd 1.1547005384		;so that the 3d perlin noise has possible values in about [-1;1]
+	
 	ZERO dd 0.0
 	ONE dd 1.0
 	
@@ -327,7 +330,9 @@ perlin_init2d:
 			mulss xmm3, xmm0
 			addss xmm2, xmm3
 			
-			;save the value
+			;scale and save the value
+			movss xmm0, dword[PERLIN_2D_SCALER]
+			mulss xmm2, xmm0
 			movss dword[ebx], xmm2
 			
 			
@@ -911,7 +916,9 @@ perlin_init3d:
 				mulss xmm3, xmm0
 				addss xmm2, xmm3			;value in xmm2
 				
-				;save value
+				;scale and save value
+				movss xmm0, dword[PERLIN_3D_SCALER]
+				mulss xmm2, xmm0
 				movss dword[ebx], xmm2
 				
 				
@@ -1136,7 +1143,23 @@ perlin_sample3d:
 	fstp dword[ebp-16]
 	add esp, 8
 	
+	push dword[ALMOST_ONE]
+	push 0
+	push dword[ebp-8]
+	call math_clamp
+	fstp dword[ebp-8]
+	mov eax, dword[ebp-12]
+	mov dword[esp], eax
+	call math_clamp
+	fstp dword[ebp-12]
+	mov eax, dword[ebp-16]
+	mov dword[esp], eax
+	call math_clamp
+	fstp dword[ebp-16]
+	add esp, 12
+	
 	mov dword[ebp-4], 0		;make the padding 0, so that no exception occurs
+	
 	
 	;calculate distances and indices
 	movss xmm0, dword[TEXTURE_3D_RESOLUTION_FLOAT]

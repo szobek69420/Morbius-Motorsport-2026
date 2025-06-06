@@ -19,8 +19,8 @@ section .rodata use32
 	PHYSICS_UPDATE_INTERVAL_MS dd 15
 	TIME_COEFFICIENT dd 0.01		;100 seconds long days
 	
-	RENDER_WIDTH dd 1920
-	RENDER_HEIGHT dd 1200
+	RENDER_WIDTH dd 1280
+	RENDER_HEIGHT dd 800
 
 	ZERO dd 0.0
 	ONE dd 1.0
@@ -31,7 +31,6 @@ section .rodata use32
 	D360 dd 360.0
 	
 	VERY_SMALL_NUMBER dd 0.0000001
-	
 	
 	PRETTY_YELLOW dd 1.0, 0.85, 0.0, 1.0
 	BLACK dd 0.0, 0.0, 0.0, 1.0
@@ -59,7 +58,7 @@ section .rodata use32
 	text_based_vectors db "Hyperplane based vectors",0
 	print_vec4 db "(%f; %f; %f; %f)",0
 	text_player_pos_4d db "Player position",0
-	text_player_pos db "Player position in plane",0
+	text_player_pos db "Player position on plane",0
 	print_vec3 db "(%f; %f; %f)",0
 	
 	print_loaded_chunk_count db "Loaded chunks: %d",0
@@ -267,9 +266,10 @@ section .text use32
 	
 	extern sky_getColour
 	
+	extern perlin_init2d
+	extern perlin_deinit2d
 	extern perlin_init3d
 	extern perlin_deinit3d
-	extern perlin_sample3d
 	
 game_loop:
 	push ebp
@@ -278,12 +278,6 @@ game_loop:
 	;save pwindow
 	mov eax, dword[ebp+8]
 	mov dword[current_window], eax
-	
-	push 100
-	call perlin_init3d
-	add esp, 4
-	
-	call perlin_deinit3d
 
 	
 	;init should_close
@@ -313,6 +307,12 @@ game_loop:
 	push dword[current_window]
 	call [glfwSetInputMode]
 	add esp, 12
+	
+	;init perlin noises
+	push 100
+	call perlin_init2d
+	call perlin_init3d
+	add esp, 4
 	
 	;init physics
 	call physics4d_init
@@ -628,6 +628,10 @@ game_loop:
 	
 	;deinit physics
 	call physics4d_deinit
+	
+	;deinit perlin noise
+	call perlin_deinit3d
+	call perlin_deinit2d
 	
 	;destroy should_close
 	push dword[should_close]

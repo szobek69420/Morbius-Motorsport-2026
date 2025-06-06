@@ -38,9 +38,9 @@ section .rodata use32
 	
 	CHUNK_BLOCK_COUNT dd 886464			;CHUNK_HEIGHT_MAP_WIDTH^3 * (CHUNK_HEIGHT+2)
 	
-	CHUNK_HEIGHT_MAP_FACTOR_X dd 0.053
-	CHUNK_HEIGHT_MAP_FACTOR_Z dd 0.057
-	CHUNK_HEIGHT_MAP_FACTOR_W dd 0.059
+	CHUNK_HEIGHT_MAP_FACTOR_X dd 0.00053
+	CHUNK_HEIGHT_MAP_FACTOR_Z dd 0.00057
+	CHUNK_HEIGHT_MAP_FACTOR_W dd 0.00059
 	
 	CHUNK_HEIGHT_MAP_SCALE dd 20.0
 	CHUNK_HEIGHT_MAP_BASE dd 80.0
@@ -88,6 +88,8 @@ section .text use32
 	extern colliderGroup4d_printInfo
 	extern physics4d_registerColliderGroup
 	extern physics4d_unregisterColliderGroup
+	
+	extern perlin_sample3d
 	
 	
 chunk4d_vec4ToBlockPos:
@@ -899,9 +901,9 @@ chunk4d_generateHeightMap:
 	sub esp, 4			;z value			20
 	sub esp, 4			;w value			24
 	
-	sub esp, 4			;x gen func value	28
-	sub esp, 4			;z gen func value	32
-	sub esp, 4			;w gen func value	36
+	sub esp, 4			;x gen func value	28(unused)
+	sub esp, 4			;z gen func value	32(unused)
+	sub esp, 4			;w gen func value	36(unused)
 	
 	sub esp, 4			;gen helper			40
 	
@@ -930,9 +932,6 @@ chunk4d_generateHeightMap:
 	add edi, 2							;x index in edi
 	chunk4d_generateHeightMap_loop_x_start:
 		fld dword[ebp-16]
-		fld st0
-		fsin
-		fstp dword[ebp-28]				;x gen func value
 		fadd dword[CHUNK_HEIGHT_MAP_FACTOR_X]
 		fstp dword[ebp-16]				;x value updated
 	
@@ -944,9 +943,6 @@ chunk4d_generateHeightMap:
 		add edi, 2							;z index in edi
 		chunk4d_generateHeightMap_loop_z_start:
 			fld dword[ebp-20]
-			fld st0
-			fsin
-			fstp dword[ebp-32]				;z gen func value
 			fadd dword[CHUNK_HEIGHT_MAP_FACTOR_Z]
 			fstp dword[ebp-20]				;z value updated
 		
@@ -958,18 +954,17 @@ chunk4d_generateHeightMap:
 			add edi, 2							;w index in edi
 			chunk4d_generateHeightMap_loop_w_start:
 				fld dword[ebp-24]
-				fld st0
-				fsin
-				fstp dword[ebp-36]				;w gen func value
 				fadd dword[CHUNK_HEIGHT_MAP_FACTOR_W]
 				fstp dword[ebp-24]				;w value updated
 				
-				movss xmm0, dword[ebp-28]
-				movss xmm1, dword[ebp-32]
-				addss xmm0, xmm1
-				movss xmm1, dword[ebp-36]
-				addss xmm0, xmm1
+				push dword[ebp-24]
+				push dword[ebp-20]
+				push dword[ebp-16]
+				call perlin_sample3d
+				fstp dword[ebp-40]
+				add esp, 12
 				
+				movss xmm0, dword[ebp-40]
 				movss xmm1, dword[CHUNK_HEIGHT_MAP_SCALE]
 				mulss xmm0, xmm1
 				movss xmm1, dword[CHUNK_HEIGHT_MAP_BASE]

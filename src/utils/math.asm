@@ -144,6 +144,7 @@ math_repeat:
 		fadd dword[ebp+12]
 	math_repeat_non_negative:
 	
+	fabs			;to avoid -0
 	
 	math_repeat_end:
 	mov esp, ebp
