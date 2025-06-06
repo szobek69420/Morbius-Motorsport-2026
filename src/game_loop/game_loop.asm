@@ -267,6 +267,9 @@ section .text use32
 	
 	extern sky_getColour
 	
+	extern perlin_init3d
+	extern perlin_deinit3d
+	extern perlin_sample3d
 	
 game_loop:
 	push ebp
@@ -275,6 +278,12 @@ game_loop:
 	;save pwindow
 	mov eax, dword[ebp+8]
 	mov dword[current_window], eax
+	
+	push 100
+	call perlin_init3d
+	add esp, 4
+	
+	call perlin_deinit3d
 
 	
 	;init should_close

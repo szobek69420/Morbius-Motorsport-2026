@@ -38,8 +38,10 @@ section .rodata use32
 	error_3d_not_initialized2 db "perlin_deinit3d: you have to call perlin_init3d before sampling",10,0
 	
 	print_two_ints_nl db "%d %d",10,0
+	print_three_ints_nl db "%d %d %d",10,0
 	print_float_nl db "%f",10,0
 	print_two_floats_nl db "%f %f",10,0
+	print_three_floats_nl db "%f %f %f",10,0
 	
 	test_text db "womb raider",10,0
 	
@@ -86,6 +88,7 @@ section .text use32
 	extern math_acos
 	
 	extern vec3_dot
+	extern vec3_print
 	
 perlin_init2d:
 	push ebp
@@ -542,8 +545,17 @@ perlin_init3d:
 	
 	sub esp, 12				;helper vector				92
 	
+	
+	;calculate helper values
+	mov eax, dword[TEXTURE_3D_VECTOR_RESOLUTION]
+	imul eax, 12
+	mov dword[ebp-76], eax
+	imul eax, dword[TEXTURE_3D_VECTOR_RESOLUTION]
+	mov dword[ebp-80], eax
+	
+	
 	;fill up the vector texture with random unit vectors
-	mov eax, 69420					;random seed in eax
+	mov eax, 6942069				;random seed in eax
 	mov esi, TEXTURE_3D_VECTOR_DATA	;current vector in esi
 	mov edi, dword[TEXTURE_3D_VECTOR_RESOLUTION]
 	mov ecx, edi
@@ -568,20 +580,75 @@ perlin_init3d:
 		test edi, edi
 		jnz perlin_init3d_vector_loop_start
 		
-	
-	;calculate sample grid step
-	fld1
-	mov eax, dword[TEXTURE_3D_RESOLUTION]
-	dec eax
-	mov dword[ebp-4], eax
-	fidiv dword[ebp-4]
-	mov eax, dword[TEXTURE_3D_VECTOR_RESOLUTION]
-	dec eax
-	mov dword[ebp-4], eax
-	fimul dword[ebp-4]
-	fsub dword[VERY_SMALL_NUMBER]		;so that in the sampling part the distances will always be slightly below the max value, thus not having to handle the edge case of being on the border
-	fstp dword[ebp-4]
-	
+	;set the values on the positive end the same as on the negative end to ensure the periodicity of the noise
+	mov eax, TEXTURE_3D_VECTOR_DATA				;current vector in eax
+	xor esi, esi		;x index in esi
+	perlin_init3d_periodicity_x_loop_start:
+		xor edi, edi		;y index in edi
+		perlin_init3d_periodicity_y_loop_start:
+			xor ebx, ebx		;z index in ebx
+			perlin_init3d_periodicity_z_loop_start:
+				test esi, esi
+				jnz perlin_init3d_periodicity_z_loop_no_x
+					mov ecx, eax
+					add ecx, TEXTURE_3D_VECTOR_DATA_SIZE_BYTES
+					sub ecx, dword[ebp-80]
+					
+					mov edx, dword[eax]
+					mov dword[ecx], edx
+					mov edx, dword[eax+4]
+					mov dword[ecx+4], edx
+					mov edx, dword[eax+8]
+					mov dword[ecx+8], ecx
+				
+				perlin_init3d_periodicity_z_loop_no_x:
+				
+				
+				test edi, edi
+				jnz perlin_init3d_periodicity_z_loop_no_y
+					mov ecx, eax
+					add ecx, dword[ebp-80]
+					sub ecx, dword[ebp-76]
+					
+					mov edx, dword[eax]
+					mov dword[ecx], edx
+					mov edx, dword[eax+4]
+					mov dword[ecx+4], edx
+					mov edx, dword[eax+8]
+					mov dword[ecx+8], ecx
+					
+				perlin_init3d_periodicity_z_loop_no_y:
+				
+				
+				test ebx, ebx
+				jnz perlin_init3d_periodicity_z_loop_no_z
+					mov ecx, eax
+					add ecx, dword[ebp-76]
+					sub ecx, 12
+					
+					mov edx, dword[eax]
+					mov dword[ecx], edx
+					mov edx, dword[eax+4]
+					mov dword[ecx+4], edx
+					mov edx, dword[eax+8]
+					mov dword[ecx+8], ecx
+					
+				perlin_init3d_periodicity_z_loop_no_z:
+				
+				
+				add eax, 12
+				
+				inc ebx
+				cmp ebx, dword[TEXTURE_3D_VECTOR_RESOLUTION]
+				jl perlin_init3d_periodicity_z_loop_start
+		
+			inc edi
+			cmp edi, dword[TEXTURE_3D_VECTOR_RESOLUTION]
+			jl perlin_init3d_periodicity_y_loop_start
+		
+		inc esi
+		cmp esi, dword[TEXTURE_3D_VECTOR_RESOLUTION]
+		jl perlin_init3d_periodicity_x_loop_start
 	
 	;set values and alloc space
 	mov eax, dword[ebp+20]
@@ -600,12 +667,20 @@ perlin_init3d:
 	mov dword[TEXTURE_3D_DATA], eax
 	add esp, 4
 	
-	;calculate helper values
+	
+	;calculate sample grid step
+	fld1
+	mov eax, dword[TEXTURE_3D_RESOLUTION]
+	dec eax
+	mov dword[ebp-4], eax
+	fidiv dword[ebp-4]
 	mov eax, dword[TEXTURE_3D_VECTOR_RESOLUTION]
-	imul eax, 12
-	mov dword[ebp-76], eax
-	imul eax, dword[TEXTURE_3D_VECTOR_RESOLUTION]
-	mov dword[ebp-80], eax
+	dec eax
+	mov dword[ebp-4], eax
+	fimul dword[ebp-4]
+	fsub dword[VERY_SMALL_NUMBER]		;so that in the sampling part the distances will always be slightly below the max value, thus not having to handle the edge case of being on the border
+	fstp dword[ebp-4]
+	
 	
 	;sample the grid
 	mov ebx, dword[TEXTURE_3D_DATA]			;current value in ebx
@@ -635,6 +710,7 @@ perlin_init3d:
 				add esi, dword[ebp-36]
 				imul dword[TEXTURE_3D_VECTOR_RESOLUTION]
 				add esi, dword[ebp-40]
+				shl esi, 2
 				add esi, TEXTURE_3D_VECTOR_DATA
 				
 				;calculate value000
