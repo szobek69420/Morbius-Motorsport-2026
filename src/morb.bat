@@ -24,6 +24,7 @@ mkdir build
 ..\build_tools\nasm.exe -fobj utils/thread_safe_value.asm -o build/thread_safe_value.o
 ..\build_tools\nasm.exe -fobj utils/multithreading.asm -o build/multithreading.o
 ..\build_tools\nasm.exe -fobj utils/queue.asm -o build/queue.o
+..\build_tools\nasm.exe -fobj utils/hashmap.asm -o build/hashmap.o
 ..\build_tools\nasm.exe -fobj utils/vector.asm -o build/vector.o
 ..\build_tools\nasm.exe -fobj utils/string.asm -o build/string.o
 ..\build_tools\nasm.exe -fobj utils/console.asm -o build/console.o
@@ -83,6 +84,7 @@ build/thread_safe_queue.o ^
 build/thread_safe_value.o ^
 build/multithreading.o ^
 build/queue.o ^
+build/hashmap.o ^
 build/vector.o ^
 build/string.o ^
 build/console.o ^
