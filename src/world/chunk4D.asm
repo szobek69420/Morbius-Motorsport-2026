@@ -42,7 +42,7 @@ section .rodata use32
 	CHUNK_HEIGHT_MAP_FACTOR_Z dd 0.00057
 	CHUNK_HEIGHT_MAP_FACTOR_W dd 0.00059
 	
-	CHUNK_HEIGHT_MAP_SCALE dd 20.0
+	CHUNK_HEIGHT_MAP_SCALE dd 60.0
 	CHUNK_HEIGHT_MAP_BASE dd 80.0
 	
 	AABB_SCALE dd 0.5, 0.5, 0.5, 0.5
@@ -79,6 +79,8 @@ section .text use32
 	extern BLOCK_GRASS
 	extern BLOCK_DIRT
 	extern BLOCK_STONE
+	extern BLOCK_OAK_LOG
+	extern BLOCK_OAK_LEAVES
 	
 	extern aabb4d_create
 	extern aabb4d_getPosition
@@ -340,6 +342,164 @@ chunk4d_generate:
 		inc edi
 		cmp edi, dword[CHUNK_HEIGHT_PLUS_TWO]
 		jl chunk4d_generate_block_types_y_loop_start
+		
+	;generate trees
+	mov esi, dword[ebp+20]
+	imul esi, dword[ebp+24]
+	imul esi, dword[ebp+28]		;random seed in esi
+	
+	mov ebx, dword[ebp-8]	;current heightmap value in ebx
+	xor edi, edi			;x index in edi
+	chunk4d_generate_tree_x_loop_start:
+		;check if the x index is valid for a tree
+		mov eax, oak_tree_lower_bounds
+		mov eax, dword[eax]
+		mov ecx, edi
+		add ecx, eax
+		cmp ecx, 2
+		jl chunk4d_generate_tree_x_loop_skip
+		
+		mov eax, oak_tree_upper_bounds
+		mov eax, dword[eax]
+		mov ecx, edi
+		lea ecx, [ecx+eax+2]
+		cmp ecx, dword[CHUNK_HEIGHT_MAP_WIDTH]
+		jge chunk4d_generate_tree_x_loop_skip
+		
+	
+		push edi				;save x index
+		xor edi, edi			;z index in edi
+		chunk4d_generate_tree_z_loop_start:
+			;check if the z index is valid for a tree
+			mov eax, oak_tree_lower_bounds
+			mov eax, dword[eax+8]
+			mov ecx, edi
+			add ecx, eax
+			cmp ecx, 2
+			jl chunk4d_generate_tree_z_loop_skip
+			
+			mov eax, oak_tree_upper_bounds
+			mov eax, dword[eax+8]
+			mov ecx, edi
+			lea ecx, [ecx+eax+2]
+			cmp ecx, dword[CHUNK_HEIGHT_MAP_WIDTH]
+			jge chunk4d_generate_tree_z_loop_skip
+			
+		
+			push edi				;save z index
+			xor edi, edi			;w index in edi
+			chunk4d_generate_tree_w_loop_start:
+				;check if the w index is valid for a tree
+				mov eax, oak_tree_lower_bounds
+				mov eax, dword[eax+12]
+				mov ecx, edi
+				add ecx, eax
+				cmp ecx, 2
+				jl chunk4d_generate_tree_w_loop_continue
+				
+				mov eax, oak_tree_upper_bounds
+				mov eax, dword[eax+12]
+				mov ecx, edi
+				lea ecx, [ecx+eax+2]
+				cmp ecx, dword[CHUNK_HEIGHT_MAP_WIDTH]
+				jge chunk4d_generate_tree_w_loop_continue
+			
+			
+				;update the random value in esi
+				imul esi, 1103515245 
+				add esi, 12345
+			
+				;check if the block can be a root block by randomness
+				mov eax, esi
+				and eax, 0x0000ffff
+				cmp eax, 65000
+				jl chunk4d_generate_tree_w_loop_continue
+				
+			
+				;check if the block is a grass block
+				xor eax, eax
+				mov al, byte[ebx]		;current height in eax
+				imul eax, dword[CHUNK_HEIGHT_MAP_WIDTH_CUBED]
+				
+				mov ecx, dword[esp+4]	;x index
+				imul ecx, dword[CHUNK_HEIGHT_MAP_WIDTH_SQUARED]
+				add eax, ecx
+				
+				mov ecx, dword[esp]		;z index
+				imul ecx, dword[CHUNK_HEIGHT_MAP_WIDTH]
+				add eax, ecx
+				
+				add eax, edi
+				
+				add eax, dword[ebp-12]
+				
+				
+				mov cl, byte[BLOCK_GRASS]
+				cmp cl, byte[eax]
+				jne chunk4d_generate_tree_w_loop_continue
+				
+				;add tree
+				;anchor block in eax
+				push esi		;save random value
+				push edi		;save w index
+				mov esi, dword[oak_tree_block_count]	;index in esi
+				mov edi, oak_tree_blocks				;current block in edi
+				chunk4d_generate_tree_add_loop_start:
+					mov ecx, dword[edi+8]
+					imul ecx, dword[CHUNK_HEIGHT_MAP_WIDTH_CUBED]
+					mov edx, dword[edi+4]
+					imul edx, dword[CHUNK_HEIGHT_MAP_WIDTH_SQUARED]
+					add ecx, edx
+					mov edx, dword[edi+12]
+					imul edx, dword[CHUNK_HEIGHT_MAP_WIDTH]
+					add ecx, edx
+					add ecx, dword[edi+16]
+					add ecx, eax
+					
+					mov edx, dword[edi]
+					mov dl, byte[edx]
+					mov byte[ecx], dl
+					
+					add edi, 20
+					
+					dec esi
+					test esi, esi
+					jnz chunk4d_generate_tree_add_loop_start
+					
+				pop edi			;restore w index
+				pop esi			;restore random value
+				
+				chunk4d_generate_tree_w_loop_continue:
+				inc ebx
+				
+				inc edi
+				cmp edi, dword[CHUNK_HEIGHT_MAP_WIDTH]
+				jl chunk4d_generate_tree_w_loop_start
+			
+			pop edi					;restore z index
+		
+		
+			jmp chunk4d_generate_tree_z_loop_continue
+			chunk4d_generate_tree_z_loop_skip:
+				add ebx, dword[CHUNK_HEIGHT_MAP_WIDTH]
+				
+			chunk4d_generate_tree_z_loop_continue:
+			inc edi
+			cmp edi, dword[CHUNK_HEIGHT_MAP_WIDTH]
+			jl chunk4d_generate_tree_z_loop_start
+		
+		pop edi					;restore x index
+	
+		
+		jmp chunk4d_generate_tree_x_loop_continue
+		chunk4d_generate_tree_x_loop_skip:
+			add ebx, dword[CHUNK_HEIGHT_MAP_WIDTH_SQUARED]
+			
+		chunk4d_generate_tree_x_loop_continue:
+		inc edi
+		cmp edi, dword[CHUNK_HEIGHT_MAP_WIDTH]
+		jl chunk4d_generate_tree_x_loop_start
+		
 		
 	;change blocks based on the changedBlocks vector
 	mov eax, dword[ebp+32]
@@ -998,3 +1158,27 @@ chunk4d_generateHeightMap:
 	pop esi
 	pop ebp
 	ret
+	
+	
+oak_tree_lower_bounds dd -2,0,-2,-2
+oak_tree_upper_bounds dd 2,6,2,2
+oak_tree_block_count dd 18
+oak_tree_blocks:
+dd BLOCK_OAK_LOG,		0,1,0,0
+dd BLOCK_OAK_LOG,		0,2,0,0
+dd BLOCK_OAK_LOG,		0,3,0,0
+dd BLOCK_OAK_LEAVES,	-2,4,0,0
+dd BLOCK_OAK_LEAVES,	-1,4,0,0
+dd BLOCK_OAK_LEAVES,	1,4,0,0
+dd BLOCK_OAK_LEAVES,	2,4,0,0
+dd BLOCK_OAK_LEAVES,	0,4,-2,0
+dd BLOCK_OAK_LEAVES,	0,4,-1,0
+dd BLOCK_OAK_LEAVES,	0,4,1,0
+dd BLOCK_OAK_LEAVES,	0,4,2,0
+dd BLOCK_OAK_LEAVES,	0,4,0,-2
+dd BLOCK_OAK_LEAVES,	0,4,0,-1
+dd BLOCK_OAK_LEAVES,	0,4,0,1
+dd BLOCK_OAK_LEAVES,	0,4,0,2
+dd BLOCK_OAK_LOG,		0,4,0,0
+dd BLOCK_OAK_LEAVES,	0,5,0,0
+dd BLOCK_OAK_LEAVES,	0,6,0,0
