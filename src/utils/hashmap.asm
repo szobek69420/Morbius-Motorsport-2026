@@ -11,15 +11,20 @@
 ;	vector<haspmapelement> buckets[256];	;0
 ;}	4096 bytes overall
 
+section .rodata use32
+
+	error_add_invalid_key db "hashMap_add: the key already exists",10,0
+
 section .text use32
 
 	global hashMap_init			;HashMap* hashMap_init()
 	global hashMap_destroy		;void hashMap_destroy(HashMap* hm)
 	
 	global hashMap_add			;void hashMap_add(HashMap* hm, void* pkey, void* pvalue, int keySizeInBytes, int valueSizeInBytes)
-	global hashMap_remove		;void hashMap_remove(HashMap* hm, void* pkey, int keySizeInBytes) //removes only the first occurence with that key
-	global hashMap_get			;void* hashMap_get(HashMap* hm, void* pkey, int keySizeInBytes)	//returns the pointer to the first value with that key, otherwise NULL
+	global hashMap_remove		;void hashMap_remove(HashMap* hm, void* pkey, int keySizeInBytes)
+	global hashMap_get			;void* hashMap_get(HashMap* hm, void* pkey, int keySizeInBytes)	//returns the pointer to the value with that key, otherwise NULL
 	
+	extern my_printf
 	extern my_malloc
 	extern my_free
 	extern my_memcmp
@@ -29,6 +34,7 @@ section .text use32
 	extern vector_destroy
 	extern vector_push_back
 	extern vector_remove_at
+	extern vector_search
 	
 hashMap_init:
 	push ebp
@@ -123,6 +129,35 @@ hashMap_add:
 	sub esp, 4			;hash value			;4
 	sub esp, 16			;element buffer		;20
 	
+	;calculate hash value
+	push dword[ebp+20]
+	push dword[ebp+12]
+	call hashMap_calculateHashValue
+	mov dword[ebp-4], eax
+	add esp, 8
+	
+	;check if the key is already registered
+	mov eax, dword[ebp+8]
+	mov ecx, dword[ebp-4]
+	shl ecx, 4
+	add eax, ecx
+	
+	push dword[ebp+12]
+	push hashMap_isMatching
+	push eax
+	call vector_search
+	add esp, 12
+	
+	cmp eax, -1
+	jne hashMap_add_valid_key
+		push error_add_invalid_key
+		call my_printf
+		add esp, 4
+		jmp hashMap_add_end
+		
+	hashMap_add_valid_key:
+	
+	
 	;create the element
 	push dword[ebp+24]
 	push dword[ebp+20]
@@ -150,6 +185,7 @@ hashMap_add:
 	add esp, 20
 	
 	
+	hashMap_add_end:
 	mov esp, ebp
 	pop ebp
 	ret
@@ -402,6 +438,24 @@ hashMap_destroyElement:
 	add esp, 4
 	call my_free
 	add esp, 4
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+;int hashMap_isMatching(HashMapElement* element, void* pkey)
+;returns 0 if the keys are same, non-zero otherwise
+hashMap_isMatching:
+	push ebp
+	mov ebp, esp
+	
+	mov eax, dword[ebp+8]
+	push dword[eax+8]
+	push dword[eax]
+	push dword[ebp+12]
+	call my_memcmp
+	
+	;return value already on the stack
 	
 	mov esp, ebp
 	pop ebp
