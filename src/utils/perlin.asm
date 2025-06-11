@@ -516,7 +516,6 @@ perlin_sample2d:
 	ret
 	
 	
-	
 perlin_init3d:
 	push ebp
 	push esi
@@ -524,40 +523,20 @@ perlin_init3d:
 	push ebx
 	mov ebp, esp
 	
-	sub esp, 4				;sample grid step			4	
-	sub esp, 4				;x distance					8
-	sub esp, 4				;y distance					12
-	sub esp, 4				;z distance					16
-	sub esp, 4				;one minus x distance 		20
-	sub esp, 4				;one minus y distance		24
-	sub esp, 4				;one minus z distance		28
+	sub esp, 4		;sample grid step					;4
+	sub esp, 4		;current grid pos x					;8
+	sub esp, 4		;current grid pos y					;12
+	sub esp, 4		;current grid pos z					;16
 	
-	sub esp, 4				;vector000 x index			32
-	sub esp, 4				;vector000 y index			36
-	sub esp, 4				;vector000 z index			40
-	
-	sub esp, 4				;value000					44	//000 means that it is towards the negative x, y and z
-	sub esp, 4				;value001					48
-	sub esp, 4				;value010					52
-	sub esp, 4				;value011					56
-	sub esp, 4				;value100					60
-	sub esp, 4				;value101					64
-	sub esp, 4				;value110					68
-	sub esp, 4				;value111					72
-	
-	sub esp, 4				;sizeof(vec3)*vec_res		76
-	sub esp, 4				;sizeof(vec3)*vec_res^2		80
-	
-	sub esp, 12				;helper vector				92
-	
+	sub esp, 4		;sizeof(vec3)*vec_res				;20
+	sub esp, 4		;sizeof(vec3)*vec_res^2				;24
 	
 	;calculate helper values
 	mov eax, dword[TEXTURE_3D_VECTOR_RESOLUTION]
 	imul eax, 12
-	mov dword[ebp-76], eax
+	mov dword[ebp-20], eax
 	imul eax, dword[TEXTURE_3D_VECTOR_RESOLUTION]
-	mov dword[ebp-80], eax
-	
+	mov dword[ebp-24], eax
 	
 	;fill up the vector texture with random unit vectors
 	mov eax, 6942069				;random seed in eax
@@ -585,6 +564,7 @@ perlin_init3d:
 		test edi, edi
 		jnz perlin_init3d_vector_loop_start
 		
+		
 	;set the values on the positive end the same as on the negative end to ensure the periodicity of the noise
 	mov eax, TEXTURE_3D_VECTOR_DATA				;current vector in eax
 	xor esi, esi		;x index in esi
@@ -597,7 +577,7 @@ perlin_init3d:
 				jnz perlin_init3d_periodicity_z_loop_no_x
 					mov ecx, eax
 					add ecx, TEXTURE_3D_VECTOR_DATA_SIZE_BYTES
-					sub ecx, dword[ebp-80]
+					sub ecx, dword[ebp-24]
 					
 					mov edx, dword[eax]
 					mov dword[ecx], edx
@@ -610,10 +590,10 @@ perlin_init3d:
 				
 				
 				test edi, edi
-				jnz perlin_init3d_periodicity_z_loop_no_y
+				jmp perlin_init3d_periodicity_z_loop_no_y
 					mov ecx, eax
-					add ecx, dword[ebp-80]
-					sub ecx, dword[ebp-76]
+					add ecx, dword[ebp-24]
+					sub ecx, dword[ebp-20]
 					
 					mov edx, dword[eax]
 					mov dword[ecx], edx
@@ -626,9 +606,9 @@ perlin_init3d:
 				
 				
 				test ebx, ebx
-				jnz perlin_init3d_periodicity_z_loop_no_z
+				jmp perlin_init3d_periodicity_z_loop_no_z
 					mov ecx, eax
-					add ecx, dword[ebp-76]
+					add ecx, dword[ebp-20]
 					sub ecx, 12
 					
 					mov edx, dword[eax]
@@ -654,7 +634,8 @@ perlin_init3d:
 		inc esi
 		cmp esi, dword[TEXTURE_3D_VECTOR_RESOLUTION]
 		jl perlin_init3d_periodicity_x_loop_start
-	
+
+		
 	;set values and alloc space
 	mov eax, dword[ebp+20]
 	mov dword[TEXTURE_3D_RESOLUTION], eax
@@ -679,332 +660,340 @@ perlin_init3d:
 	dec eax
 	mov dword[ebp-4], eax
 	fidiv dword[ebp-4]
-	mov eax, dword[TEXTURE_3D_VECTOR_RESOLUTION]
-	dec eax
-	mov dword[ebp-4], eax
-	fimul dword[ebp-4]
-	fsub dword[VERY_SMALL_NUMBER]		;so that in the sampling part the distances will always be slightly below the max value, thus not having to handle the edge case of being on the border
+	;fsub dword[VERY_SMALL_NUMBER]		;so that in the sampling part the distances will always be slightly below the max value, thus not having to handle the edge case of being on the border
 	fstp dword[ebp-4]
 	
-	
 	;sample the grid
-	mov ebx, dword[TEXTURE_3D_DATA]			;current value in ebx
+	mov ebx, dword[TEXTURE_3D_DATA]		;current data value in ebx
 	
-	mov dword[ebp-8], 0						;x distance is 0
-	mov dword[ebp-20], 0x3f800000			;one minus x distance is 1
-	mov dword[ebp-32], 0					;x index is 0
-	mov edi, dword[TEXTURE_3D_RESOLUTION]	;loop index in edi
-	perlin_init3d_x_sample_loop_start:
-		push edi								;save edi
-		
-		mov dword[ebp-12], 0					;y distance is 0
-		mov dword[ebp-24], 0x3f800000			;one minus y distance is 1
-		mov dword[ebp-36], 0					;y index is 0
-		mov edi, dword[TEXTURE_3D_RESOLUTION]	;loop index in edi
-		perlin_init3d_y_sample_loop_start:
-			push edi								;save edi
+	mov dword[ebp-8], 0					;x pos is 0
+	mov esi, dword[TEXTURE_3D_RESOLUTION]	;x index in esi
+	perlin_init3d_sample_x_loop_start:
+		push esi								;save x index
+		mov dword[ebp-12], 0					;y pos is 0
+		mov esi, dword[TEXTURE_3D_RESOLUTION]	;y index in esi
+		perlin_init3d_sample_y_loop_start:
+			push esi								;save y index
+			mov dword[ebp-16], 0					;z pos is 0
+			mov esi, dword[TEXTURE_3D_RESOLUTION]	;z index in esi
+			perlin_init3d_sample_z_loop_start:
+				push dword[ebp-16]
+				push dword[ebp-12]
+				push dword[ebp-8]
+				call perlin_init3d_helper
+				movss dword[ebx], xmm0
+				add esp, 12
 			
-			mov dword[ebp-16], 0					;z distance is 0
-			mov dword[ebp-28], 0x3f800000			;one minus z distance is 1
-			mov dword[ebp-40], 0					;z index is 0
-			mov edi, dword[TEXTURE_3D_RESOLUTION]	;loop index in edi
-			perlin_init3d_z_sample_loop_start:
-				;get vector000
-				mov esi, dword[ebp-32]
-				imul dword[TEXTURE_3D_VECTOR_RESOLUTION]
-				add esi, dword[ebp-36]
-				imul dword[TEXTURE_3D_VECTOR_RESOLUTION]
-				add esi, dword[ebp-40]
-				shl esi, 2
-				add esi, TEXTURE_3D_VECTOR_DATA
+				movss xmm0, dword[ebp-4]
+				movss xmm1, dword[ebp-16]
+				addss xmm1, xmm0
+				movss dword[ebp-16], xmm1
 				
-				;calculate value000
-				mov eax, dword[ebp-8]
-				xor eax, 0x80000000					;x distance should have a negative sign
-				mov dword[ebp-92], eax
-				mov eax, dword[ebp-12]
-				xor eax, 0x80000000					;y distance should have a negative sign
-				mov dword[ebp-88], eax
-				mov eax, dword[ebp-16]
-				xor eax, 0x80000000					;z distance should have a negative sign
-				mov dword[ebp-84], eax
-				
-				lea eax, [ebp-92]
-				push eax
-				push esi
-				call vec3_dot
-				fstp dword[ebp-44]
-				add esp, 8
-				
-				
-				;calculate value001
-				lea ecx, [esi+12]
-				
-				mov eax, dword[ebp-28]
-				mov dword[ebp-84], eax
-				
-				lea eax, [ebp-92]
-				push eax
-				push ecx
-				call vec3_dot
-				fstp dword[ebp-48]
-				add esp, 8
-				
-				
-				;calculate value010
-				mov ecx, dword[ebp-76]
-				add ecx, esi
-				
-				mov eax, dword[ebp-24]
-				mov dword[ebp-88], eax
-				mov eax, dword[ebp-16]
-				xor eax, 0x80000000					;z distance should have a negative sign
-				mov dword[ebp-84], eax
-				
-				lea eax, [ebp-92]
-				push eax
-				push ecx
-				call vec3_dot
-				fstp dword[ebp-52]
-				add esp, 8
-				
-				
-				;calculate value011
-				mov ecx, dword[ebp-76]
-				lea ecx, [ecx+esi+12]
-				
-				mov eax, dword[ebp-28]
-				mov dword[ebp-84], eax
-				
-				lea eax, [ebp-92]
-				push eax
-				push ecx
-				call vec3_dot
-				fstp dword[ebp-56]
-				add esp, 8
-				
-				
-				;calculate value100
-				mov ecx, dword[ebp-80]
-				add ecx, esi
-				
-				mov eax, dword[ebp-20]
-				mov dword[ebp-92], eax
-				mov eax, dword[ebp-12]
-				xor eax, 0x80000000					;y distance should have a negative sign
-				mov dword[ebp-88], eax
-				mov eax, dword[ebp-16]
-				xor eax, 0x80000000					;z distance should have a negative sign
-				mov dword[ebp-84], eax
-				
-				lea eax, [ebp-92]
-				push eax
-				push ecx
-				call vec3_dot
-				fstp dword[ebp-60]
-				add esp, 8
-				
-				
-				;calculate value101
-				mov ecx, dword[ebp-80]
-				lea ecx, [ecx+esi+12]
-				
-				mov eax, dword[ebp-28]
-				mov dword[ebp-84], eax
-				
-				lea eax, [ebp-92]
-				push eax
-				push ecx
-				call vec3_dot
-				fstp dword[ebp-64]
-				add esp, 8
-				
-				
-				;calculate value110
-				mov ecx, dword[ebp-80]
-				add ecx, dword[ebp-76]
-				add ecx, esi
-				
-				mov eax, dword[ebp-24]
-				mov dword[ebp-88], eax
-				mov eax, dword[ebp-16]
-				xor eax, 0x80000000					;z distance should have a negative sign
-				mov dword[ebp-84], eax
-				
-				lea eax, [ebp-92]
-				push eax
-				push ecx
-				call vec3_dot
-				fstp dword[ebp-68]
-				add esp, 8
-				
-				
-				;calculate value111
-				mov ecx, dword[ebp-80]
-				add ecx, dword[ebp-76]
-				lea ecx, [ecx+esi+12]
-				
-				mov eax, dword[ebp-28]
-				mov dword[ebp-84], eax
-				
-				lea eax, [ebp-92]
-				push eax
-				push ecx
-				call vec3_dot
-				fstp dword[ebp-72]
-				add esp, 8
-				
-				
-				;interpolate along the z axis
-				movss xmm0, dword[ebp-16]
-				movss xmm1, dword[ebp-28]
-				
-				movss xmm2, dword[ebp-44]
-				movss xmm3, dword[ebp-48]
-				mulss xmm2, xmm1
-				mulss xmm3, xmm0
-				addss xmm2, xmm3
-				movss dword[ebp-44], xmm2
-				
-				movss xmm2, dword[ebp-52]
-				movss xmm3, dword[ebp-56]
-				mulss xmm2, xmm1
-				mulss xmm3, xmm0
-				addss xmm2, xmm3
-				movss dword[ebp-52], xmm2
-				
-				movss xmm2, dword[ebp-60]
-				movss xmm3, dword[ebp-64]
-				mulss xmm2, xmm1
-				mulss xmm3, xmm0
-				addss xmm2, xmm3
-				movss dword[ebp-60], xmm2
-				
-				movss xmm2, dword[ebp-68]
-				movss xmm3, dword[ebp-72]
-				mulss xmm2, xmm1
-				mulss xmm3, xmm0
-				addss xmm2, xmm3
-				movss dword[ebp-68], xmm2
-				
-				
-				;interpolate along the y axis
-				movss xmm0, dword[ebp-12]
-				movss xmm1, dword[ebp-24]
-				
-				movss xmm2, dword[ebp-44]
-				movss xmm3, dword[ebp-52]
-				mulss xmm2, xmm1
-				mulss xmm3, xmm0
-				addss xmm2, xmm3
-				movss dword[ebp-44], xmm2
-				
-				movss xmm2, dword[ebp-60]
-				movss xmm3, dword[ebp-68]
-				mulss xmm2, xmm1
-				mulss xmm3, xmm0
-				addss xmm2, xmm3
-				movss dword[ebp-60], xmm2
-				
-				
-				;interpolate along the x axis
-				movss xmm0, dword[ebp-8]
-				movss xmm1, dword[ebp-20]
-				movss xmm2, dword[ebp-44]
-				movss xmm3, dword[ebp-60]
-				mulss xmm2, xmm1
-				mulss xmm3, xmm0
-				addss xmm2, xmm3			;value in xmm2
-				
-				;scale and save value
-				movss xmm0, dword[PERLIN_3D_SCALER]
-				mulss xmm2, xmm0
-				movss dword[ebx], xmm2
-				
-				
-				;update distance things
-				movss xmm0, dword[ebp-16]
-				movss xmm1, dword[ebp-4]
-				addss xmm0, xmm1
-				
-				movss xmm1, dword[ONE]
-				ucomiss xmm0, xmm1
-				jb perlin_init3d_z_sample_loop_distance_good
-					subss xmm0, xmm1			;subtract one if necessary
-					inc dword[ebp-40]			;also increment index
-				perlin_init3d_z_sample_loop_distance_good:
-				movss xmm2, xmm0
-				subss xmm1, xmm2
-				
-				movss dword[ebp-16], xmm0				;distance
-				movss dword[ebp-28], xmm1				;one minus distance
-			
-				;continue
 				add ebx, 4
 				
-				dec edi
-				test edi, edi
-				jnz perlin_init3d_z_sample_loop_start
+				dec esi
+				test esi, esi
+				jnz perlin_init3d_sample_z_loop_start
+			pop esi									;restore y index
 			
-			pop edi									;restore edi
+			movss xmm0, dword[ebp-4]
+			movss xmm1, dword[ebp-12]
+			addss xmm1, xmm0
+			movss dword[ebp-12], xmm1
 			
-			;update distance things
-			movss xmm0, dword[ebp-12]
-			movss xmm1, dword[ebp-4]
-			addss xmm0, xmm1
-			
-			movss xmm1, dword[ONE]
-			ucomiss xmm0, xmm1
-			jb perlin_init3d_y_sample_loop_distance_good
-				subss xmm0, xmm1			;subtract one if necessary
-				inc dword[ebp-36]			;also increment index
-			perlin_init3d_y_sample_loop_distance_good:
-			movss xmm2, xmm0
-			subss xmm1, xmm2
-			
-			movss dword[ebp-12], xmm0				;distance
-			movss dword[ebp-24], xmm1				;one minus distance
-			
-			;continue
-			dec edi
-			test edi, edi
-			jnz perlin_init3d_y_sample_loop_start
-		
-		pop edi									;restore edi
-		
-		;update distance things
-		movss xmm0, dword[ebp-8]
-		movss xmm1, dword[ebp-4]
-		addss xmm0, xmm1
-		
-		movss xmm1, dword[ONE]
-		ucomiss xmm0, xmm1
-		jb perlin_init3d_x_sample_loop_distance_good
-			subss xmm0, xmm1			;subtract one if necessary
-			inc dword[ebp-32]			;also increment index
-		perlin_init3d_x_sample_loop_distance_good:
-		movss xmm2, xmm0
-		subss xmm1, xmm2
-		
-		movss dword[ebp-8], xmm0				;distance
-		movss dword[ebp-20], xmm1				;one minus distance
-		
-		
-		;continue
-		dec edi
-		test edi, edi
-		jnz perlin_init3d_x_sample_loop_start
+			dec esi
+			test esi, esi
+			jnz perlin_init3d_sample_y_loop_start
+		pop esi									;restore x index
 	
+		movss xmm0, dword[ebp-4]
+		movss xmm1, dword[ebp-8]
+		addss xmm1, xmm0
+		movss dword[ebp-8], xmm1
+		
+		dec esi
+		test esi, esi
+		jnz perlin_init3d_sample_x_loop_start
 	
 	mov dword[TEXTURE_3D_INITIALIZED], 69
 	
-	perlin_init3d_end:
 	mov esp, ebp
 	pop ebx
 	pop edi
 	pop esi
 	pop ebp
 	ret
+	
+;float perlin_init3d_helper(float x, float y, float z)
+;samples directly from the vector grid
+;RETURNS THE RESULT IN XMM0!!!
+perlin_init3d_helper:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 4		;padding
+	sub esp, 4		;projected x value			;8
+	sub esp, 4		;projected y value			;12
+	sub esp, 4		;projected z value			;16
+	
+	sub esp, 4		;padding
+	sub esp, 4		;smoothstepped x distance	;24
+	sub esp, 4		;smoothstepped y distance	;28
+	sub esp, 4		;smoothstepped z distance	;32
+	
+	sub esp, 4		;padding
+	sub esp, 4		;one minus ss x distance	;40
+	sub esp, 4		;one minus ss y distance 	;44
+	sub esp, 4		;one minus ss z distance	;48
+	
+	sub esp, 4		;padding
+	sub esp, 4		;vector000 x index			;56
+	sub esp, 4		;vector000 y index			;60
+	sub esp, 4		;vector000 z index			;64
+	
+	sub esp, 4		;value000					;68
+	sub esp, 4		;value001					;72
+	sub esp, 4		;value010					;76
+	sub esp, 4		;value011					;80
+	sub esp, 4		;value100					;84
+	sub esp, 4		;value101					;88
+	sub esp, 4		;value110					;92
+	sub esp, 4		;value111					;96
+	
+	sub esp, 4		;vector000 address			;100
+	sub esp, 4		;sizeof(vec3)*vec_res^2		;104
+	sub esp, 4		;sizeof(vec3)*vec_res		;108
+	
+	sub esp, 4		;helper vec3				;120
+	
+	;calculate projected value
+	mov dword[ebp-4], 0	;set the padding to 0
+	
+	push dword[ONE]
+	push dword[ebp+20]
+	call math_repeat
+	fstp dword[ebp-8]
+	mov eax, dword[ebp+24]
+	mov dword[esp], eax
+	call math_repeat
+	fstp dword[ebp-12]
+	mov eax, dword[ebp+28]
+	mov dword[esp], eax
+	call math_repeat
+	fstp dword[ebp-16]
+	add esp, 8
+
+	
+	movss xmm0, dword[TEXTURE_3D_VECTOR_RESOLUTION_FLOAT]
+	movss xmm1, dword[ONE]
+	subss xmm0, xmm1
+	shufps xmm0, xmm0, 0b00000000
+	movups xmm1, [ebp-16]
+	mulps xmm1, xmm0
+	movups [ebp-16], xmm1
+	
+	
+	;calculate non-smoothstepped distances
+	push dword[ONE]
+	push dword[ebp-8]
+	call math_repeat
+	fstp dword[ebp-24]
+	mov eax, dword[ebp-12]
+	mov dword[esp], eax
+	call math_repeat
+	fstp dword[ebp-28]
+	mov eax, dword[ebp-16]
+	mov dword[esp], eax
+	call math_repeat
+	fstp dword[ebp-32]
+	add esp, 8
+	
+	;calculate indices
+	movups xmm0, [ebp-16]
+	movups xmm1, [ebp-32]
+	subps xmm0, xmm1
+	roundps xmm0, xmm0, 0b100			;mode[2]==1 means overriding the default round control, mode[1:0]==00 means rounding to the nearest integer
+	movups [ebp-64], xmm0
+	fld dword[ebp-56]
+	fistp dword[ebp-56]
+	fld dword[ebp-60]
+	fistp dword[ebp-60]
+	fld dword[ebp-64]
+	fistp dword[ebp-64]
+	
+	
+	;smoothstep values
+	push dword[ebp-24]
+	call math_smoothstep1
+	fstp dword[ebp-24]
+	push dword[ebp-28]
+	call math_smoothstep1
+	fstp dword[ebp-28]
+	push dword[ebp-32]
+	call math_smoothstep1
+	fstp dword[ebp-32]
+	add esp, 12
+
+
+	movss xmm0, dword[ONE]
+	shufps xmm0, xmm0, 0b00000000
+	movups xmm1, [ebp-32]
+	subps xmm0, xmm1
+	movups [ebp-48], xmm0
+	
+	
+	
+	;calculate base address and helpers
+	mov eax, dword[TEXTURE_3D_VECTOR_RESOLUTION]
+	mov ecx, eax
+	imul ecx, 12
+	mov dword[ebp-108], ecx
+	imul ecx, eax
+	mov dword[ebp-104], ecx
+	
+	mov eax, dword[ebp-56]
+	imul eax, dword[ebp-104]
+	mov ecx, dword[ebp-60]
+	imul ecx, dword[ebp-108]
+	mov edx, dword[ebp-64]
+	imul edx, 12
+	add eax, ecx
+	add eax, edx
+	add eax, TEXTURE_3D_VECTOR_DATA
+	mov dword[ebp-100], eax
+	
+	;calculate values
+	lea ebx, [ebp-68]		;current value in ebx
+	xor esi, esi			;index in esi
+	perlin_init3d_helper_value_loop_start:
+		mov edi, TEXTURE_3D_VECTOR_DATA		;current vector will be in edi
+		
+		test esi, 0b100
+		jnz perlin_init3d_helper_value_loop_pos_x
+			;neg x
+			mov eax, dword[ebp-24]
+			mov dword[ebp-120], eax
+			jmp perlin_init3d_helper_value_loop_x_done
+		perlin_init3d_helper_value_loop_pos_x:
+			;pos x
+			mov eax, dword[ebp-40]
+			xor eax, 0x80000000				;has to be negated
+			mov dword[ebp-120], eax
+			
+			add edi, dword[ebp-104]
+		perlin_init3d_helper_value_loop_x_done:
+		
+		test esi, 0b010
+		jnz perlin_init3d_helper_value_loop_pos_y
+			;neg y
+			mov eax, dword[ebp-28]
+			mov dword[ebp-116], eax
+			jmp perlin_init3d_helper_value_loop_y_done
+		perlin_init3d_helper_value_loop_pos_y:
+			;pos y
+			mov eax, dword[ebp-44]
+			xor eax, 0x80000000				;has to be negated
+			mov dword[ebp-116], eax
+			
+			add edi, dword[ebp-108]
+		perlin_init3d_helper_value_loop_y_done:
+		
+		test esi, 0b001
+		jnz perlin_init3d_helper_value_loop_pos_z
+			;neg z
+			mov eax, dword[ebp-32]
+			mov dword[ebp-112], eax
+			jmp perlin_init3d_helper_value_loop_z_done
+		perlin_init3d_helper_value_loop_pos_z:
+			;pos z
+			mov eax, dword[ebp-48]
+			xor eax, 0x80000000				;has to be negated
+			mov dword[ebp-112], eax
+			
+			add edi, 12
+		perlin_init3d_helper_value_loop_z_done:
+		
+		lea eax, [ebp-120]
+		push eax
+		push edi
+		call vec3_dot
+		fstp dword[ebx]
+		add esp, 8
+		
+		sub ebx, 4
+		inc esi
+		cmp esi, 8
+		jl perlin_init3d_helper_value_loop_start
+		
+	;interpolate along the z axis
+	push dword[ebp-32]
+	sub esp, 8
+	mov eax, dword[ebp-68]
+	mov dword[esp], eax
+	mov ecx, dword[ebp-72]
+	mov dword[esp+4], ecx
+	call math_lerp
+	fstp dword[ebp-68]
+	mov eax, dword[ebp-76]
+	mov dword[esp], eax
+	mov ecx, dword[ebp-80]
+	mov dword[esp+4], ecx
+	call math_lerp
+	fstp dword[ebp-76]
+	mov eax, dword[ebp-84]
+	mov dword[esp], eax
+	mov ecx, dword[ebp-88]
+	mov dword[esp+4], ecx
+	call math_lerp
+	fstp dword[ebp-84]
+	mov eax, dword[ebp-92]
+	mov dword[esp], eax
+	mov ecx, dword[ebp-96]
+	mov dword[esp+4], ecx
+	call math_lerp
+	fstp dword[ebp-92]
+	add esp, 12
+	
+	;interpolate along the y axis
+	push dword[ebp-28]
+	sub esp, 8
+	mov eax, dword[ebp-68]
+	mov dword[esp], eax
+	mov ecx, dword[ebp-76]
+	mov dword[esp+4], ecx
+	call math_lerp
+	fstp dword[ebp-68]
+	mov eax, dword[ebp-84]
+	mov dword[esp], eax
+	mov ecx, dword[ebp-92]
+	mov dword[esp+4], ecx
+	call math_lerp
+	fstp dword[ebp-84]
+	add esp, 12
+	
+	;interpolate along the x axis
+	push dword[ebp-24]
+	push dword[ebp-84]
+	push dword[ebp-68]
+	call math_lerp
+	fstp dword[ebp-68]
+	add esp, 12
+	
+	;set return value
+	movss xmm0, dword[ebp-68]
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+
 	
 	
 ;void perlin_init3d_gen_random_vec(vec3* buffer, int random1, int random2)

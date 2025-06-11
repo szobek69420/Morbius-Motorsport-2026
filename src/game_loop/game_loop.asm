@@ -387,7 +387,7 @@ game_loop:
 	
 	
 	;audio things
-	push sound_path
+	push music_path
 	call audio_loadSound
 	add esp, 4
 	

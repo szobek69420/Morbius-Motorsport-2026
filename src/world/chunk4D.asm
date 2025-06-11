@@ -48,7 +48,10 @@ section .rodata use32
 	AABB_SCALE dd 0.5, 0.5, 0.5, 0.5
 	
 	print_int_nl db "%d",10,0
+	print_three_ints_nl db "%d %d %d",10,0
 	print_four_ints_nl db "%d %d %d %d",10,0
+	print_float_nl db "%f",10,0
+	print_three_floats_nl db "%f %f %f",10,0
 	
 	test_text db "stalinkin park",10,0
 	
