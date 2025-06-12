@@ -109,6 +109,9 @@ section .data use32
 	delta_time_milliseconds_chunk_loader dd 0	;int (it is just for monitoring purposes)
 
 	TIME_OF_DAY dd 0.0	;values are in [0;1], 0 and 1 are dawn
+	
+	PERLIN_TEST_1 dd -0.9
+	PERLIN_TEST_2 dd -0.8
 
 section .text use32
 
@@ -270,6 +273,8 @@ section .text use32
 	extern perlin_deinit2d
 	extern perlin_init3d
 	extern perlin_deinit3d
+	
+	extern perlin_sample3d
 	
 game_loop:
 	push ebp

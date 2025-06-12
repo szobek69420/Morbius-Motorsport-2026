@@ -530,6 +530,7 @@ perlin_init3d:
 	
 	sub esp, 4		;sizeof(vec3)*vec_res				;20
 	sub esp, 4		;sizeof(vec3)*vec_res^2				;24
+	sub esp, 4		;sizeof(vec3)*vec_res^3				;28
 	
 	;calculate helper values
 	mov eax, dword[TEXTURE_3D_VECTOR_RESOLUTION]
@@ -537,6 +538,9 @@ perlin_init3d:
 	mov dword[ebp-20], eax
 	imul eax, dword[TEXTURE_3D_VECTOR_RESOLUTION]
 	mov dword[ebp-24], eax
+	imul eax, dword[TEXTURE_3D_VECTOR_RESOLUTION]
+	mov dword[ebp-28], eax
+	
 	
 	;fill up the vector texture with random unit vectors
 	mov eax, 6942069				;random seed in eax
@@ -566,75 +570,97 @@ perlin_init3d:
 		
 		
 	;set the values on the positive end the same as on the negative end to ensure the periodicity of the noise
-	mov eax, TEXTURE_3D_VECTOR_DATA				;current vector in eax
-	xor esi, esi		;x index in esi
-	perlin_init3d_periodicity_x_loop_start:
-		xor edi, edi		;y index in edi
-		perlin_init3d_periodicity_y_loop_start:
-			xor ebx, ebx		;z index in ebx
-			perlin_init3d_periodicity_z_loop_start:
-				test esi, esi
-				jnz perlin_init3d_periodicity_z_loop_no_x
-					mov ecx, eax
-					add ecx, TEXTURE_3D_VECTOR_DATA_SIZE_BYTES
-					sub ecx, dword[ebp-24]
-					
-					mov edx, dword[eax]
-					mov dword[ecx], edx
-					mov edx, dword[eax+4]
-					mov dword[ecx+4], edx
-					mov edx, dword[eax+8]
-					mov dword[ecx+8], ecx
-				
-				perlin_init3d_periodicity_z_loop_no_x:
-				
-				
-				test edi, edi
-				jmp perlin_init3d_periodicity_z_loop_no_y
-					mov ecx, eax
-					add ecx, dword[ebp-24]
-					sub ecx, dword[ebp-20]
-					
-					mov edx, dword[eax]
-					mov dword[ecx], edx
-					mov edx, dword[eax+4]
-					mov dword[ecx+4], edx
-					mov edx, dword[eax+8]
-					mov dword[ecx+8], ecx
-					
-				perlin_init3d_periodicity_z_loop_no_y:
-				
-				
-				test ebx, ebx
-				jmp perlin_init3d_periodicity_z_loop_no_z
-					mov ecx, eax
-					add ecx, dword[ebp-20]
-					sub ecx, 12
-					
-					mov edx, dword[eax]
-					mov dword[ecx], edx
-					mov edx, dword[eax+4]
-					mov dword[ecx+4], edx
-					mov edx, dword[eax+8]
-					mov dword[ecx+8], ecx
-					
-				perlin_init3d_periodicity_z_loop_no_z:
-				
-				
-				add eax, 12
-				
-				inc ebx
-				cmp ebx, dword[TEXTURE_3D_VECTOR_RESOLUTION]
-				jl perlin_init3d_periodicity_z_loop_start
+	xor esi, esi			;y index in esi
+	perlin_init3d_periodicity_x_outer_loop_start:
+		xor edi, edi			;z index in edi
+		perlin_init3d_periodicity_x_inner_loop_start:
+			mov ecx, dword[ebp-20]
+			imul ecx, esi
+			mov edx, 12
+			imul edx, edi
+			lea eax, [ecx+edx+TEXTURE_3D_VECTOR_DATA]		;x=0 in eax
+			
+			mov ecx, eax
+			add ecx, dword[ebp-28]
+			sub ecx, dword[ebp-24]							;x=res-1 in ecx
+			
+			;copy the vector
+			mov edx, dword[ecx]
+			mov dword[eax], edx
+			mov edx, dword[ecx+4]
+			mov dword[eax+4], edx
+			mov edx, dword[ecx+8]
+			mov dword[eax+8], edx
 		
 			inc edi
 			cmp edi, dword[TEXTURE_3D_VECTOR_RESOLUTION]
-			jl perlin_init3d_periodicity_y_loop_start
+			jl perlin_init3d_periodicity_x_inner_loop_start
 		
 		inc esi
 		cmp esi, dword[TEXTURE_3D_VECTOR_RESOLUTION]
-		jl perlin_init3d_periodicity_x_loop_start
-
+		jl perlin_init3d_periodicity_x_outer_loop_start
+		
+		
+	xor esi, esi			;x index in esi
+	perlin_init3d_periodicity_y_outer_loop_start:
+		xor edi, edi			;z index in edi
+		perlin_init3d_periodicity_y_inner_loop_start:
+			mov ecx, dword[ebp-24]
+			imul ecx, esi
+			mov edx, 12
+			imul edx, edi
+			lea eax, [ecx+edx+TEXTURE_3D_VECTOR_DATA]		;y=0 in eax
+			
+			mov ecx, eax
+			add ecx, dword[ebp-24]
+			sub ecx, dword[ebp-20]							;y=res-1 in ecx
+			
+			;copy the vector
+			mov edx, dword[ecx]
+			mov dword[eax], edx
+			mov edx, dword[ecx+4]
+			mov dword[eax+4], edx
+			mov edx, dword[ecx+8]
+			mov dword[eax+8], edx
+		
+			inc edi
+			cmp edi, dword[TEXTURE_3D_VECTOR_RESOLUTION]
+			jl perlin_init3d_periodicity_y_inner_loop_start
+		
+		inc esi
+		cmp esi, dword[TEXTURE_3D_VECTOR_RESOLUTION]
+		jl perlin_init3d_periodicity_y_outer_loop_start
+		
+		
+	xor esi, esi			;x index in esi
+	perlin_init3d_periodicity_z_outer_loop_start:
+		xor edi, edi			;y index in edi
+		perlin_init3d_periodicity_z_inner_loop_start:
+			mov ecx, dword[ebp-24]
+			imul ecx, esi
+			mov edx, dword[ebp-20]
+			imul edx, edi
+			lea eax, [ecx+edx+TEXTURE_3D_VECTOR_DATA]		;z=0 in eax
+			
+			mov ecx, eax
+			add ecx, dword[ebp-20]
+			sub ecx, 12										;z=res-1 in ecx
+			
+			;copy the vector
+			mov edx, dword[ecx]
+			mov dword[eax], edx
+			mov edx, dword[ecx+4]
+			mov dword[eax+4], edx
+			mov edx, dword[ecx+8]
+			mov dword[eax+8], edx
+		
+			inc edi
+			cmp edi, dword[TEXTURE_3D_VECTOR_RESOLUTION]
+			jl perlin_init3d_periodicity_z_inner_loop_start
+		
+		inc esi
+		cmp esi, dword[TEXTURE_3D_VECTOR_RESOLUTION]
+		jl perlin_init3d_periodicity_z_outer_loop_start
 		
 	;set values and alloc space
 	mov eax, dword[ebp+20]
@@ -683,6 +709,7 @@ perlin_init3d:
 				call perlin_init3d_helper
 				movss dword[ebx], xmm0
 				add esp, 12
+			
 			
 				movss xmm0, dword[ebp-4]
 				movss xmm1, dword[ebp-16]
