@@ -110,8 +110,11 @@ section .data use32
 
 	TIME_OF_DAY dd 0.0	;values are in [0;1], 0 and 1 are dawn
 	
-	PERLIN_TEST_1 dd -0.9
-	PERLIN_TEST_2 dd -0.8
+	HASHMAP dd 0
+	KEY1 dd 23451,34214325,432102
+	KEY2 dd 997213,8654239,12386721
+	DATA1 dd 69
+	DATA2 dd 420
 
 section .text use32
 
@@ -274,7 +277,11 @@ section .text use32
 	extern perlin_init3d
 	extern perlin_deinit3d
 	
-	extern perlin_sample3d
+	extern hashMap_init
+	extern hashMap_destroy
+	extern hashMap_add
+	extern hashMap_remove
+	extern hashMap_get
 	
 game_loop:
 	push ebp
@@ -283,7 +290,44 @@ game_loop:
 	;save pwindow
 	mov eax, dword[ebp+8]
 	mov dword[current_window], eax
-
+	
+	call hashMap_init
+	mov dword[HASHMAP], eax
+	
+	push 4
+	push 12
+	push DATA1
+	push KEY1
+	push dword[HASHMAP]
+	call hashMap_add
+	call hashMap_add
+	add esp, 20
+	
+	push 12
+	push KEY1
+	push dword[HASHMAP]
+	call hashMap_get
+	
+	push dword[eax]
+	push print_int_nl
+	call my_printf
+	add esp, 8
+	
+	call hashMap_remove
+	call hashMap_get
+	
+	push eax
+	push print_int_nl
+	call my_printf
+	add esp, 8
+	
+	push dword[HASHMAP]
+	call hashMap_destroy
+	add esp, 4
+	
+	push test_text
+	call my_printf
+	add esp, 4
 	
 	;init should_close
 	push 4

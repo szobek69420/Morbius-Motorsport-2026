@@ -1,6 +1,6 @@
-[BITS 32]
+ [BITS 32]
 
-;struct hashmapelement{
+;struct HashMapElement{
 ;	void* pkey;				;0
 ;	void* pvalue;			;4
 ;	int keySizeInBytes;		;8
@@ -8,12 +8,15 @@
 ;}	16 bytes overall
 
 ;struct hashmap{
-;	vector<haspmapelement> buckets[256];	;0
+;	vector<HashMapElement> buckets[256];	;0
 ;}	4096 bytes overall
 
 section .rodata use32
 
 	error_add_invalid_key db "hashMap_add: the key already exists",10,0
+	
+	print_int_nl db "%d",10,0
+	test_text db "mog rider",10,0
 
 section .text use32
 
@@ -23,6 +26,8 @@ section .text use32
 	global hashMap_add			;void hashMap_add(HashMap* hm, void* pkey, void* pvalue, int keySizeInBytes, int valueSizeInBytes)
 	global hashMap_remove		;void hashMap_remove(HashMap* hm, void* pkey, int keySizeInBytes)
 	global hashMap_get			;void* hashMap_get(HashMap* hm, void* pkey, int keySizeInBytes)	//returns the pointer to the value with that key, otherwise NULL
+	global hashMap_containsKey	;int hashMap_containsKey(HashMap* hm, void* pkey, int keySizeInBytes)	//returns non-zero if ja
+	
 	
 	extern my_printf
 	extern my_malloc
@@ -81,13 +86,14 @@ hashMap_destroy:
 	push ebx
 	mov ebp, esp
 	
+	
 	;destroy the elements and buckets
 	mov esi, 256				;index in esi
 	mov edi, dword[ebp+20]		;current bucket in edi
 	hashMap_destroy_bucket_loop_start:
 		;destroy elements
-		mov ebx, dword[edi]			;index in ebx
-		cmp ebx, 0
+		xor ebx, ebx			;index in ebx
+		cmp dword[edi], 0
 		jle hashMap_destroy_element_loop_end
 		hashMap_destroy_element_loop_start:
 			mov eax, ebx
@@ -97,9 +103,9 @@ hashMap_destroy:
 			call hashMap_destroyElement
 			add esp, 4
 			
-			dec ebx
-			test ebx, ebx
-			jnz hashMap_destroy_element_loop_start
+			inc ebx
+			cmp ebx, dword[edi]
+			jl hashMap_destroy_element_loop_start
 			
 		hashMap_destroy_element_loop_end:
 		
@@ -129,27 +135,15 @@ hashMap_add:
 	sub esp, 4			;hash value			;4
 	sub esp, 16			;element buffer		;20
 	
-	;calculate hash value
+	;check if the key is already registered	
 	push dword[ebp+20]
 	push dword[ebp+12]
-	call hashMap_calculateHashValue
-	mov dword[ebp-4], eax
-	add esp, 8
-	
-	;check if the key is already registered
-	mov eax, dword[ebp+8]
-	mov ecx, dword[ebp-4]
-	shl ecx, 4
-	add eax, ecx
-	
-	push dword[ebp+12]
-	push hashMap_isMatching
-	push eax
-	call vector_search
+	push dword[ebp+8]
+	call hashMap_containsKey
 	add esp, 12
 	
-	cmp eax, -1
-	jne hashMap_add_valid_key
+	cmp eax, 0
+	je hashMap_add_valid_key
 		push error_add_invalid_key
 		call my_printf
 		add esp, 4
@@ -158,7 +152,8 @@ hashMap_add:
 	hashMap_add_valid_key:
 	
 	
-	;create the element
+	
+	;calculate the hash value and create the element
 	push dword[ebp+24]
 	push dword[ebp+20]
 	push dword[ebp+16]
@@ -168,7 +163,6 @@ hashMap_add:
 	call hashMap_createElement
 	mov dword[ebp-4], eax			;save hash value
 	add esp, 20
-	
 	
 	;add the element to the corresponding bucket
 	mov eax, dword[ebp+8]
@@ -218,12 +212,17 @@ hashMap_remove:
 	mov eax, dword[ebp-8]
 	mov esi, dword[eax]			;index in esi
 	mov edi, dword[eax+12]		;current element in edi
-	xor ebx, ebx				;current bucket index in ebx (helper)
+	xor ebx, ebx				;index in bucket in ebx (helper)
 	cmp esi, 0
 	jle hashMap_remove_loop_end
 	hashMap_remove_loop_start:
+		;check if the key length is the same
+		mov eax, dword[edi+8]
+		cmp eax, dword[ebp+28]
+		jne hashMap_get_loop_continue
+	
 		;check if the key is the same
-		push dword[ebp+28]
+		push eax
 		push dword[ebp+24]
 		push dword[edi]
 		call my_memcmp
@@ -248,7 +247,7 @@ hashMap_remove:
 		
 		dec esi
 		test esi, esi
-		jnz hashMap_remove_loop_end
+		jnz hashMap_remove_loop_start
 		
 	hashMap_remove_loop_end:
 	
@@ -294,8 +293,13 @@ hashMap_get:
 	cmp esi, 0
 	jle hashMap_get_loop_end
 	hashMap_get_loop_start:
+		;check if the key length is the same
+		mov eax, dword[edi+8]
+		cmp eax, dword[ebp+28]
+		jne hashMap_get_loop_continue
+	
 		;check if the key is the same
-		push dword[ebp+28]
+		push eax
 		push dword[ebp+24]
 		push dword[edi]
 		call my_memcmp
@@ -314,12 +318,78 @@ hashMap_get:
 		
 		dec esi
 		test esi, esi
-		jnz hashMap_get_loop_end
+		jnz hashMap_get_loop_start
 		
 	hashMap_get_loop_end:
 	
 	;set return value
 	mov eax, dword[ebp-12]
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+hashMap_containsKey:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+
+	sub esp, 4				;hash value			4
+	sub esp, 4				;return value		8
+	
+	mov dword[ebp-8], 0
+
+	;calculate hash value
+	push dword[ebp+28]
+	push dword[ebp+24]
+	call hashMap_calculateHashValue
+	mov dword[ebp-4], eax
+	
+	;obtain bucket
+	mov ebx, eax
+	shl ebx, 4
+	add ebx, dword[ebp+20]
+	
+	;check if the key exists
+	mov esi, dword[ebx]				;index in esi
+	mov edi, dword[ebx+12]			;current element in edi
+	cmp esi, 0
+	jle hashMap_containsKey_loop_end
+	hashMap_containsKey_loop_start:
+		;check if the key lengths are the same
+		mov eax, dword[edi+8]
+		cmp eax, dword[ebp+28]
+		jne hashMap_containsKey_loop_continue
+		
+		;check if the keys are the same
+		push eax
+		push dword[edi]
+		push dword[ebp+24]
+		call my_memcmp
+		add esp, 12
+		test eax, eax
+		jnz hashMap_containsKey_loop_continue
+		
+		;found the key
+		mov dword[ebp-8], 69
+		jmp hashMap_containsKey_loop_end
+		
+		hashMap_containsKey_loop_continue:
+		add edi, 16
+		dec esi
+		test esi, esi
+		jnz hashMap_containsKey_loop_start
+	hashMap_containsKey_loop_end:
+	
+	
+	;set return value
+	mov eax, dword[ebp-8]
 	
 	mov esp, ebp
 	pop ebx
@@ -354,7 +424,7 @@ hashMap_calculateHashValue:
 		jnz hashMap_calculateHashValue_loop_start
 	hashMap_calculateHashValue_loop_end:
 	
-	and eax, 0x000000ff
+	and edx, 0x000000ff
 	mov dword[ebp-4], edx
 	
 	;set return value
