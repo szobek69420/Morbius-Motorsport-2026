@@ -7,7 +7,8 @@
 ;	tsQueue<ChunkGraphicsUpdate4D*> pendingGraphicsUpdates;		20
 ;	GLuint shader;												28
 ;	HyperPlane hyperPlane;										32
-;	vector<ChangedBlockInfo> changedBlocks;						96 //doesn't need a mutex as it is used only on the chunk generation thread
+;	hashMap<ivec3, ChangedBlockInfo> changedBlocks;				96 //doesn't need a mutex as it is used only on the chunk generation thread
+;	padding of 12 bytes
 ;	tsQueue<ChangedBlockInfo> pendingChangedBlocks;				112
 ;	TextureArrayInfo* blockTextures;							120
 ;}			124 bytes overall
@@ -114,6 +115,7 @@ section .text use32
 	extern vector_push_back
 	extern vector_remove
 	extern vector_search
+	extern vector_push_back_buffer
 	
 	extern tsQueue_init
 	extern tsQueue_destroy
@@ -124,6 +126,11 @@ section .text use32
 	extern tsQueue_isEmpty
 	extern tsQueue_at
 	extern tsQueue_size
+	
+	extern hashMap_init
+	extern hashMap_destroy
+	extern hashMap_add
+	extern hashMap_get
 	
 	extern vec3_normalize
 	extern vec4_add
@@ -207,12 +214,10 @@ chunkManager4d_create:
 	mov ecx, dword[ebp-4]
 	mov dword[ecx+28], eax
 	
-	;init changed blocks vector
-	mov eax, dword[ebp-4]
-	lea eax, [eax+96]
-	push 32
-	push eax
-	call vector_init
+	;init changed blocks hashmap
+	call hashMap_init
+	mov ecx, dword[ebp-4]
+	mov dword[ecx+96], eax
 	
 	;init pending changed blocks queue
 	mov eax, dword[ebp-4]
@@ -958,7 +963,6 @@ chunkManager4d_getPlayerChunk:
 	pop ebp
 	ret
 	
-	
 chunkManager4d_registerChangedBlock:
 	push ebp
 	mov ebp, esp
@@ -982,13 +986,14 @@ chunkManager4d_registerChangedBlock:
 	pop ebp
 	ret
 	
+	
 chunkManager4d_processChangedBlock:
 	push ebp
 	mov ebp, esp
 	
 	sub esp, 32				;changed block buffer				32
 	sub esp, 32				;neighbour's changed block buffer	64 (helper variable)
-	
+
 	;is there a pending block?
 	mov eax, dword[ebp+8]
 	add eax, 112
@@ -1009,20 +1014,14 @@ chunkManager4d_processChangedBlock:
 	test eax, eax
 	jnz chunkManager4d_processChangedBlock_end		;there was a problem
 	
-	;add the block to the changed blocks vector
-	sub esp, 32
-	mov eax, esp
-	push 32
-	lea ecx, [ebp-32]
-	push ecx
-	push eax
-	call my_memcpy
+	;add the block to the chunk's changed blocks vector
+	lea eax, [ebp-32]
+	push eax			;value
+	lea ecx, [ebp-28]
+	push ecx			;key
+	push dword[ebp+8]
+	call chunkManager4d_processChangedBlock_internal
 	add esp, 12
-	mov eax, dword[ebp+8]
-	add eax, 96
-	push eax
-	call vector_push_back
-	add esp, 36
 	
 	;reload the chunk
 	push dword[ebp-20]
@@ -1049,13 +1048,14 @@ chunkManager4d_processChangedBlock:
 		mov dword[ebp-48], 16
 		dec dword[ebp-60]
 	
-		;add the block to the changed blocks vector
-		;esp should point to ebp-64!!!!!!!!!!!!
-		mov eax, dword[ebp+8]
-		add eax, 96
-		push eax
-		call vector_push_back
-		add esp, 4
+		;add the block to the neighbouring chunk's changed blocks vector
+		lea eax, [ebp-64]
+		push eax			;value
+		lea ecx, [ebp-60]
+		push ecx			;key
+		push dword[ebp+8]
+		call chunkManager4d_processChangedBlock_internal
+		add esp, 12
 		
 		;reload the chunk
 		push dword[ebp-52]
@@ -1085,13 +1085,14 @@ chunkManager4d_processChangedBlock:
 		mov dword[ebp-48], -1
 		inc dword[ebp-60]
 	
-		;add the block to the changed blocks vector
-		;esp should point to ebp-64!!!!!!!!!!!!
-		mov eax, dword[ebp+8]
-		add eax, 96
-		push eax
-		call vector_push_back
-		add esp, 4
+		;add the block to the neighbouring chunk's changed blocks vector
+		lea eax, [ebp-64]
+		push eax			;value
+		lea ecx, [ebp-60]
+		push ecx			;key
+		push dword[ebp+8]
+		call chunkManager4d_processChangedBlock_internal
+		add esp, 12
 		
 		;reload the chunk
 		push dword[ebp-52]
@@ -1121,13 +1122,14 @@ chunkManager4d_processChangedBlock:
 		mov dword[ebp-40], 16
 		dec dword[ebp-56]
 	
-		;add the block to the changed blocks vector
-		;esp should point to ebp-64!!!!!!!!!!!!
-		mov eax, dword[ebp+8]
-		add eax, 96
-		push eax
-		call vector_push_back
-		add esp, 4
+		;add the block to the neighbouring chunk's changed blocks vector
+		lea eax, [ebp-64]
+		push eax			;value
+		lea ecx, [ebp-60]
+		push ecx			;key
+		push dword[ebp+8]
+		call chunkManager4d_processChangedBlock_internal
+		add esp, 12
 		
 		;reload the chunk
 		push dword[ebp-52]
@@ -1157,13 +1159,14 @@ chunkManager4d_processChangedBlock:
 		mov dword[ebp-40], -1
 		inc dword[ebp-56]
 	
-		;add the block to the changed blocks vector
-		;esp should point to ebp-64!!!!!!!!!!!!
-		mov eax, dword[ebp+8]
-		add eax, 96
-		push eax
-		call vector_push_back
-		add esp, 4
+		;add the block to the neighbouring chunk's changed blocks vector
+		lea eax, [ebp-64]
+		push eax			;value
+		lea ecx, [ebp-60]
+		push ecx			;key
+		push dword[ebp+8]
+		call chunkManager4d_processChangedBlock_internal
+		add esp, 12
 		
 		;reload the chunk
 		push dword[ebp-52]
@@ -1193,13 +1196,14 @@ chunkManager4d_processChangedBlock:
 		mov dword[ebp-36], 16
 		dec dword[ebp-52]
 	
-		;add the block to the changed blocks vector
-		;esp should point to ebp-64!!!!!!!!!!!!
-		mov eax, dword[ebp+8]
-		add eax, 96
-		push eax
-		call vector_push_back
-		add esp, 4
+		;add the block to the neighbouring chunk's changed blocks vector
+		lea eax, [ebp-64]
+		push eax			;value
+		lea ecx, [ebp-60]
+		push ecx			;key
+		push dword[ebp+8]
+		call chunkManager4d_processChangedBlock_internal
+		add esp, 12
 		
 		;reload the chunk
 		push dword[ebp-52]
@@ -1229,13 +1233,14 @@ chunkManager4d_processChangedBlock:
 		mov dword[ebp-36], -1
 		inc dword[ebp-52]
 	
-		;add the block to the changed blocks vector
-		;esp should point to ebp-64!!!!!!!!!!!!
-		mov eax, dword[ebp+8]
-		add eax, 96
-		push eax
-		call vector_push_back
-		add esp, 4
+		;add the block to the neighbouring chunk's changed blocks vector
+		lea eax, [ebp-64]
+		push eax			;value
+		lea ecx, [ebp-60]
+		push ecx			;key
+		push dword[ebp+8]
+		call chunkManager4d_processChangedBlock_internal
+		add esp, 12
 		
 		;reload the chunk
 		push dword[ebp-52]
@@ -1817,4 +1822,62 @@ chunkManager4d_unload_comparator:
 	mov edx, dword[esp+8]
 	mov eax, dword[ecx]
 	sub eax, dword[edx]
+	ret
+	
+
+
+;void chunkManager4d_processChangedBlockInternal(
+;	ChunkManager4D* cm,
+;	ivec3* key,
+;	ChangedBlockInfo* value
+;)
+chunkManager4d_processChangedBlock_internal:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 16			;vector buffer (if necessary)	16
+	sub esp, 4			;chunk block vector	addr		20
+	
+	
+	;obtain chunk vector
+	chunkManager4d_processChangedBlock_internal_register_chunk:
+	push 12
+	push dword[ebp+12]
+	mov eax, dword[ebp+8]
+	push dword[eax+96]
+	call hashMap_get
+	mov dword[ebp-20], eax
+	add esp, 12
+	
+	;register chunk in hashmap if necessary
+	test eax, eax
+	jnz chunkManager4d_processChangedBlock_internal_chunk_already_registered
+		lea eax, [ebp-16]
+		push 32
+		push eax
+		call vector_init
+		
+		push 16
+		push 12
+		lea eax, [ebp-16]
+		push eax
+		push dword[ebp+12]
+		mov edx, dword[ebp+8]
+		push dword[edx+96]
+		call hashMap_add
+		
+		add esp, 28
+		jmp chunkManager4d_processChangedBlock_internal_register_chunk		;infinite loop danger
+		
+	chunkManager4d_processChangedBlock_internal_chunk_already_registered:
+	
+	
+	;register block into the hashmap
+	push dword[ebp+16]
+	push dword[ebp-20]
+	call vector_push_back_buffer
+	add esp, 8
+	
+	mov esp, ebp
+	pop ebp
 	ret

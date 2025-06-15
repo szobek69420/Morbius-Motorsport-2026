@@ -27,6 +27,7 @@ section .text use32
 	global vector_clear			;void vector_clear(vector*)
 	global vector_at			;<element>* vector_at(vector*, int index)
 	global vector_push_back		;void vector_push_back(vector*, <element> element)
+	global vector_push_back_buffer	;void vector_push_back_buffer(vector*, <element>* element)
 	global vector_pop_back		;void vector_pop_back(vector*)
 	global vector_insert		;void vector_insert(vector*, int index, <element> element)
 	global vector_remove_at		;void vector_remove_at(vector*, int index)
@@ -142,9 +143,9 @@ vector_push_back:	;void vector_push_back(vector* robloxman, element _element) (e
 	push ebp
 	mov ebp, esp
 	
-	mov ecx, dword [ebp+8] ;vector* in ecx
+	mov ecx, dword[ebp+8] ;vector* in ecx
 	
-	mov eax, dword[ecx]	;size
+	mov eax, dword[ecx]		;size
 	mov edx, dword[ecx+4]	;capacity
 	
 	cmp eax, edx
@@ -189,6 +190,57 @@ _push_back_no_realloc:
 	pop ebp
 	ret
 	
+	
+vector_push_back_buffer:
+	push ebp
+	mov ebp, esp
+	
+	mov ecx, dword[ebp+8] ;vector* in ecx
+	
+	mov eax, dword[ecx]		;size
+	mov edx, dword[ecx+4]	;capacity
+	
+	cmp eax, edx
+	jl vector_push_back_buffer_no_realloc
+	
+		imul edx, 2
+		mov dword[ecx+4], edx	;new capacity
+		
+		push ecx	;save ecx
+		
+		imul edx, dword[ecx+8]	;calculate new size
+		push edx
+		mov eax, dword[ecx+12]
+		push eax
+		call my_realloc
+		add esp, 8
+		pop ecx		;restore ecx
+		
+		mov dword[ecx+12], eax	;save new data*
+		
+	vector_push_back_buffer_no_realloc:
+	
+	mov eax, dword[ecx]
+	imul eax, dword[ecx+8]	;offset from data*
+	mov edx, dword[ecx+12]
+	add edx, eax
+
+	
+	mov eax, dword[ecx+8]
+	push eax
+	push dword[ebp+12]
+	push edx
+	call my_memcpy
+	add esp, 12
+	
+	mov eax, dword[ebp+8]
+	mov ecx, dword[eax]
+	inc ecx
+	mov dword[eax],ecx
+	
+	mov esp, ebp
+	pop ebp
+	ret
 	
 	
 vector_pop_back:	;void vector_pop_back(vector* borsodee)

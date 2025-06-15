@@ -291,43 +291,6 @@ game_loop:
 	mov eax, dword[ebp+8]
 	mov dword[current_window], eax
 	
-	call hashMap_init
-	mov dword[HASHMAP], eax
-	
-	push 4
-	push 12
-	push DATA1
-	push KEY1
-	push dword[HASHMAP]
-	call hashMap_add
-	call hashMap_add
-	add esp, 20
-	
-	push 12
-	push KEY1
-	push dword[HASHMAP]
-	call hashMap_get
-	
-	push dword[eax]
-	push print_int_nl
-	call my_printf
-	add esp, 8
-	
-	call hashMap_remove
-	call hashMap_get
-	
-	push eax
-	push print_int_nl
-	call my_printf
-	add esp, 8
-	
-	push dword[HASHMAP]
-	call hashMap_destroy
-	add esp, 4
-	
-	push test_text
-	call my_printf
-	add esp, 4
 	
 	;init should_close
 	push 4
