@@ -59,7 +59,7 @@ section .text use32
 
 	;the collider and renderable is initialized by the chunk manager
 	;changedBlocks can be null
-	global chunk4d_generate			;Chunk4D* chunk4d_generate(int chunkX, int chunkZ, int chunkW, const vector<ChangedBlockInfo>* changedBlocks)
+	global chunk4d_generate			;Chunk4D* chunk4d_generate(int chunkX, int chunkZ, int chunkW, const vector<ChangedBlockInfo>* changedBlocks, int isFirstLoad)
 	;the renderable is destroyed by the chunk manager
 	global chunk4d_destroy			;void chunk4d_destroy(Chunk4D* chunk)
 	

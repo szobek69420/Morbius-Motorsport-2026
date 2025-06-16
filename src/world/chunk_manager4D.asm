@@ -7,11 +7,12 @@
 ;	tsQueue<ChunkGraphicsUpdate4D*> pendingGraphicsUpdates;		20
 ;	GLuint shader;												28
 ;	HyperPlane hyperPlane;										32
-;	hashMap<ivec3, ChangedBlockInfo> changedBlocks;				96 //doesn't need a mutex as it is used only on the chunk generation thread
+;	hashMap<ivec3, ChangedBlockInfo>* changedBlocks;			96 //doesn't need a mutex as it is used only on the chunk generation thread
 ;	padding of 12 bytes
 ;	tsQueue<ChangedBlockInfo> pendingChangedBlocks;				112
 ;	TextureArrayInfo* blockTextures;							120
-;}			124 bytes overall
+;	vector<ivec3> registeredChunks;								124 //chunks that have been loaded at least once
+;}			140 bytes overall
 
 ;layout:
 ;struct ChunkGraphicsUpdate4D{
@@ -174,7 +175,7 @@ chunkManager4d_create:
 	sub esp, 4				;ChunkManager4D*
 	
 	;alloc chunk manager
-	push 120
+	push 140
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
@@ -232,6 +233,13 @@ chunkManager4d_create:
 	mov ecx, dword[ebp-4]
 	mov dword[ecx+120], eax
 	
+	;init registered chunk vector
+	push 12
+	mov ecx, dword[ebp-4]
+	add ecx, 124
+	push ecx
+	call vector_init
+	add esp, 8
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -987,6 +995,7 @@ chunkManager4d_registerChangedBlock:
 	ret
 	
 	
+;only reloads chunks that are already registered
 chunkManager4d_processChangedBlock:
 	push ebp
 	mov ebp, esp
@@ -1023,12 +1032,16 @@ chunkManager4d_processChangedBlock:
 	call chunkManager4d_processChangedBlock_internal
 	add esp, 12
 	
-	;reload the chunk
+	;check if the chunk can be reloaded and do so if ja
 	push dword[ebp-20]
 	push dword[ebp-24]
 	push dword[ebp-28]
 	push dword[ebp+8]
-	call chunkManager4d_reloadChunkByPosition_internal
+	call chunkManager4d_isChunkLoaded_internal
+	test eax, eax
+	jz chunkManager4d_processChangedBlock_no_reload
+		call chunkManager4d_reloadChunkByPosition_internal
+	chunkManager4d_processChangedBlock_no_reload:
 	add esp, 16
 	
 	;is the block at the neg x border?
@@ -1057,12 +1070,16 @@ chunkManager4d_processChangedBlock:
 		call chunkManager4d_processChangedBlock_internal
 		add esp, 12
 		
-		;reload the chunk
+		;check if the chunk can be reloaded and do so if ja
 		push dword[ebp-52]
 		push dword[ebp-56]
 		push dword[ebp-60]
 		push dword[ebp+8]
-		call chunkManager4d_reloadChunkByPosition_internal
+		call chunkManager4d_isChunkLoaded_internal
+		test eax, eax
+		jz chunkManager4d_processChangedBlock_neg_x_no_reload
+			call chunkManager4d_reloadChunkByPosition_internal
+		chunkManager4d_processChangedBlock_neg_x_no_reload:
 		add esp, 16
 	
 	chunkManager4d_processChangedBlock_not_neg_x:
@@ -1094,12 +1111,16 @@ chunkManager4d_processChangedBlock:
 		call chunkManager4d_processChangedBlock_internal
 		add esp, 12
 		
-		;reload the chunk
+		;check if the chunk can be reloaded and do so if ja
 		push dword[ebp-52]
 		push dword[ebp-56]
 		push dword[ebp-60]
 		push dword[ebp+8]
-		call chunkManager4d_reloadChunkByPosition_internal
+		call chunkManager4d_isChunkLoaded_internal
+		test eax, eax
+		jz chunkManager4d_processChangedBlock_pos_x_no_reload
+			call chunkManager4d_reloadChunkByPosition_internal
+		chunkManager4d_processChangedBlock_pos_x_no_reload:
 		add esp, 16
 	
 	chunkManager4d_processChangedBlock_not_pos_x:
@@ -1131,12 +1152,16 @@ chunkManager4d_processChangedBlock:
 		call chunkManager4d_processChangedBlock_internal
 		add esp, 12
 		
-		;reload the chunk
+		;check if the chunk can be reloaded and do so if ja
 		push dword[ebp-52]
 		push dword[ebp-56]
 		push dword[ebp-60]
 		push dword[ebp+8]
-		call chunkManager4d_reloadChunkByPosition_internal
+		call chunkManager4d_isChunkLoaded_internal
+		test eax, eax
+		jz chunkManager4d_processChangedBlock_neg_z_no_reload
+			call chunkManager4d_reloadChunkByPosition_internal
+		chunkManager4d_processChangedBlock_neg_z_no_reload:
 		add esp, 16
 	
 	chunkManager4d_processChangedBlock_not_neg_z:
@@ -1168,12 +1193,16 @@ chunkManager4d_processChangedBlock:
 		call chunkManager4d_processChangedBlock_internal
 		add esp, 12
 		
-		;reload the chunk
+		;check if the chunk can be reloaded and do so if ja
 		push dword[ebp-52]
 		push dword[ebp-56]
 		push dword[ebp-60]
 		push dword[ebp+8]
-		call chunkManager4d_reloadChunkByPosition_internal
+		call chunkManager4d_isChunkLoaded_internal
+		test eax, eax
+		jz chunkManager4d_processChangedBlock_pos_z_no_reload
+			call chunkManager4d_reloadChunkByPosition_internal
+		chunkManager4d_processChangedBlock_pos_z_no_reload:
 		add esp, 16
 	
 	chunkManager4d_processChangedBlock_not_pos_z:
@@ -1205,12 +1234,16 @@ chunkManager4d_processChangedBlock:
 		call chunkManager4d_processChangedBlock_internal
 		add esp, 12
 		
-		;reload the chunk
+		;check if the chunk can be reloaded and do so if ja
 		push dword[ebp-52]
 		push dword[ebp-56]
 		push dword[ebp-60]
 		push dword[ebp+8]
-		call chunkManager4d_reloadChunkByPosition_internal
+		call chunkManager4d_isChunkLoaded_internal
+		test eax, eax
+		jz chunkManager4d_processChangedBlock_neg_w_no_reload
+			call chunkManager4d_reloadChunkByPosition_internal
+		chunkManager4d_processChangedBlock_neg_w_no_reload:
 		add esp, 16
 	
 	chunkManager4d_processChangedBlock_not_neg_w:
@@ -1242,12 +1275,16 @@ chunkManager4d_processChangedBlock:
 		call chunkManager4d_processChangedBlock_internal
 		add esp, 12
 		
-		;reload the chunk
+		;check if the chunk can be reloaded and do so if ja
 		push dword[ebp-52]
 		push dword[ebp-56]
 		push dword[ebp-60]
 		push dword[ebp+8]
-		call chunkManager4d_reloadChunkByPosition_internal
+		call chunkManager4d_isChunkLoaded_internal
+		test eax, eax
+		jz chunkManager4d_processChangedBlock_pos_w_no_reload
+			call chunkManager4d_reloadChunkByPosition_internal
+		chunkManager4d_processChangedBlock_pos_w_no_reload:
 		add esp, 16
 	
 	chunkManager4d_processChangedBlock_not_pos_w:
@@ -1268,6 +1305,34 @@ chunkManager4d_loadChunk_internal:
 	
 	sub esp, 4				;loaded chunk			4
 	sub esp, 4				;changed blocks	vector	8
+	sub esp, 4				;is first load			12
+	
+	mov dword[ebp-12], 0
+	
+	;check if the chunk is already registered
+	lea eax, [ebp+12]
+	push eax
+	push chunkManager4d_registered_chunk_comparator
+	mov ecx, dword[ebp+8]
+	add ecx, 124
+	push ecx
+	call vector_search
+	add esp, 12
+	
+	cmp eax, -1
+	jne chunkManager4d_loadChunk_internal_chunk_not_registered
+		;mark chunk as first load and add it to the registered chunks vector
+		mov dword[ebp-12], 69
+		
+		lea eax, [ebp+12]
+		push eax
+		mov ecx, dword[ebp+8]
+		add ecx, 124
+		push ecx
+		call vector_push_back_buffer
+		add esp, 8
+		
+	chunkManager4d_loadChunk_internal_chunk_not_registered:
 	
 	;obtain changed blocks vector
 	push 12
@@ -1280,13 +1345,14 @@ chunkManager4d_loadChunk_internal:
 	add esp, 12
 	
 	;generate chunk
-	push dword[ebp-8]
+	push dword[ebp-12]			;is chunk registered
+	push dword[ebp-8]			;changed blocks
 	push dword[ebp+20]			;chunkw
 	push dword[ebp+16]			;chunkz
 	push dword[ebp+12]			;chunkx
 	call chunk4d_generate
 	mov dword[ebp-4], eax
-	add esp, 16
+	add esp, 20
 	
 	;add the chunk to the loaded chunks
 	mov eax, dword[ebp+8]
@@ -1833,6 +1899,39 @@ chunkManager4d_unload_comparator:
 	sub eax, dword[edx]
 	ret
 	
+;it is a compare function for vector_search
+;int chunkManager4d_registered_chunk_comparator(const ivec3* a, const ivec3* searchKey)
+chunkManager4d_registered_chunk_comparator:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4		;return value			4
+	
+	mov dword[ebp-4], 69
+	
+	mov eax, dword[ebp+8]
+	mov ecx, dword[ebp+12]
+	
+	mov edx, dword[eax]
+	cmp edx, dword[ecx]
+	jne chunkManager4d_registered_chunk_comparator_end 
+	
+	mov edx, dword[eax+4]
+	cmp edx, dword[ecx+4]
+	jne chunkManager4d_registered_chunk_comparator_end 
+	
+	mov edx, dword[eax+8]
+	cmp edx, dword[ecx+8]
+	jne chunkManager4d_registered_chunk_comparator_end 
+	
+	mov dword[ebp-4], 0
+	
+	chunkManager4d_registered_chunk_comparator_end:
+	mov eax, dword[ebp-4]
+	
+	mov esp, ebp
+	pop ebp
+	ret
 
 
 ;void chunkManager4d_processChangedBlockInternal(
@@ -1890,3 +1989,56 @@ chunkManager4d_processChangedBlock_internal:
 	mov esp, ebp
 	pop ebp
 	ret
+	
+	
+;returns non-zero, if ja
+;int chunkManager4d_isChunkLoaded_internal(ChunkManager4D* cm, int chunkX, int chunkZ, int chunkW)
+chunkManager4d_isChunkLoaded_internal:
+	push ebp
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 4			;return value		4
+	
+	mov dword[ebp-4], eax
+	
+	mov edx, dword[ebp+12]
+	mov eax, dword[edx]		;index in eax
+	mov ecx, dword[edx+12]	;current chunk* in ecx
+	cmp eax, 0
+	jle chunkManager4d_isChunkLoaded_internal_end
+	chunkManager4d_isChunkLoaded_internal_loop_start:
+		mov ebx, dword[ecx]			;chunk* in ebx
+	
+		mov edx, dword[ebx]
+		cmp edx, dword[ebp+16]
+		jne chunkManager4d_isChunkLoaded_internal_loop_continue
+		
+		mov edx, dword[ebx+4]
+		cmp edx, dword[ebp+20]
+		jne chunkManager4d_isChunkLoaded_internal_loop_continue
+		
+		mov edx, dword[ebx+8]
+		cmp edx, dword[ebp+24]
+		jne chunkManager4d_isChunkLoaded_internal_loop_continue
+		
+		test dword[ebx+60], 0xffffffff
+		jz chunkManager4d_isChunkLoaded_internal_end			  	;the chunk is loaded but not yet registered in a graphics update
+		
+		mov dword[ebp-4], 69
+		jmp chunkManager4d_isChunkLoaded_internal_end
+	
+		chunkManager4d_isChunkLoaded_internal_loop_continue:
+		add ecx, 4
+		dec eax
+		test eax, eax
+		jnz chunkManager4d_isChunkLoaded_internal_loop_start
+	
+	chunkManager4d_isChunkLoaded_internal_end:
+	mov eax, dword[ebp-4]
+	
+	mov esp, ebp
+	pop ebx
+	pop ebp
+	ret
+	
