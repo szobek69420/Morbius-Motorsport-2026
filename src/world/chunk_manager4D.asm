@@ -1266,12 +1266,21 @@ chunkManager4d_loadChunk_internal:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 4				;loaded chunk		4
+	sub esp, 4				;loaded chunk			4
+	sub esp, 4				;changed blocks	vector	8
+	
+	;obtain changed blocks vector
+	push 12
+	lea eax, [ebp+12]
+	push eax
+	mov eax, dword[ebp+8]
+	push dword[eax+96]
+	call hashMap_get
+	mov dword[ebp-8], eax
+	add esp, 12
 	
 	;generate chunk
-	mov eax, dword[ebp+8]
-	add eax, 96
-	push eax
+	push dword[ebp-8]
 	push dword[ebp+20]			;chunkw
 	push dword[ebp+16]			;chunkz
 	push dword[ebp+12]			;chunkx

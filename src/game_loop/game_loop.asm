@@ -91,7 +91,7 @@ section .bss use32
 	framebuffer resb 4
 	
 section .data use32
-	render_distance dd 4
+	render_distance dd 3
 
 	last_frame_milliseconds dd 0		;int, the GetTickCount of the last frame
 	delta_time_milliseconds dd 0		;int
@@ -110,11 +110,6 @@ section .data use32
 
 	TIME_OF_DAY dd 0.0	;values are in [0;1], 0 and 1 are dawn
 	
-	HASHMAP dd 0
-	KEY1 dd 23451,34214325,432102
-	KEY2 dd 997213,8654239,12386721
-	DATA1 dd 69
-	DATA2 dd 420
 
 section .text use32
 
@@ -277,11 +272,6 @@ section .text use32
 	extern perlin_init3d
 	extern perlin_deinit3d
 	
-	extern hashMap_init
-	extern hashMap_destroy
-	extern hashMap_add
-	extern hashMap_remove
-	extern hashMap_get
 	
 game_loop:
 	push ebp
