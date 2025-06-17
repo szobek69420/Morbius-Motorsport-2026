@@ -59,7 +59,9 @@ section .text use32
 
 	;the collider and renderable is initialized by the chunk manager
 	;changedBlocks can be null
-	global chunk4d_generate			;Chunk4D* chunk4d_generate(int chunkX, int chunkZ, int chunkW, const vector<ChangedBlockInfo>* changedBlocks, int isFirstLoad)
+	;firstGenChangedBlocks should be empty initially, it is filled with blocks connected to terrain generation (e.g. trees) and serves as an output variable that will be used by the calling chunkmanager
+	;firstGenChangedBlocks is null if it is not the first generation of the chunk
+	global chunk4d_generate			;Chunk4D* chunk4d_generate(int chunkX, int chunkZ, int chunkW, const vector<ChangedBlockInfo>* changedBlocks, vector<ChangedBlockInfo>* firstGenChangedBlocks)
 	;the renderable is destroyed by the chunk manager
 	global chunk4d_destroy			;void chunk4d_destroy(Chunk4D* chunk)
 	
@@ -76,6 +78,7 @@ section .text use32
 	extern vector_init
 	extern vector_destroy
 	extern vector_push_back
+	extern vector_push_back_buffer
 	
 	extern vec4_add
 	
@@ -233,6 +236,8 @@ chunk4d_generate:
 	sub esp, 4				;is block visible					56
 	sub esp, 16				;chunk position as floats			72
 	
+	sub esp, 16				;origin block (tree helper)			88
+	
 	;alloc space for chunk
 	push 64
 	call my_malloc
@@ -347,162 +352,108 @@ chunk4d_generate:
 		cmp edi, dword[CHUNK_HEIGHT_PLUS_TWO]
 		jl chunk4d_generate_block_types_y_loop_start
 		
-	;generate trees
-	mov esi, dword[ebp+20]
-	imul esi, dword[ebp+24]
-	imul esi, dword[ebp+28]		;random seed in esi
+	;generate trees (only if it's the first generation)
+	cmp dword[ebp+36], 0
+	je chunk4d_generate_no_trees
 	
-	mov ebx, dword[ebp-8]	;current heightmap value in ebx
-	xor edi, edi			;x index in edi
-	chunk4d_generate_tree_x_loop_start:
-		;check if the x index is valid for a tree
-		mov eax, oak_tree_lower_bounds
-		mov eax, dword[eax]
-		mov ecx, edi
-		add ecx, eax
-		cmp ecx, 2
-		jl chunk4d_generate_tree_x_loop_skip
+		mov esi, dword[ebp+20]
+		add esi, 2346287
+		mov eax, dword[ebp+24]
+		add eax, 9798233
+		imul esi, eax
+		mov eax, dword[ebp+28]
+		add eax, -4692385
+		imul esi, eax					;random seed in esi
 		
-		mov eax, oak_tree_upper_bounds
-		mov eax, dword[eax]
-		mov ecx, edi
-		lea ecx, [ecx+eax+2]
-		cmp ecx, dword[CHUNK_HEIGHT_MAP_WIDTH]
-		jge chunk4d_generate_tree_x_loop_skip
 		
-	
-		push edi				;save x index
-		xor edi, edi			;z index in edi
-		chunk4d_generate_tree_z_loop_start:
-			;check if the z index is valid for a tree
-			mov eax, oak_tree_lower_bounds
-			mov eax, dword[eax+8]
-			mov ecx, edi
-			add ecx, eax
-			cmp ecx, 2
-			jl chunk4d_generate_tree_z_loop_skip
-			
-			mov eax, oak_tree_upper_bounds
-			mov eax, dword[eax+8]
-			mov ecx, edi
-			lea ecx, [ecx+eax+2]
-			cmp ecx, dword[CHUNK_HEIGHT_MAP_WIDTH]
-			jge chunk4d_generate_tree_z_loop_skip
-			
+		mov edi, dword[CHUNK_HEIGHT_MAP_WIDTH]
+		dec edi							;x index in edi (from chunk_width+1 inclusive to 1 inclusive)
+		chunk4d_generate_tree_x_loop_start:
 		
-			push edi				;save z index
-			xor edi, edi			;w index in edi
-			chunk4d_generate_tree_w_loop_start:
-				;check if the w index is valid for a tree
-				mov eax, oak_tree_lower_bounds
-				mov eax, dword[eax+12]
-				mov ecx, edi
-				add ecx, eax
-				cmp ecx, 2
-				jl chunk4d_generate_tree_w_loop_continue
+			push edi							;save x index
+			mov edi, dword[CHUNK_HEIGHT_MAP_WIDTH]
+			dec edi								;z index in edi (from chunk_width+1 inclusive to 1 inclusive)
+			chunk4d_generate_tree_z_loop_start:
+				push edi							;save z index
+				mov edi, dword[CHUNK_HEIGHT_MAP_WIDTH]
+				dec edi								;w index in edi (from chunk_width+1 inclusive to 1 inclusive)
+				chunk4d_generate_tree_w_loop_start:
+					;update the random value in esi
+					imul esi, 1103515245 
+					add esi, 12345
 				
-				mov eax, oak_tree_upper_bounds
-				mov eax, dword[eax+12]
-				mov ecx, edi
-				lea ecx, [ecx+eax+2]
-				cmp ecx, dword[CHUNK_HEIGHT_MAP_WIDTH]
-				jge chunk4d_generate_tree_w_loop_continue
-			
-			
-				;update the random value in esi
-				imul esi, 1103515245 
-				add esi, 12345
-			
-				;check if the block can be a root block by randomness
-				mov eax, esi
-				and eax, 0x0000ffff
-				cmp eax, 65000
-				jl chunk4d_generate_tree_w_loop_continue
-				
-			
-				;check if the block is a grass block
-				xor eax, eax
-				mov al, byte[ebx]		;current height in eax
-				imul eax, dword[CHUNK_HEIGHT_MAP_WIDTH_CUBED]
-				
-				mov ecx, dword[esp+4]	;x index
-				imul ecx, dword[CHUNK_HEIGHT_MAP_WIDTH_SQUARED]
-				add eax, ecx
-				
-				mov ecx, dword[esp]		;z index
-				imul ecx, dword[CHUNK_HEIGHT_MAP_WIDTH]
-				add eax, ecx
-				
-				add eax, edi
-				
-				add eax, dword[ebp-12]
-				
-				
-				mov cl, byte[BLOCK_GRASS]
-				cmp cl, byte[eax]
-				jne chunk4d_generate_tree_w_loop_continue
-				
-				;add tree
-				;anchor block in eax
-				push esi		;save random value
-				push edi		;save w index
-				mov esi, dword[oak_tree_block_count]	;index in esi
-				mov edi, oak_tree_blocks				;current block in edi
-				chunk4d_generate_tree_add_loop_start:
-					mov ecx, dword[edi+8]
-					imul ecx, dword[CHUNK_HEIGHT_MAP_WIDTH_CUBED]
-					mov edx, dword[edi+4]
-					imul edx, dword[CHUNK_HEIGHT_MAP_WIDTH_SQUARED]
-					add ecx, edx
-					mov edx, dword[edi+12]
-					imul edx, dword[CHUNK_HEIGHT_MAP_WIDTH]
-					add ecx, edx
-					add ecx, dword[edi+16]
-					add ecx, eax
+					;check if the block can be a root block by randomness
+					mov eax, esi
+					and eax, 0x0000ffff
+					cmp eax, 65000
+					jl chunk4d_generate_tree_w_loop_continue
 					
-					mov edx, dword[edi]
-					mov dl, byte[edx]
-					mov byte[ecx], dl
+					;get the current height in the height map
+					mov ebx, dword[esp+4]			;x index
+					imul ebx, dword[CHUNK_HEIGHT_MAP_WIDTH]
+					add ebx, dword[esp]				;z index
+					imul ebx, dword[CHUNK_HEIGHT_MAP_WIDTH]
+					add ebx, edi					;w index in edi, offset in heightmap in ebx
 					
-					add edi, 20
-					
-					dec esi
-					test esi, esi
-					jnz chunk4d_generate_tree_add_loop_start
-					
-				pop edi			;restore w index
-				pop esi			;restore random value
+					mov edx, dword[ebp-8]
+					add edx, ebx					;current height addr in edx
 				
-				chunk4d_generate_tree_w_loop_continue:
-				inc ebx
+					;check if the block is a grass block
+					xor eax, eax
+					mov al, byte[edx]		;current height in eax
+					imul eax, dword[CHUNK_HEIGHT_MAP_WIDTH_CUBED]
+					add eax, ebx
+					add eax, dword[ebp-12]	;current block in eax
+					
+					
+					mov cl, byte[BLOCK_GRASS]
+					cmp cl, byte[eax]
+					jne chunk4d_generate_tree_w_loop_continue
+					
+					;fill origin block buffer
+					;current height addr still in edx
+					mov eax, dword[esp+4]
+					dec eax
+					mov dword[ebp-88], eax			;block x
+					xor eax, eax
+					mov al, byte[edx]
+					mov dword[ebp-84], eax			;block y
+					mov eax, dword[esp]
+					dec eax
+					mov dword[ebp-80], eax			;block z
+					mov eax, edi
+					dec eax
+					mov dword[ebp-76], eax			;block w
+					
+					;add tree
+					lea eax, [ebp-88]
+					push eax
+					lea eax, [ebp+20]
+					push eax
+					push oak_tree
+					push dword[ebp+36]
+					call chunk4d_generateStructure_internal
+					add esp, 16
+					
+					chunk4d_generate_tree_w_loop_continue:
+					
+					dec edi
+					test edi, edi
+					jnz chunk4d_generate_tree_w_loop_start
 				
-				inc edi
-				cmp edi, dword[CHUNK_HEIGHT_MAP_WIDTH]
-				jl chunk4d_generate_tree_w_loop_start
+				pop edi					;restore z index
+
+				dec edi
+				test edi, edi
+				jnz chunk4d_generate_tree_z_loop_start
 			
-			pop edi					;restore z index
-		
-		
-			jmp chunk4d_generate_tree_z_loop_continue
-			chunk4d_generate_tree_z_loop_skip:
-				add ebx, dword[CHUNK_HEIGHT_MAP_WIDTH]
-				
-			chunk4d_generate_tree_z_loop_continue:
-			inc edi
-			cmp edi, dword[CHUNK_HEIGHT_MAP_WIDTH]
-			jl chunk4d_generate_tree_z_loop_start
-		
-		pop edi					;restore x index
-	
-		
-		jmp chunk4d_generate_tree_x_loop_continue
-		chunk4d_generate_tree_x_loop_skip:
-			add ebx, dword[CHUNK_HEIGHT_MAP_WIDTH_SQUARED]
+			pop edi					;restore x index
+
+			dec edi
+			test edi, edi
+			jnz chunk4d_generate_tree_x_loop_start
 			
-		chunk4d_generate_tree_x_loop_continue:
-		inc edi
-		cmp edi, dword[CHUNK_HEIGHT_MAP_WIDTH]
-		jl chunk4d_generate_tree_x_loop_start
+	chunk4d_generate_no_trees:
 		
 		
 	;change blocks based on the changedBlocks vector
@@ -1168,8 +1119,151 @@ chunk4d_generateHeightMap:
 	ret
 	
 	
-oak_tree_lower_bounds dd -2,0,-2,-2
-oak_tree_upper_bounds dd 2,6,2,2
+;void chunk4d_generateStructure_internal(vector<ChangedBlockInfo>* output, void* structure, ivec3* originChunk, ivec4* originBlock)
+chunk4d_generateStructure_internal:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 32		;changed block buffer			32
+	
+	mov eax, dword[ebp+24]
+	mov esi, dword[eax]				;index in esi
+	lea edi, [eax+4]				;current block in edi
+	cmp esi, 0
+	jle chunk4d_generateStructure_internal_loop_end
+	chunk4d_generateStructure_internal_loop_start:
+		;prepare changed block info
+		mov ebx, dword[ebp+28]			;chunk in ebx
+		mov eax, dword[edi]
+		mov eax, dword[eax]
+		mov dword[ebp-32], eax			;block type
+		mov ecx, dword[ebx]
+		mov dword[ebp-28], ecx			;chunk x
+		mov edx, dword[ebx]
+		mov dword[ebp-24], edx			;chunk z
+		mov eax, dword[ebx]
+		mov dword[ebp-20], eax			;chunk w
+		
+		mov ebx, dword[ebp+32]			;origin block in ebx
+		mov eax, dword[edi+4]
+		add eax, dword[ebx]
+		mov dword[ebp-16], eax			;block x
+		mov eax, dword[edi+8]
+		add eax, dword[ebx+4]
+		mov dword[ebp-12], eax			;block y
+		mov eax, dword[edi+12]
+		add eax, dword[ebx+8]
+		mov dword[ebp-8], eax			;block z
+		mov eax, dword[edi+16]
+		add eax, dword[ebx+12]
+		mov dword[ebp-4], eax			;block w
+		
+		;check for overflow-----------------
+		;x overflow
+		mov eax, dword[ebp-16]
+		test eax, 0x80000000
+		jnz chunk4d_generateStructure_internal_loop_x_neg
+			cmp eax, dword[CHUNK_WIDTH]
+			jl chunk4d_generateStructure_internal_loop_x_done		;no overflow
+			
+			xor edx, edx
+			idiv dword[CHUNK_WIDTH]
+			add dword[ebp-28], eax			;add quotient to the chunk pos
+			mov dword[ebp-16], edx			;remainder is the new block pos
+			jmp chunk4d_generateStructure_internal_loop_x_done
+			
+		chunk4d_generateStructure_internal_loop_x_neg:
+			cdq								;eax -> edx:eax
+			idiv dword[	CHUNK_WIDTH]
+			dec eax
+			add dword[ebp-28], eax			;update chunk pos
+			add edx, dword[CHUNK_WIDTH]
+			mov dword[ebp-16], edx			;update block pos
+		
+		chunk4d_generateStructure_internal_loop_x_done:
+		
+		;y overflow
+		mov eax, dword[ebp-12]
+		test eax, 0x80000000
+		jnz chunk4d_generateStructure_internal_loop_continue
+		cmp eax, dword[CHUNK_HEIGHT]
+		jge chunk4d_generateStructure_internal_loop_continue
+		
+		;z overflow
+		mov eax, dword[ebp-8]
+		test eax, 0x80000000
+		jnz chunk4d_generateStructure_internal_loop_z_neg
+			cmp eax, dword[CHUNK_WIDTH]
+			jl chunk4d_generateStructure_internal_loop_z_done		;no overflow
+			
+			xor edx, edx
+			idiv dword[CHUNK_WIDTH]
+			add dword[ebp-24], eax			;add quotient to the chunk pos
+			mov dword[ebp-8], edx			;remainder is the new block pos
+			jmp chunk4d_generateStructure_internal_loop_z_done
+			
+		chunk4d_generateStructure_internal_loop_z_neg:
+			cdq								;eax -> edx:eax
+			idiv dword[	CHUNK_WIDTH]
+			dec eax
+			add dword[ebp-24], eax			;update chunk pos
+			add edx, dword[CHUNK_WIDTH]
+			mov dword[ebp-8], edx			;update block pos
+		
+		chunk4d_generateStructure_internal_loop_z_done:
+		
+		;w overflow
+		mov eax, dword[ebp-4]
+		test eax, 0x80000000
+		jnz chunk4d_generateStructure_internal_loop_w_neg
+			cmp eax, dword[CHUNK_WIDTH]
+			jl chunk4d_generateStructure_internal_loop_w_done		;no overflow
+			
+			xor edx, edx
+			idiv dword[CHUNK_WIDTH]
+			add dword[ebp-20], eax			;add quotient to the chunk pos
+			mov dword[ebp-4], edx			;remainder is the new block pos
+			jmp chunk4d_generateStructure_internal_loop_w_done
+			
+		chunk4d_generateStructure_internal_loop_w_neg:
+			cdq								;eax -> edx:eax
+			idiv dword[	CHUNK_WIDTH]
+			dec eax
+			add dword[ebp-20], eax			;update chunk pos
+			add edx, dword[CHUNK_WIDTH]
+			mov dword[ebp-4], edx			;update block pos
+		
+		chunk4d_generateStructure_internal_loop_w_done:
+		
+		;add changed block to changed blocks vector
+		lea eax, [ebp-32]
+		push eax
+		push dword[ebp+20]
+		call vector_push_back_buffer
+		add esp, 8
+		
+		chunk4d_generateStructure_internal_loop_continue:
+		add edi, 20
+		dec esi
+		test esi, esi
+		jnz chunk4d_generateStructure_internal_loop_start
+		
+	chunk4d_generateStructure_internal_loop_end:
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+;structure layout:
+;int blockCount
+;struct{int blockType, ivec4 chunkLocalBlockPos}* blocks
+oak_tree:
 oak_tree_block_count dd 18
 oak_tree_blocks:
 dd BLOCK_OAK_LOG,		0,1,0,0

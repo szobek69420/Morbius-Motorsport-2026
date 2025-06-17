@@ -1303,9 +1303,10 @@ chunkManager4d_loadChunk_internal:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 4				;loaded chunk			4
-	sub esp, 4				;changed blocks	vector	8
-	sub esp, 4				;is first load			12
+	sub esp, 4				;loaded chunk							4
+	sub esp, 4				;changed blocks	vector					8
+	sub esp, 4				;is first load							12
+	sub esp, 16				;first load changed blocks vector		28
 	
 	mov dword[ebp-12], 0
 	
@@ -1320,8 +1321,8 @@ chunkManager4d_loadChunk_internal:
 	add esp, 12
 	
 	cmp eax, -1
-	jne chunkManager4d_loadChunk_internal_chunk_not_registered
-		;mark chunk as first load and add it to the registered chunks vector
+	jne chunkManager4d_loadChunk_internal_chunk_already_registered
+		;mark chunk as first load, add it to the registered chunks vector and init first load changed blocks vector
 		mov dword[ebp-12], 69
 		
 		lea eax, [ebp+12]
@@ -1332,7 +1333,13 @@ chunkManager4d_loadChunk_internal:
 		call vector_push_back_buffer
 		add esp, 8
 		
-	chunkManager4d_loadChunk_internal_chunk_not_registered:
+		lea eax, [ebp-28]
+		push 32
+		push eax
+		call vector_init
+		add esp, 8
+		
+	chunkManager4d_loadChunk_internal_chunk_already_registered:
 	
 	;obtain changed blocks vector
 	push 12
@@ -1345,7 +1352,12 @@ chunkManager4d_loadChunk_internal:
 	add esp, 12
 	
 	;generate chunk
-	push dword[ebp-12]			;is chunk registered
+	push 0						;first load changed blocks output vector
+	cmp dword[ebp-12], 0
+	je chunkManager4d_loadChunk_internal_chunk_already_registered2
+		lea eax, [ebp-28]
+		mov dword[esp], eax
+	chunkManager4d_loadChunk_internal_chunk_already_registered2:
 	push dword[ebp-8]			;changed blocks
 	push dword[ebp+20]			;chunkw
 	push dword[ebp+16]			;chunkz
@@ -1353,6 +1365,21 @@ chunkManager4d_loadChunk_internal:
 	call chunk4d_generate
 	mov dword[ebp-4], eax
 	add esp, 20
+	
+	;deal with the first load changed blocks vector
+	cmp dword[ebp-12], 0
+	je chunkManager4d_loadChunk_internal_chunk_already_registered3
+		push dword[ebp-28]
+		push print_int_nl
+		call my_printf
+		add esp, 8
+	
+		lea eax, [ebp-28]
+		push eax
+		call vector_destroy
+		add esp, 4
+		
+	chunkManager4d_loadChunk_internal_chunk_already_registered3:
 	
 	;add the chunk to the loaded chunks
 	mov eax, dword[ebp+8]
@@ -1368,7 +1395,7 @@ chunkManager4d_loadChunk_internal:
 	
 	mov eax, dword[ebp+8]
 	push dword[eax+16]
-	call mutex_lock
+	call mutex_unlock
 	add esp, 4
 	
 	;do we need a graphics update? (is the alreadyProcessed flag on?)
