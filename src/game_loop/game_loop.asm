@@ -255,7 +255,7 @@ section .text use32
 	extern chunkManager4d_unload
 	extern chunkManager4d_processUpdate
 	extern chunkManager4d_processGraphicsUpdate
-	extern chunkManager4d_processChangedBlock
+	extern chunkManager4d_processChangedBlocks
 	extern chunkManager4d_render
 	extern chunkManager4d_getHyperPlane
 	
@@ -742,7 +742,7 @@ gameLoop_chunkLoader:
 			
 			;reload chunks if necessary
 			push dword[chunk_manager_4d]
-			call chunkManager4d_processChangedBlock
+			call chunkManager4d_processChangedBlocks
 			add esp, 4
 		
 			;do chunk update things		

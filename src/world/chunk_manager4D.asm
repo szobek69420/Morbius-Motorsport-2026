@@ -90,7 +90,7 @@ section .text use32
 	;adds a block that needs to be changed to the pending changed blocks queue
 	global chunkManager4d_registerChangedBlock	;void chunkManager4d_registerChangedBlock(ChunkManager4D* cm, int blockType, ivec3* chunkPos, ivec4* chunkLocalBlockPos)
 	
-	global chunkManager4d_processChangedBlock	;void chunkManager4d_processChangedBlock(ChunkManager4D* cm)
+	global chunkManager4d_processChangedBlocks	;void chunkManager4d_processChangedBlock(ChunkManager4D* cm)
 	
 	extern my_printf
 	extern my_malloc
