@@ -223,7 +223,7 @@ chunkManager4d_create:
 	;init pending changed blocks queue
 	mov eax, dword[ebp-4]
 	lea eax, [eax+112]
-	push 512
+	push 16384
 	push 32
 	push eax
 	call tsQueue_init
@@ -996,301 +996,365 @@ chunkManager4d_registerChangedBlock:
 	
 	
 ;only reloads chunks that are already registered
-chunkManager4d_processChangedBlock:
+chunkManager4d_processChangedBlocks:
 	push ebp
 	mov ebp, esp
 	
 	sub esp, 32				;changed block buffer				32
 	sub esp, 32				;neighbour's changed block buffer	64 (helper variable)
-
-	;is there a pending block?
-	mov eax, dword[ebp+8]
-	add eax, 112
-	push eax
-	call tsQueue_isEmpty
-	add esp, 4
-	test eax, eax
-	jnz chunkManager4d_processChangedBlock_end
+	sub esp, 16				;changed chunks	vector<ivec3>		80
 	
-	;pop the block
-	lea eax, [ebp-32]
+	;create changed chunks vector
+	lea eax, [ebp-80]
+	push 12
 	push eax
-	mov eax, dword[ebp+8]
-	add eax, 112
-	push eax
-	call tsQueue_pop
+	call vector_init
 	add esp, 8
-	test eax, eax
-	jnz chunkManager4d_processChangedBlock_end		;there was a problem
 	
-	;add the block to the chunk's changed blocks vector
-	lea eax, [ebp-32]
-	push eax			;value
-	lea ecx, [ebp-28]
-	push ecx			;key
-	push dword[ebp+8]
-	call chunkManager4d_processChangedBlock_internal
-	add esp, 12
-	
-	;check if the chunk can be reloaded and do so if ja
-	push dword[ebp-20]
-	push dword[ebp-24]
-	push dword[ebp-28]
-	push dword[ebp+8]
-	call chunkManager4d_isChunkLoaded_internal
-	test eax, eax
-	jz chunkManager4d_processChangedBlock_no_reload
-		call chunkManager4d_reloadChunkByPosition_internal
-	chunkManager4d_processChangedBlock_no_reload:
-	add esp, 16
-	
-	;is the block at the neg x border?
-	cmp dword[ebp-16], 0
-	jne chunkManager4d_processChangedBlock_not_neg_x
-	
-		;copy the changed block buffer to the neighbour's changed block buffer
-		push 32
+	chunkManager4d_processChangedBlocks_add_loop_start:
+		;is there a pending block?
+		mov eax, dword[ebp+8]
+		add eax, 112
+		push eax
+		call tsQueue_isEmpty
+		add esp, 4
+		test eax, eax
+		jnz chunkManager4d_processChangedBlocks_add_loop_end
+		
+		;pop the block
 		lea eax, [ebp-32]
 		push eax
-		lea eax, [ebp-64]
+		mov eax, dword[ebp+8]
+		add eax, 112
 		push eax
-		call my_memcpy
-		add esp, 12
+		call tsQueue_pop
+		add esp, 8
+		test eax, eax
+		jnz chunkManager4d_processChangedBlocks_add_loop_end		;there was a problem
 		
-		;transform the neighbour's block buffer
-		mov dword[ebp-48], 16
-		dec dword[ebp-60]
-	
-		;add the block to the neighbouring chunk's changed blocks vector
-		lea eax, [ebp-64]
+		
+		;add the block to the chunk's changed blocks vector
+		lea eax, [ebp-32]
 		push eax			;value
-		lea ecx, [ebp-60]
+		lea ecx, [ebp-28]
 		push ecx			;key
 		push dword[ebp+8]
 		call chunkManager4d_processChangedBlock_internal
 		add esp, 12
 		
+		;check if the chunk is registered as changed and do so if nicht
+		lea eax, [ebp-28]
+		push eax
+		push chunkManager4d_changed_block_chunk_comparator
+		lea eax, [ebp-80]
+		push eax
+		call vector_search
+		add esp, 12
+		cmp eax, -1
+		jne chunkManager4d_processChangedBlocks_add_loop_chunk_already_registered
+			lea eax, [ebp-28]
+			push eax
+			lea ecx, [ebp-80]
+			push ecx
+			call vector_push_back_buffer
+			add esp, 8
+		chunkManager4d_processChangedBlocks_add_loop_chunk_already_registered:
+		
+		
+		;is the block at the neg x border?
+		cmp dword[ebp-16], 0
+		jne chunkManager4d_processChangedBlocks_add_loop_not_neg_x
+			;copy the changed block buffer to the neighbour's changed block buffer
+			push 32
+			lea eax, [ebp-32]
+			push eax
+			lea eax, [ebp-64]
+			push eax
+			call my_memcpy
+			add esp, 12
+			;transform the neighbour's block buffer
+			mov dword[ebp-48], 16
+			dec dword[ebp-60]
+			;add the block to the neighbouring chunk's changed blocks vector
+			lea eax, [ebp-64]
+			push eax			;value
+			lea ecx, [ebp-60]
+			push ecx			;key
+			push dword[ebp+8]
+			call chunkManager4d_processChangedBlock_internal
+			add esp, 12
+			;check if the chunk is registered as changed and do so if nicht
+			lea eax, [ebp-60]
+			push eax
+			push chunkManager4d_changed_block_chunk_comparator
+			lea eax, [ebp-80]
+			push eax
+			call vector_search
+			add esp, 12
+			cmp eax, -1
+			jne chunkManager4d_processChangedBlocks_add_loop_neg_x_chunk_already_registered
+				lea eax, [ebp-60]
+				push eax
+				lea ecx, [ebp-80]
+				push ecx
+				call vector_push_back_buffer
+				add esp, 8
+			chunkManager4d_processChangedBlocks_add_loop_neg_x_chunk_already_registered:
+		chunkManager4d_processChangedBlocks_add_loop_not_neg_x:
+		
+		
+		;is the block at the pos x border?
+		cmp dword[ebp-16], 15
+		jne chunkManager4d_processChangedBlocks_add_loop_not_pos_x
+			;copy the changed block buffer to the neighbour's changed block buffer
+			push 32
+			lea eax, [ebp-32]
+			push eax
+			lea eax, [ebp-64]
+			push eax
+			call my_memcpy
+			add esp, 12
+			;transform the neighbour's block buffer
+			mov dword[ebp-48], -1
+			inc dword[ebp-60]
+			;add the block to the neighbouring chunk's changed blocks vector
+			lea eax, [ebp-64]
+			push eax			;value
+			lea ecx, [ebp-60]
+			push ecx			;key
+			push dword[ebp+8]
+			call chunkManager4d_processChangedBlock_internal
+			add esp, 12
+			;check if the chunk is registered as changed and do so if nicht
+			lea eax, [ebp-60]
+			push eax
+			push chunkManager4d_changed_block_chunk_comparator
+			lea eax, [ebp-80]
+			push eax
+			call vector_search
+			add esp, 12
+			cmp eax, -1
+			jne chunkManager4d_processChangedBlocks_add_loop_pos_x_chunk_already_registered
+				lea eax, [ebp-60]
+				push eax
+				lea ecx, [ebp-80]
+				push ecx
+				call vector_push_back_buffer
+				add esp, 8
+			chunkManager4d_processChangedBlocks_add_loop_pos_x_chunk_already_registered:
+		chunkManager4d_processChangedBlocks_add_loop_not_pos_x:
+		
+		
+		;is the block at the neg z border?
+		cmp dword[ebp-8], 0
+		jne chunkManager4d_processChangedBlocks_add_loop_not_neg_z
+			;copy the changed block buffer to the neighbour's changed block buffer
+			push 32
+			lea eax, [ebp-32]
+			push eax
+			lea eax, [ebp-64]
+			push eax
+			call my_memcpy
+			add esp, 12
+			;transform the neighbour's block buffer
+			mov dword[ebp-40], 16
+			dec dword[ebp-56]
+			;add the block to the neighbouring chunk's changed blocks vector
+			lea eax, [ebp-64]
+			push eax			;value
+			lea ecx, [ebp-60]
+			push ecx			;key
+			push dword[ebp+8]
+			call chunkManager4d_processChangedBlock_internal
+			add esp, 12
+			;check if the chunk is registered as changed and do so if nicht
+			lea eax, [ebp-60]
+			push eax
+			push chunkManager4d_changed_block_chunk_comparator
+			lea eax, [ebp-80]
+			push eax
+			call vector_search
+			add esp, 12
+			cmp eax, -1
+			jne chunkManager4d_processChangedBlocks_add_loop_neg_z_chunk_already_registered
+				lea eax, [ebp-60]
+				push eax
+				lea ecx, [ebp-80]
+				push ecx
+				call vector_push_back_buffer
+				add esp, 8
+			chunkManager4d_processChangedBlocks_add_loop_neg_z_chunk_already_registered:
+		chunkManager4d_processChangedBlocks_add_loop_not_neg_z:
+		
+		
+		;is the block at the pos z border?
+		cmp dword[ebp-8], 15
+		jne chunkManager4d_processChangedBlocks_add_loop_not_pos_z
+			;copy the changed block buffer to the neighbour's changed block buffer
+			push 32
+			lea eax, [ebp-32]
+			push eax
+			lea eax, [ebp-64]
+			push eax
+			call my_memcpy
+			add esp, 12
+			;transform the neighbour's block buffer
+			mov dword[ebp-40], -1
+			inc dword[ebp-56]
+			;add the block to the neighbouring chunk's changed blocks vector
+			lea eax, [ebp-64]
+			push eax			;value
+			lea ecx, [ebp-60]
+			push ecx			;key
+			push dword[ebp+8]
+			call chunkManager4d_processChangedBlock_internal
+			add esp, 12
+			;check if the chunk is registered as changed and do so if nicht
+			lea eax, [ebp-60]
+			push eax
+			push chunkManager4d_changed_block_chunk_comparator
+			lea eax, [ebp-80]
+			push eax
+			call vector_search
+			add esp, 12
+			cmp eax, -1
+			jne chunkManager4d_processChangedBlocks_add_loop_pos_z_chunk_already_registered
+				lea eax, [ebp-60]
+				push eax
+				lea ecx, [ebp-80]
+				push ecx
+				call vector_push_back_buffer
+				add esp, 8
+			chunkManager4d_processChangedBlocks_add_loop_pos_z_chunk_already_registered:
+		chunkManager4d_processChangedBlocks_add_loop_not_pos_z:
+		
+		
+		;is the block at the neg w border?
+		cmp dword[ebp-4], 0
+		jne chunkManager4d_processChangedBlocks_add_loop_not_neg_w
+			;copy the changed block buffer to the neighbour's changed block buffer
+			push 32
+			lea eax, [ebp-32]
+			push eax
+			lea eax, [ebp-64]
+			push eax
+			call my_memcpy
+			add esp, 12
+			;transform the neighbour's block buffer
+			mov dword[ebp-36], 16
+			dec dword[ebp-52]
+			;add the block to the neighbouring chunk's changed blocks vector
+			lea eax, [ebp-64]
+			push eax			;value
+			lea ecx, [ebp-60]
+			push ecx			;key
+			push dword[ebp+8]
+			call chunkManager4d_processChangedBlock_internal
+			add esp, 12
+			;check if the chunk is registered as changed and do so if nicht
+			lea eax, [ebp-60]
+			push eax
+			push chunkManager4d_changed_block_chunk_comparator
+			lea eax, [ebp-80]
+			push eax
+			call vector_search
+			add esp, 12
+			cmp eax, -1
+			jne chunkManager4d_processChangedBlocks_add_loop_neg_w_chunk_already_registered
+				lea eax, [ebp-60]
+				push eax
+				lea ecx, [ebp-80]
+				push ecx
+				call vector_push_back_buffer
+				add esp, 8
+			chunkManager4d_processChangedBlocks_add_loop_neg_w_chunk_already_registered:
+		chunkManager4d_processChangedBlocks_add_loop_not_neg_w:
+		
+		
+		;is the block at the pos w border?
+		cmp dword[ebp-4], 15
+		jne chunkManager4d_processChangedBlocks_add_loop_not_pos_w
+			;copy the changed block buffer to the neighbour's changed block buffer
+			push 32
+			lea eax, [ebp-32]
+			push eax
+			lea eax, [ebp-64]
+			push eax
+			call my_memcpy
+			add esp, 12
+			;transform the neighbour's block buffer
+			mov dword[ebp-36], -1
+			inc dword[ebp-52]
+			;add the block to the neighbouring chunk's changed blocks vector
+			lea eax, [ebp-64]
+			push eax			;value
+			lea ecx, [ebp-60]
+			push ecx			;key
+			push dword[ebp+8]
+			call chunkManager4d_processChangedBlock_internal
+			add esp, 12
+			;check if the chunk is registered as changed and do so if nicht
+			lea eax, [ebp-60]
+			push eax
+			push chunkManager4d_changed_block_chunk_comparator
+			lea eax, [ebp-80]
+			push eax
+			call vector_search
+			add esp, 12
+			cmp eax, -1
+			jne chunkManager4d_processChangedBlocks_add_loop_pos_w_chunk_already_registered
+				lea eax, [ebp-60]
+				push eax
+				lea ecx, [ebp-80]
+				push ecx
+				call vector_push_back_buffer
+				add esp, 8
+			chunkManager4d_processChangedBlocks_add_loop_pos_w_chunk_already_registered:
+		chunkManager4d_processChangedBlocks_add_loop_not_pos_w:
+		
+		
+		jmp chunkManager4d_processChangedBlocks_add_loop_start
+		
+	chunkManager4d_processChangedBlocks_add_loop_end:
+	
+	
+	;reload the chunks that can be reloaded
+	push esi			;save esi
+	push edi			;save edi
+	
+	mov esi, dword[ebp-80]				;index in esi
+	mov edi, dword[ebp-68]				;current chunk in edi
+	cmp esi, 0
+	jle chunkManager4d_processChangedBlocks_reload_loop_end
+	chunkManager4d_processChangedBlocks_reload_loop_start:
 		;check if the chunk can be reloaded and do so if ja
-		push dword[ebp-52]
-		push dword[ebp-56]
-		push dword[ebp-60]
+		push dword[edi+8]
+		push dword[edi+4]
+		push dword[edi]
 		push dword[ebp+8]
 		call chunkManager4d_isChunkLoaded_internal
 		test eax, eax
-		jz chunkManager4d_processChangedBlock_neg_x_no_reload
+		jz chunkManager4d_processChangedBlocks_reload_loop_no_reload
 			call chunkManager4d_reloadChunkByPosition_internal
-		chunkManager4d_processChangedBlock_neg_x_no_reload:
+		chunkManager4d_processChangedBlocks_reload_loop_no_reload:
 		add esp, 16
 	
-	chunkManager4d_processChangedBlock_not_neg_x:
+		add edi, 12
+		dec esi
+		test esi, esi
+		jnz chunkManager4d_processChangedBlocks_reload_loop_start
+	chunkManager4d_processChangedBlocks_reload_loop_end:
 	
+	pop edi				;restore edi
+	pop esi				;restore esi
 	
-	;is the block at the pos x border?
-	cmp dword[ebp-16], 15
-	jne chunkManager4d_processChangedBlock_not_pos_x
+	;yeet the changed chunk vector
+	lea eax, [ebp-80]
+	push eax
+	call vector_destroy
+	add esp, 4
 	
-		;copy the changed block buffer to the neighbour's changed block buffer
-		push 32
-		lea eax, [ebp-32]
-		push eax
-		lea eax, [ebp-64]
-		push eax
-		call my_memcpy
-		add esp, 12
-		
-		;transform the neighbour's block buffer
-		mov dword[ebp-48], -1
-		inc dword[ebp-60]
-	
-		;add the block to the neighbouring chunk's changed blocks vector
-		lea eax, [ebp-64]
-		push eax			;value
-		lea ecx, [ebp-60]
-		push ecx			;key
-		push dword[ebp+8]
-		call chunkManager4d_processChangedBlock_internal
-		add esp, 12
-		
-		;check if the chunk can be reloaded and do so if ja
-		push dword[ebp-52]
-		push dword[ebp-56]
-		push dword[ebp-60]
-		push dword[ebp+8]
-		call chunkManager4d_isChunkLoaded_internal
-		test eax, eax
-		jz chunkManager4d_processChangedBlock_pos_x_no_reload
-			call chunkManager4d_reloadChunkByPosition_internal
-		chunkManager4d_processChangedBlock_pos_x_no_reload:
-		add esp, 16
-	
-	chunkManager4d_processChangedBlock_not_pos_x:
-	
-	
-	;is the block at the neg z border?
-	cmp dword[ebp-8], 0
-	jne chunkManager4d_processChangedBlock_not_neg_z
-	
-		;copy the changed block buffer to the neighbour's changed block buffer
-		push 32
-		lea eax, [ebp-32]
-		push eax
-		lea eax, [ebp-64]
-		push eax
-		call my_memcpy
-		add esp, 12
-		
-		;transform the neighbour's block buffer
-		mov dword[ebp-40], 16
-		dec dword[ebp-56]
-	
-		;add the block to the neighbouring chunk's changed blocks vector
-		lea eax, [ebp-64]
-		push eax			;value
-		lea ecx, [ebp-60]
-		push ecx			;key
-		push dword[ebp+8]
-		call chunkManager4d_processChangedBlock_internal
-		add esp, 12
-		
-		;check if the chunk can be reloaded and do so if ja
-		push dword[ebp-52]
-		push dword[ebp-56]
-		push dword[ebp-60]
-		push dword[ebp+8]
-		call chunkManager4d_isChunkLoaded_internal
-		test eax, eax
-		jz chunkManager4d_processChangedBlock_neg_z_no_reload
-			call chunkManager4d_reloadChunkByPosition_internal
-		chunkManager4d_processChangedBlock_neg_z_no_reload:
-		add esp, 16
-	
-	chunkManager4d_processChangedBlock_not_neg_z:
-	
-	
-	;is the block at the pos z border?
-	cmp dword[ebp-8], 15
-	jne chunkManager4d_processChangedBlock_not_pos_z
-	
-		;copy the changed block buffer to the neighbour's changed block buffer
-		push 32
-		lea eax, [ebp-32]
-		push eax
-		lea eax, [ebp-64]
-		push eax
-		call my_memcpy
-		add esp, 12
-		
-		;transform the neighbour's block buffer
-		mov dword[ebp-40], -1
-		inc dword[ebp-56]
-	
-		;add the block to the neighbouring chunk's changed blocks vector
-		lea eax, [ebp-64]
-		push eax			;value
-		lea ecx, [ebp-60]
-		push ecx			;key
-		push dword[ebp+8]
-		call chunkManager4d_processChangedBlock_internal
-		add esp, 12
-		
-		;check if the chunk can be reloaded and do so if ja
-		push dword[ebp-52]
-		push dword[ebp-56]
-		push dword[ebp-60]
-		push dword[ebp+8]
-		call chunkManager4d_isChunkLoaded_internal
-		test eax, eax
-		jz chunkManager4d_processChangedBlock_pos_z_no_reload
-			call chunkManager4d_reloadChunkByPosition_internal
-		chunkManager4d_processChangedBlock_pos_z_no_reload:
-		add esp, 16
-	
-	chunkManager4d_processChangedBlock_not_pos_z:
-	
-	
-	;is the block at the neg w border?
-	cmp dword[ebp-4], 0
-	jne chunkManager4d_processChangedBlock_not_neg_w
-	
-		;copy the changed block buffer to the neighbour's changed block buffer
-		push 32
-		lea eax, [ebp-32]
-		push eax
-		lea eax, [ebp-64]
-		push eax
-		call my_memcpy
-		add esp, 12
-		
-		;transform the neighbour's block buffer
-		mov dword[ebp-36], 16
-		dec dword[ebp-52]
-	
-		;add the block to the neighbouring chunk's changed blocks vector
-		lea eax, [ebp-64]
-		push eax			;value
-		lea ecx, [ebp-60]
-		push ecx			;key
-		push dword[ebp+8]
-		call chunkManager4d_processChangedBlock_internal
-		add esp, 12
-		
-		;check if the chunk can be reloaded and do so if ja
-		push dword[ebp-52]
-		push dword[ebp-56]
-		push dword[ebp-60]
-		push dword[ebp+8]
-		call chunkManager4d_isChunkLoaded_internal
-		test eax, eax
-		jz chunkManager4d_processChangedBlock_neg_w_no_reload
-			call chunkManager4d_reloadChunkByPosition_internal
-		chunkManager4d_processChangedBlock_neg_w_no_reload:
-		add esp, 16
-	
-	chunkManager4d_processChangedBlock_not_neg_w:
-	
-	
-	;is the block at the pos w border?
-	cmp dword[ebp-4], 15
-	jne chunkManager4d_processChangedBlock_not_pos_w
-	
-		;copy the changed block buffer to the neighbour's changed block buffer
-		push 32
-		lea eax, [ebp-32]
-		push eax
-		lea eax, [ebp-64]
-		push eax
-		call my_memcpy
-		add esp, 12
-		
-		;transform the neighbour's block buffer
-		mov dword[ebp-36], -1
-		inc dword[ebp-52]
-	
-		;add the block to the neighbouring chunk's changed blocks vector
-		lea eax, [ebp-64]
-		push eax			;value
-		lea ecx, [ebp-60]
-		push ecx			;key
-		push dword[ebp+8]
-		call chunkManager4d_processChangedBlock_internal
-		add esp, 12
-		
-		;check if the chunk can be reloaded and do so if ja
-		push dword[ebp-52]
-		push dword[ebp-56]
-		push dword[ebp-60]
-		push dword[ebp+8]
-		call chunkManager4d_isChunkLoaded_internal
-		test eax, eax
-		jz chunkManager4d_processChangedBlock_pos_w_no_reload
-			call chunkManager4d_reloadChunkByPosition_internal
-		chunkManager4d_processChangedBlock_pos_w_no_reload:
-		add esp, 16
-	
-	chunkManager4d_processChangedBlock_not_pos_w:
-	
-	
-	chunkManager4d_processChangedBlock_end:
+	chunkManager4d_processChangedBlocks_end:
 	mov esp, ebp
 	pop ebp
 	ret
@@ -1369,10 +1433,30 @@ chunkManager4d_loadChunk_internal:
 	;deal with the first load changed blocks vector
 	cmp dword[ebp-12], 0
 	je chunkManager4d_loadChunk_internal_chunk_already_registered3
-		push dword[ebp-28]
-		push print_int_nl
-		call my_printf
-		add esp, 8
+		push esi			;save esi
+		push edi			;save edi
+		
+		mov esi, dword[ebp-28]			;index in esi
+		mov edi, dword[ebp-16]			;current block info in edi
+		cmp esi, 0
+		jle chunkManager4d_loadChunk_internal_register_block_loop_end
+		chunkManager4d_loadChunk_internal_register_block_loop_start:
+			lea eax, [edi+16]
+			push eax					;block pos
+			lea eax, [edi+4]
+			push eax					;chunk pos
+			push dword[edi]				;block
+			push dword[ebp+8]			;chunk manager
+			call chunkManager4d_registerChangedBlock
+			add esp, 16
+		
+			add edi, 32
+			dec esi
+			test esi, esi
+			jnz chunkManager4d_loadChunk_internal_register_block_loop_start
+		chunkManager4d_loadChunk_internal_register_block_loop_end:
+		pop edi				;restore edi
+		pop esi				;save esi
 	
 		lea eax, [ebp-28]
 		push eax
@@ -1960,7 +2044,6 @@ chunkManager4d_registered_chunk_comparator:
 	pop ebp
 	ret
 
-
 ;void chunkManager4d_processChangedBlockInternal(
 ;	ChunkManager4D* cm,
 ;	ivec3* key,
@@ -2012,6 +2095,40 @@ chunkManager4d_processChangedBlock_internal:
 	push dword[ebp-20]
 	call vector_push_back_buffer
 	add esp, 8
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+;it is a compare function for vector_search
+;int chunkManager4d_registered_chunk_comparator(const ivec3* a, const ivec3* searchKey)
+chunkManager4d_changed_block_chunk_comparator:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4		;return value			4
+	
+	mov dword[ebp-4], 69
+	
+	mov eax, dword[ebp+8]
+	mov ecx, dword[ebp+12]
+	
+	mov edx, dword[eax]
+	cmp edx, dword[ecx]
+	jne chunkManager4d_changed_block_chunk_comparator_end 
+	
+	mov edx, dword[eax+4]
+	cmp edx, dword[ecx+4]
+	jne chunkManager4d_changed_block_chunk_comparator_end 
+	
+	mov edx, dword[eax+8]
+	cmp edx, dword[ecx+8]
+	jne chunkManager4d_changed_block_chunk_comparator_end 
+	
+	mov dword[ebp-4], 0
+	
+	chunkManager4d_changed_block_chunk_comparator_end:
+	mov eax, dword[ebp-4]
 	
 	mov esp, ebp
 	pop ebp
