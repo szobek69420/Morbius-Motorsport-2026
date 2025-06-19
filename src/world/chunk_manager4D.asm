@@ -12,12 +12,13 @@
 ;	tsQueue<ChangedBlockInfo> pendingChangedBlocks;				112
 ;	TextureArrayInfo* blockTextures;							120
 ;	vector<ivec3> registeredChunks;								124 //chunks that have been loaded at least once
-;}			140 bytes overall
+;	vector<struct{ivec3;Renderable*}> fanthomChunks;			140 //fanthom chunks are remaining renderables of no longer existing chunks, they are kept during a reload to prevent flickering
+;}			156 bytes overall
 
 ;layout:
 ;struct ChunkGraphicsUpdate4D{
 ;	void* data					0, it is Chunk4D* if load update, otherwise a renderable*
-;	int load;					4
+;	int isLoadUpdate;			4
 ;}		8 bytes overall
 
 ;layout:
@@ -56,6 +57,8 @@ section .rodata use32
 	test_text3 db "you're so portuguese3",10,0
 	
 	print_int_nl db "%d",10,0
+	print_two_ints_nl db "%d %d",10,0
+	print_three_ints_nl db "%d %d %d",10,0
 	print_float_nl db "%f",10,0
 	print_four_floats_nl db "%f %f %f %f",10,0
 	
@@ -115,6 +118,7 @@ section .text use32
 	extern vector_destroy
 	extern vector_push_back
 	extern vector_remove
+	extern vector_remove_at
 	extern vector_search
 	extern vector_push_back_buffer
 	
@@ -237,6 +241,14 @@ chunkManager4d_create:
 	push 12
 	mov ecx, dword[ebp-4]
 	add ecx, 124
+	push ecx
+	call vector_init
+	add esp, 8
+	
+	;init fanthom chunk vector
+	push 16
+	mov ecx, dword[ebp-4]
+	add ecx, 140
 	push ecx
 	call vector_init
 	add esp, 8
@@ -742,11 +754,12 @@ chunkManager4d_unload:
 	je chunkManager4d_unload_end
 	
 		;unload chunk
-		push 69				;chunk should be registered
+		push 69				;destroy renderable
+		push 69				;chunk should be unregistered
 		push dword[ebp-16]
 		push dword[ebp+20]
 		call chunkManager4d_unloadChunk_internal
-		add esp, 8
+		add esp, 16
 	
 	chunkManager4d_unload_end:
 	mov esp, ebp
@@ -1003,6 +1016,9 @@ chunkManager4d_processChangedBlocks:
 	sub esp, 32				;changed block buffer				32
 	sub esp, 32				;neighbour's changed block buffer	64 (helper variable)
 	sub esp, 16				;changed chunks	vector<ivec3>		80
+	sub esp, 4				;processed block count (debug)		84
+	
+	mov dword[ebp-84], 0
 	
 	;create changed chunks vector
 	lea eax, [ebp-80]
@@ -1032,6 +1048,8 @@ chunkManager4d_processChangedBlocks:
 		test eax, eax
 		jnz chunkManager4d_processChangedBlocks_add_loop_end		;there was a problem
 		
+		;increment processed block count
+		inc dword[ebp-84]
 		
 		;add the block to the chunk's changed blocks vector
 		lea eax, [ebp-32]
@@ -1486,24 +1504,10 @@ chunkManager4d_loadChunk_internal:
 	mov eax, dword[ebp-4]
 	cmp dword[eax+60], 0
 	jne chunkManager4d_loadChunk_internal_no_graphics_update
-	
-	;create graphics update
-	push 8
-	call my_malloc
-	add esp, 4
-	
-	mov dword[eax+4], 69			;load
-	mov ecx, dword[ebp-4]
-	mov dword[eax], ecx				;chunk
-	
-	;add the graphics update to the queue
-	mov ecx, dword[ebp+8]
-	add ecx, 20
-	
-	push eax
-	push ecx
-	call tsQueue_push
-	add esp, 8
+		push dword[ebp-4]
+		push dword[ebp+8]
+		call chunkManager4d_registerGraphicsLoadUpdate_internal
+		add esp, 8
 	
 	chunkManager4d_loadChunk_internal_no_graphics_update:
 	
@@ -1515,7 +1519,12 @@ chunkManager4d_loadChunk_internal:
 ;unloads a selected chunk
 ;shouldn't be called under vector mutex lock
 ;isChunkRegistered is non-zero, if the chunk should be only unloaded if it is registered in the chunk manager
-;void chunkManager4d_unloadChunk_internal(ChunkManager4D* cm, Chunk4D* chunk, int isChunkRegistered)
+;void chunkManager4d_unloadChunk_internal(
+;	ChunkManager4D* cm,
+;	Chunk4D* chunk,
+;	int isChunkRegistered,
+;	int shouldDestroyRenderable
+;)
 chunkManager4d_unloadChunk_internal:
 	push ebp
 	mov ebp, esp
@@ -1551,30 +1560,18 @@ chunkManager4d_unloadChunk_internal:
 	
 	chunkManager4d_unloadChunk_internal_skip_remove:
 	
-	;create graphics update and add it to the queue if there is a renderable
+	;create graphics update and add it to the queue if a renderable is present and should be destroyed
 	mov eax, dword[ebp+12]
 	mov dword[eax+60], 69			;mark chunk as processed
 	cmp dword[eax+12], 0
-	je chunkManager4d_unloadChunk_internal_no_renderable
+	je chunkManager4d_unloadChunk_internal_no_renderable		;there is no renderable
+	cmp dword[ebp+20], 0
+	je chunkManager4d_unloadChunk_internal_no_renderable		;renderable should not be yeeted
 		mov dword[eax+60], 0			;unmark chunk as processed
 	
-		push 8
-		call my_malloc
-		mov dword[ebp-4], eax
-		add esp, 4
-		
-		mov dword[eax+4], 0			;unload
-		mov ecx, dword[ebp+12]
-		mov ecx, dword[ecx+12]
-		mov dword[eax], ecx				;renderable
-		
-		;add the graphics update to the queue
-		mov ecx, dword[ebp+8]
-		add ecx, 20
-		
-		push eax
-		push ecx
-		call tsQueue_push
+		push dword[eax+12]
+		push dword[ebp+8]
+		call chunkManager4d_registerGraphicsUnloadUpdate_internal
 		add esp, 8
 		
 	chunkManager4d_unloadChunk_internal_no_renderable:
@@ -1593,7 +1590,14 @@ chunkManager4d_unloadChunk_internal:
 	
 ;unloads a selected chunk
 ;shouldn't be called under vector mutex lock
-;void chunkManager4d_unloadChunkByPosition_internal(ChunkManager4D* cm, int chunkX, int chunkZ, int chunkW)
+;output is the address to which the destroyed chunks renderable goes, if output is NULL, the renderable is destroyed here
+;void chunkManager4d_unloadChunkByPosition_internal(
+;	ChunkManager4D* cm,
+;	int chunkX,
+;	int chunkZ,
+;	int chunkW,
+;	Renderable** output
+;)
 chunkManager4d_unloadChunkByPosition_internal:
 	push ebp
 	push esi
@@ -1630,12 +1634,26 @@ chunkManager4d_unloadChunkByPosition_internal:
 		cmp ecx, dword[ebp+28]
 		jne chunkManager4d_unloadChunkByPosition_internal_loop_continue
 		
+			;should the renderable be destroyed?
+			push 69						;renderable should be destroyed
+			test dword[ebp+32], 0xffffffff
+			jz chunkManager4d_unloadChunkByPosition_internal_loop_yeet_renderable
+				;save renderable into output
+				mov ecx, dword[ebp+32]
+				mov edx, dword[eax+12]
+				mov dword[ecx], edx
+				
+				;unyeet renderable
+				mov dword[esp], 0
+				
+			chunkManager4d_unloadChunkByPosition_internal_loop_yeet_renderable:
+			
 			;unload chunk
 			push 69
 			push eax
 			push dword[ebp+16]
 			call chunkManager4d_unloadChunk_internal
-			add esp, 12
+			add esp, 16
 			jmp chunkManager4d_unloadChunkByPosition_internal_search_done
 		
 		chunkManager4d_unloadChunkByPosition_internal_loop_continue:
@@ -1662,7 +1680,7 @@ chunkManager4d_unloadChunkByPosition_internal:
 	
 ;unloads a selected chunk
 ;shouldn't be called under vector mutex lock
-;NOTE: this function heavily relies on two things:
+;NOTE: this function heavily relies on two things (not anymore tho):
 ;	- unloadChunkByPosition always picks to first occurence of a chunk with matching chunkPos in the loaded chunks vector
 ;	- loadChunk always puts the newly loaded chunks at the end of the loaded chunks vector
 ;void chunkManager4d_reloadChunkByPosition_internal(ChunkManager4D* cm, int chunkX, int chunkZ, int chunkW)
@@ -1672,14 +1690,38 @@ chunkManager4d_reloadChunkByPosition_internal:
 	push edi
 	mov ebp, esp
 	
-	;load the new chunk first
+	sub esp, 4		;renderable				4
+	
+	;unload the chunk
+	lea eax, [ebp-4]
+	push eax
+	push dword[ebp+28]
+	push dword[ebp+24]
+	push dword[ebp+20]
+	push dword[ebp+16]
+	call chunkManager4d_unloadChunkByPosition_internal
+	test dword[ebp-4], 0xffffffff
+	jz chunkManager4d_reloadChunkByPosition_internal_no_renderable
+		;register the fanthom chunk
+		mov eax, dword[ebp-4]
+		mov dword[esp+16], eax
+		call chunkManager4d_registerFanthomChunk_internal
+	chunkManager4d_reloadChunkByPosition_internal_no_renderable:
+	add esp, 20
+	
+	;load the new chunk
 	push dword[ebp+28]
 	push dword[ebp+24]
 	push dword[ebp+20]
 	push dword[ebp+16]
 	call chunkManager4d_loadChunk_internal
-	call chunkManager4d_unloadChunkByPosition_internal
+	test dword[ebp-4], 0xffffffff
+	jz chunkManager4d_reloadChunkByPosition_internal_no_renderable2
+		;yeet fanthom chunk
+		call chunkManager4d_unregisterFanthomChunk_internal
+	chunkManager4d_reloadChunkByPosition_internal_no_renderable2:
 	add esp, 16
+
 	
 	mov esp, ebp
 	pop edi
@@ -1687,6 +1729,158 @@ chunkManager4d_reloadChunkByPosition_internal:
 	pop ebp
 	ret
 	
+	
+;void chunkManager4d_registerGraphicsLoadUpdate_internal(ChunkManager4D* cm, Chunk4D* chomk)
+chunkManager4d_registerGraphicsLoadUpdate_internal:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;graphics update			4
+	
+	;alloc graphics update
+	push 8
+	call my_malloc
+	mov dword[ebp-4], eax
+	add esp, 8
+	
+	;init graphics update
+	mov ecx, dword[ebp+12]
+	mov dword[eax], ecx		;chomk
+	mov dword[eax+4], 69	;load update
+	
+	;push it onto the queue
+	push eax
+	mov ecx, dword[ebp+8]
+	add ecx, 20
+	push ecx
+	call tsQueue_push
+	add esp, 8
+	
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;void chunkManager4d_registerGraphicsUnloadUpdate_internal(ChunkManager4D* cm, Renderable* renderable)
+chunkManager4d_registerGraphicsUnloadUpdate_internal:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;graphics update			4
+	
+	;alloc graphics update
+	push 8
+	call my_malloc
+	mov dword[ebp-4], eax
+	add esp, 8
+	
+	;init graphics update
+	mov ecx, dword[ebp+12]
+	mov dword[eax], ecx		;renderable
+	mov dword[eax+4], 0	;unload update
+	
+	;push it onto the queue
+	push eax
+	mov ecx, dword[ebp+8]
+	add ecx, 20
+	push ecx
+	call tsQueue_push
+	add esp, 8
+	
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+
+;this function shall only be called from the chunk loader thread, for there is no mutex of fanthom vector
+;void chunkManager4d_registerFanthomChunk_internal(ChunkManager4D* cm, int chunkX, int chunkZ, int chunkW, Renderable* renderable)
+chunkManager4d_registerFanthomChunk_internal:
+	push ebp
+	mov ebp, esp
+	
+	lea ecx, [ebp+12]
+	push ecx
+	mov eax, dword[ebp+8]
+	add eax, 140
+	push eax
+	call vector_push_back_buffer
+	add esp, 8
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;removes the fanthom chunk from the vector and pushes the renderable into the graphics update queue
+;void chunkManager4d_unregisterFanthomChunk_internal(ChunkManager4D* cm, int chunkX, int chunkZ, int chunkW)
+chunkManager4d_unregisterFanthomChunk_internal:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	sub esp, 4			;renderable			4
+	sub esp, 4			;fanthom index		8
+	
+	mov dword[ebp-4], 0
+	mov dword[ebp-8], 0
+	
+	mov eax, dword[ebp+16]
+	mov esi, dword[eax+140]		;index in esi
+	mov edi, dword[eax+152]		;current fanthom chunk in edi
+	cmp esi, 0
+	jle chunkManager4d_unregisterFanthomChunk_internal_loop_end
+		mov eax, dword[ebp+20]		;chunk x
+		mov ecx, dword[ebp+24]		;chunk z
+		mov edx, dword[ebp+28]		;chunk w
+	chunkManager4d_unregisterFanthomChunk_internal_loop_start:
+		cmp dword[edi], eax
+		jne chunkManager4d_unregisterFanthomChunk_internal_loop_continue
+		cmp dword[edi+4], ecx
+		jne chunkManager4d_unregisterFanthomChunk_internal_loop_continue
+		cmp dword[edi+8], ecx
+		jne chunkManager4d_unregisterFanthomChunk_internal_loop_continue
+		
+			;chunk found
+			mov eax, dword[edi+12]
+			mov dword[ebp-4], eax
+			
+			push dword[ebp-8]
+			mov eax, dword[ebp+16]
+			add eax, 140
+			push eax
+			call vector_remove_at
+			add esp, 8
+			
+			jmp chunkManager4d_unregisterFanthomChunk_internal_loop_end
+	
+		chunkManager4d_unregisterFanthomChunk_internal_loop_continue:
+		inc dword[ebp-8]
+		add edi, 16
+		dec esi
+		test esi, esi
+		jnz chunkManager4d_unregisterFanthomChunk_internal_loop_start
+		
+	chunkManager4d_unregisterFanthomChunk_internal_loop_end:
+	
+	;did we find the chunk?
+	cmp dword[ebp-4], 0
+	je chunkManager4d_unregisterFanthomChunk_internal_end
+	
+		;push the graphics update
+		push dword[ebp-4]
+		push dword[ebp+16]
+		call chunkManager4d_registerGraphicsUnloadUpdate_internal
+		add esp, 8
+	
+	chunkManager4d_unregisterFanthomChunk_internal_end:
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
 	
 ;returns 0 if the chunk doesn't need to be culled
 ;int chunkManager4d_frustumCull(
@@ -2185,4 +2379,3 @@ chunkManager4d_isChunkLoaded_internal:
 	pop ebx
 	pop ebp
 	ret
-	
