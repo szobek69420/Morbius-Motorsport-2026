@@ -226,6 +226,7 @@ section .text use32
 	extern tsValue_destroy
 	extern tsValue_set
 	extern tsValue_isEqual
+	extern tsQueue_size
 	
 	extern audio_loadSound
 	extern audio_unloadSound
@@ -744,6 +745,7 @@ gameLoop_chunkLoader:
 			push dword[chunk_manager_4d]
 			call chunkManager4d_processChangedBlocks
 			add esp, 4
+			
 		
 			;do chunk update things		
 			mov eax, dword[pplayer]
@@ -754,6 +756,7 @@ gameLoop_chunkLoader:
 			call chunkManager4d_load
 			call chunkManager4d_unload
 			add esp, 12
+			
 			
 			;set the displayed delta time
 			call [GetTickCount]

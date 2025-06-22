@@ -8,7 +8,7 @@
 ;	ColliderGroup4D* cg;						;16
 ;	vec4 lowerBound, upperBound;				;20
 ;	void* vertices, int vertexFloatCount		;52			;temporary, deleted as soon as the renderable is constructed
-;	int chunkAlreadyProcessed;					;60			;it is an indicater for the chunkManager_unload if the chunk can be unloaded
+;	int chunkAlreadyProcessed;					;60			;it is an indicator for the chunkManager_unload if the chunk can be unloaded
 ;}		64 bytes overall
 
 SIDE_POS_X equ 0x00000000

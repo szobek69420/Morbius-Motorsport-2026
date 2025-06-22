@@ -59,6 +59,7 @@ section .rodata use32
 	print_int_nl db "%d",10,0
 	print_two_ints_nl db "%d %d",10,0
 	print_three_ints_nl db "%d %d %d",10,0
+	print_four_ints_nl db "%d %d %d %d",10,0
 	print_float_nl db "%f",10,0
 	print_four_floats_nl db "%f %f %f %f",10,0
 	
@@ -179,7 +180,7 @@ chunkManager4d_create:
 	sub esp, 4				;ChunkManager4D*
 	
 	;alloc chunk manager
-	push 140
+	push 156
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
@@ -1372,6 +1373,11 @@ chunkManager4d_processChangedBlocks:
 	call vector_destroy
 	add esp, 4
 	
+	push dword[ebp-84]
+	push print_int_nl
+	call my_printf
+	add esp, 8
+	
 	chunkManager4d_processChangedBlocks_end:
 	mov esp, ebp
 	pop ebp
@@ -1692,6 +1698,8 @@ chunkManager4d_reloadChunkByPosition_internal:
 	
 	sub esp, 4		;renderable				4
 	
+	mov dword[ebp-4], 0
+	
 	;unload the chunk
 	lea eax, [ebp-4]
 	push eax
@@ -1827,6 +1835,7 @@ chunkManager4d_unregisterFanthomChunk_internal:
 	mov dword[ebp-4], 0
 	mov dword[ebp-8], 0
 	
+	
 	mov eax, dword[ebp+16]
 	mov esi, dword[eax+140]		;index in esi
 	mov edi, dword[eax+152]		;current fanthom chunk in edi
@@ -1840,9 +1849,8 @@ chunkManager4d_unregisterFanthomChunk_internal:
 		jne chunkManager4d_unregisterFanthomChunk_internal_loop_continue
 		cmp dword[edi+4], ecx
 		jne chunkManager4d_unregisterFanthomChunk_internal_loop_continue
-		cmp dword[edi+8], ecx
+		cmp dword[edi+8], edx
 		jne chunkManager4d_unregisterFanthomChunk_internal_loop_continue
-		
 			;chunk found
 			mov eax, dword[edi+12]
 			mov dword[ebp-4], eax
