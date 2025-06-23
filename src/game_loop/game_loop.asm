@@ -737,8 +737,7 @@ gameLoop_chunkLoader:
 		mov ecx, eax
 		sub ecx, dword[ebp-4]
 		cmp ecx, 50
-		jl gameLoop_chunk_loader_loop_no_load
-		
+		jb gameLoop_chunk_loader_loop_no_load
 			mov dword[ebp-4], eax			;update the last chunk update time
 			
 			;reload chunks if necessary
@@ -764,7 +763,6 @@ gameLoop_chunkLoader:
 			mov dword[delta_time_milliseconds_chunk_loader], eax
 		
 		gameLoop_chunk_loader_loop_no_load:
-		
 		
 		;check if an exit is necessary
 		push 0

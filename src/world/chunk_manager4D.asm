@@ -13,7 +13,8 @@
 ;	TextureArrayInfo* blockTextures;							120
 ;	vector<ivec3> registeredChunks;								124 //chunks that have been loaded at least once
 ;	vector<struct{ivec3;Renderable*}> fanthomChunks;			140 //fanthom chunks are remaining renderables of no longer existing chunks, they are kept during a reload to prevent flickering
-;}			156 bytes overall
+;	Mutex* fanthomChunkMutex;									156
+;}			160 bytes overall
 
 ;layout:
 ;struct ChunkGraphicsUpdate4D{
@@ -180,7 +181,7 @@ chunkManager4d_create:
 	sub esp, 4				;ChunkManager4D*
 	
 	;alloc chunk manager
-	push 156
+	push 160
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
@@ -253,6 +254,12 @@ chunkManager4d_create:
 	push ecx
 	call vector_init
 	add esp, 8
+	
+	;create fanthom chunk mutex
+	call mutex_create
+	mov ecx, dword[ebp-4]
+	mov dword[ecx+156], eax
+	
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -489,6 +496,77 @@ chunkManager4d_render:
 		jnz chunkManager4d_render_loop_start
 		
 	chunkManager4d_render_loop_end:
+	
+	;render fanthom chunks
+	mov eax, dword[ebp+16]
+	cmp dword[eax+140], 0
+	jle chunkManager4d_render_fanthom_chunks_skip
+	
+		;lock fanthom mutex
+		mov eax, dword[ebp+16]
+		push -1
+		push dword[eax+156]
+		call mutex_lock
+		add esp, 8
+		
+		mov eax, dword[ebp+16]
+		mov esi, dword[eax+140]
+		mov edi, dword[eax+152]
+		cmp esi, 0
+		jle chunkManager4d_render_fanthom_chunks_loop_end	;ko ez a check
+		chunkManager4d_render_fanthom_chunks_loop_start:
+			;set chunkPos uniform
+			mov ecx, dword[edi+8]
+			imul ecx, dword[CHUNK_WIDTH]
+			push ecx
+			fild dword[esp]
+			fstp dword[esp]
+			
+			mov ecx, dword[edi+4]
+			imul ecx, dword[CHUNK_WIDTH]
+			push ecx
+			fild dword[esp]
+			fstp dword[esp]
+			
+			push 0
+			
+			mov ecx, dword[edi]
+			imul ecx, dword[CHUNK_WIDTH]
+			push ecx
+			fild dword[esp]
+			fstp dword[esp]
+			
+			
+			push dword[RENDERABLE_UNIFORM_VEC4]
+			push uniform_name_chunkPos
+			mov eax, dword[ebp+16]
+			push dword[eax+28]
+			call renderable_setUniform
+			add esp, 28
+			
+			;render chunk
+			push 69					;use textures
+			mov ecx, dword[ebp+16]
+			push dword[ecx+28]		;shader
+			push dword[ebp+20]
+			push dword[edi+12]
+			call renderable_renderCustom
+			add esp, 16
+			
+			
+			add edi, 16
+			dec esi
+			test esi, esi
+			jnz chunkManager4d_render_fanthom_chunks_loop_start
+		chunkManager4d_render_fanthom_chunks_loop_end:
+		
+		;unlock fanthom mutex
+		mov eax, dword[ebp+16]
+		push dword[eax+156]
+		call mutex_unlock
+		add esp, 4
+	
+	chunkManager4d_render_fanthom_chunks_skip:
 	
 	mov esp, ebp
 	pop edi
@@ -1373,11 +1451,6 @@ chunkManager4d_processChangedBlocks:
 	call vector_destroy
 	add esp, 4
 	
-	push dword[ebp-84]
-	push print_int_nl
-	call my_printf
-	add esp, 8
-	
 	chunkManager4d_processChangedBlocks_end:
 	mov esp, ebp
 	pop ebp
@@ -1808,6 +1881,14 @@ chunkManager4d_registerFanthomChunk_internal:
 	push ebp
 	mov ebp, esp
 	
+	;lock fanthom mutex
+	push -1
+	mov eax, dword[ebp+8]
+	push dword[eax+156]
+	call mutex_lock
+	add esp, 8
+	
+	;add fanthom chunk to the viktor
 	lea ecx, [ebp+12]
 	push ecx
 	mov eax, dword[ebp+8]
@@ -1815,6 +1896,12 @@ chunkManager4d_registerFanthomChunk_internal:
 	push eax
 	call vector_push_back_buffer
 	add esp, 8
+	
+	;unlock fanthom mutex
+	mov eax, dword[ebp+8]
+	push dword[eax+156]
+	call mutex_unlock
+	add esp, 4
 	
 	mov esp, ebp
 	pop ebp
@@ -1836,6 +1923,14 @@ chunkManager4d_unregisterFanthomChunk_internal:
 	mov dword[ebp-8], 0
 	
 	
+	;lock fanthom mutex
+	push -1
+	mov eax, dword[ebp+16]
+	push dword[eax+156]
+	call mutex_lock
+	add esp, 8
+	
+	;remove fanthom chunk from the viktor
 	mov eax, dword[ebp+16]
 	mov esi, dword[eax+140]		;index in esi
 	mov edi, dword[eax+152]		;current fanthom chunk in edi
@@ -1872,6 +1967,12 @@ chunkManager4d_unregisterFanthomChunk_internal:
 		jnz chunkManager4d_unregisterFanthomChunk_internal_loop_start
 		
 	chunkManager4d_unregisterFanthomChunk_internal_loop_end:
+	
+	;unlock fanthom mutex
+	mov eax, dword[ebp+16]
+	push dword[eax+156]
+	call mutex_unlock
+	add esp, 4
 	
 	;did we find the chunk?
 	cmp dword[ebp-4], 0

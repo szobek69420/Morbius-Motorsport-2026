@@ -1264,8 +1264,9 @@ chunk4d_generateStructure_internal:
 ;int blockCount
 ;struct{int blockType, ivec4 chunkLocalBlockPos}* blocks
 oak_tree:
-oak_tree_block_count dd 18
+oak_tree_block_count dd 19
 oak_tree_blocks:
+dd BLOCK_OAK_LOG,		0,0,0,0
 dd BLOCK_OAK_LOG,		0,1,0,0
 dd BLOCK_OAK_LOG,		0,2,0,0
 dd BLOCK_OAK_LOG,		0,3,0,0
