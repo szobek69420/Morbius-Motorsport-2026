@@ -26,10 +26,15 @@ section .rodata use32
 	dd 0.0, 1.0, 0.0, 0.0
 	dd 0.0, 0.0, 1.0, 0.0
 	dd 0.0, 0.0, 0.0, 1.0
+	
+	vertex_shader_draw_to_screen db "shaders/pp/draw_to_screen.vag",0
+	fragment_shader_draw_to_screen db "shaders/pp/draw_to_screen.fag",0
 
 section .data use32
 	initialized dd 0
 	renderable dd 0
+	
+	shader_draw_to_screen dd 0
 	
 
 section .text use32
@@ -45,13 +50,15 @@ section .text use32
 	;void postProcessing_drawToScreen(Framebuffer* framebuffer)
 	global postProcessing_drawToScreen
 	
-	extern renderable_create
+	extern renderable_createCustom
 	extern renderable_destroy
-	extern renderable_render
+	extern renderable_renderCustom
+	extern renderable_setExtraTexture2D
 	extern renderable_enableDepthTest
 	extern renderable_enableBlending
 	extern renderable_setPrimitive
-	extern RENDERABLE_ATTRIB_P3UV2
+	extern renderable_createShader
+	extern renderable_destroyShader
 	
 	extern glBindFramebuffer
 	extern GL_FRAMEBUFFER
@@ -64,11 +71,22 @@ postProcessing_init:
 	mov ebp, esp
 	
 	;create renderable
-	push dword[RENDERABLE_ATTRIB_P3UV2]
+	push 0
+	push 2			;uv vec2
+	push 3			;pos vec3
+	push 2
 	push index_vector
 	push vertex_vector
-	call renderable_create
+	call renderable_createCustom
 	mov dword[renderable], eax
+	
+	;create draw to screen shader
+	push 0
+	push fragment_shader_draw_to_screen
+	push vertex_shader_draw_to_screen
+	call renderable_createShader
+	mov dword[shader_draw_to_screen], eax
+	add esp, 12
 	
 	;set initialized flag
 	mov dword[initialized], 69
@@ -81,6 +99,12 @@ postProcessing_init:
 postProcessing_deinit:
 	push ebp
 	mov ebp, esp
+	
+	;yeet draw to screen shader
+	push dword[shader_draw_to_screen]
+	call renderable_destroyShader
+	mov dword[shader_draw_to_screen], 0
+	add esp, 4
 	
 	;destroy renderable
 	push dword[renderable]
@@ -114,10 +138,12 @@ postProcessing_drawToScreen:
 	add esp, 4
 	
 	;set the texture of the renderable
-	mov eax, dword[renderable]
 	mov ecx, dword[ebp+8]
-	mov ecx, dword[ecx+4]
-	mov dword[eax+56], ecx
+	push dword[ecx+4]
+	push 0
+	push dword[renderable]
+	call renderable_setExtraTexture2D
+	add esp, 12
 	
 	;bind the screen framebuffer
 	push 0
@@ -125,10 +151,12 @@ postProcessing_drawToScreen:
 	call [glBindFramebuffer]
 	
 	;render the renderable
+	push 69
+	push dword[shader_draw_to_screen]
 	push mat4_identity
 	push dword[renderable]
-	call renderable_render
-	add esp, 8
+	call renderable_renderCustom
+	add esp, 16
 	
 	mov esp, ebp
 	pop ebp
