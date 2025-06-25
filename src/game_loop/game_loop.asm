@@ -344,7 +344,7 @@ game_loop:
 	call framebuffer_create
 	mov dword[framebuffer], eax
 	add esp, 4
-	
+
 	push 0
 	push FRAMEBUFFER_RGBA
 	push dword[framebuffer]
@@ -355,7 +355,7 @@ game_loop:
 	
 	test eax, eax
 	jnz game_loop_framebuffer_gg
-		;send error message (even though it will crash anyway skull emoji)
+		;send error message and do nothing (even though it will crash anyway skull emoji)
 		push error_incomplete_framebuffer
 		call my_printf
 		add esp, 4

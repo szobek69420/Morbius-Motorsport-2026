@@ -36,6 +36,7 @@ section .rodata use32
 	dd GL_FLOAT			;pixel data type (not exactly necessary)
 	
 	print_int_nl db "%d",10,0
+	print_two_ints_nl db "%d %d",10,0
 	print_status db "framebuffer is complete: %d",10,0
 	
 	test_text db "drip chungus",10,0
@@ -74,6 +75,7 @@ section .text use32
 	extern glGenTextures
 	extern glDeleteTextures
 	extern glBindTexture
+	extern glActiveTexture
 	extern glTexImage2D
 	extern glTexParameteri
 	extern GL_TEXTURE_2D
@@ -83,6 +85,7 @@ section .text use32
 	extern GL_TEXTURE_WRAP_T
 	extern GL_NEAREST
 	extern GL_CLAMP_TO_EDGE
+	extern GL_TEXTURE0
 	
 	extern GL_RGB
 	extern GL_RGB16F
@@ -103,7 +106,7 @@ framebuffer_create:
 	sub esp, 4	;FrameBuffer		;4
 	
 	;alloc space for framebuffer struct
-	push 24
+	push 32
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
@@ -233,8 +236,7 @@ framebuffer_colourAttachment:
 	mov eax, dword[ebp-8]
 	cmp dword[eax], 0
 	je framebuffer_colourAttachment_no_previous
-		lea ecx, [eax]
-		push ecx
+		push eax
 		push 1
 		call [glDeleteTextures]
 		
@@ -247,6 +249,9 @@ framebuffer_colourAttachment:
 	call [glGenTextures]
 	
 	;bind texture
+	push dword[GL_TEXTURE0]
+	call [glActiveTexture]
+	
 	push dword[ebp-4]
 	push dword[GL_TEXTURE_2D]
 	call [glBindTexture]

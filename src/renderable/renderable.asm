@@ -9,7 +9,10 @@
 ;	vec3 scale;						;40
 ;	int vertexAttribLayout;			;52
 ;	GLuint albedoMap, specularMap	;56
-;}		;64 bytes overall
+;		//the extra2DTextures use the textures GL_TEXTURE2 to GL_TEXTURE5 and they are of type GL_TEXTURE_2D.
+;		//They aren't destroyed with the renderable
+;	GLuint extra2DTextures[4]		;64
+;}		;80 bytes overall
 
 NO_EBO equ 0xFFFFFFFF
 
@@ -64,6 +67,18 @@ section .rodata
 	uniform_name_model db "model",0
 	uniform_name_albedo db "albedo",0
 	uniform_name_specular db "specular",0
+	uniform_name_extra2DTexture0 db "extra2DTexture0",0
+	uniform_name_extra2DTexture1 db "extra2DTexture1",0
+	uniform_name_extra2DTexture2 db "extra2DTexture2",0
+	uniform_name_extra2DTexture3 db "extra2DTexture3",0
+	
+	uniform_names_texture2d:		;helper for renderable_renderCustom
+	dd uniform_name_albedo
+	dd uniform_name_specular
+	dd uniform_name_extra2DTexture0
+	dd uniform_name_extra2DTexture1
+	dd uniform_name_extra2DTexture2
+	dd uniform_name_extra2DTexture3
 	
 	EPSILON dd 0.00001
 	ONE dd 1.0
@@ -124,6 +139,9 @@ section .text use32
 	global renderable_createShader		;GLuint renderable_createShader(const char* vertexShaderPath, const char* fragmentShaderPath, const char* geometryShaderNullablePath)
 	global renderable_destroyShader		;void renderable_destroyShader(GLuint shader)
 	global renderable_useShader			;void renderable_useShader(GLuint shader)
+	
+	global renderable_setExtraTexture2D	;void renderable_setExtraTexture2D(Renderable* renderable, int textureNumber, GLuint texture2D)
+	
 	;doesn't call glUseShader so make sure you use it in conjunction with renderable_useShader
 	global renderable_setUniform		;void renderable_setUniform(GLuint shader, const char* uniformName, int uniformType, ...data)
 	
@@ -296,13 +314,13 @@ renderable_create:
 	renderable_create_initialized:
 	
 	;alloc the space for the renderable
-	push 64
+	push 80
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
 	
 	;zero all of the values
-	push 64
+	push 80
 	push 0
 	push dword[ebp-4]
 	call my_memset_dword
@@ -835,33 +853,46 @@ renderable_renderCustom:
 	;are textures necessary?
 	cmp dword[ebp+20], 0
 	je renderable_renderCustom_no_textures
-		;bind textures
-		mov eax, dword[ebp+8]
-		push dword[eax+60]			;specular map
-		push dword[GL_TEXTURE_2D]
-		push dword[GL_TEXTURE1]
-		push dword[eax+56]			;albedo map
-		push dword[GL_TEXTURE_2D]
-		push dword[GL_TEXTURE0]
-		call [glActiveTexture]
-		call [glBindTexture]
-		call [glActiveTexture]
-		call [glBindTexture]
+		push esi			;save esi
+		push edi			;save edi
+		push ebx			;save ebx
 		
-		;set texture uniforms
-		push 0
-		push dword[RENDERABLE_UNIFORM_1I]
-		push uniform_name_albedo
-		push dword[ebp+16]			;current shader
-		call renderable_setUniform
-		add esp, 16
-		
-		push 1
-		push dword[RENDERABLE_UNIFORM_1I]
-		push uniform_name_specular
-		push dword[ebp+16]			;current shader
-		call renderable_setUniform
-		add esp, 16
+		mov esi, dword[ebp+8]
+		lea esi, [esi+56]					;current texture2d in esi
+		mov edi, uniform_names_texture2d	;current uniform name in edi
+		xor ebx, ebx						;index in ebx
+		renderable_renderCustom_texture2d_loop_start:
+			cmp dword[esi], 0
+			je renderable_renderCustom_texture2d_loop_continue	;is there a texture in the slot?
+				
+				;bind texture
+				mov eax, dword[GL_TEXTURE0]
+				add eax, ebx
+				push eax
+				call [glActiveTexture]
+				
+				push dword[esi]
+				push dword[GL_TEXTURE_2D]
+				call [glBindTexture]
+				
+				;set uniform
+				push ebx
+				push dword[RENDERABLE_UNIFORM_1I]
+				push dword[edi]
+				push dword[ebp+16]			;current shader
+				call renderable_setUniform
+				add esp, 16
+	
+			renderable_renderCustom_texture2d_loop_continue:
+			add esi, 4
+			add edi, 4
+			inc ebx
+			cmp ebx, 6	;6 textures for albedo, specular and the 4 extra2DTextures
+			jl renderable_renderCustom_texture2d_loop_start
+			
+		pop ebx				;restore ebx
+		pop edi				;restore edi
+		pop esi				;restore esi
 	
 	renderable_renderCustom_no_textures:
 	
@@ -1152,6 +1183,20 @@ renderable_useShader:
 	pop ebp
 	ret
 	
+	
+renderable_setExtraTexture2D:
+	push ebp
+	mov ebp, esp
+	
+	mov eax, dword[ebp+8]
+	mov ecx, dword[ebp+12]
+	lea eax, [eax+64+4*ecx]
+	mov edx, dword[ebp+16]
+	mov dword[eax], edx
+	
+	mov esp, ebp
+	pop ebp
+	ret
 	
 renderable_setUniform:
 	push ebp
