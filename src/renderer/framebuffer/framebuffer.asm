@@ -4,23 +4,43 @@
 ;	GLuint fbo;					;0
 ;	GLuint colourAttachment0;	;4
 ;	GLuint colourAttachment1;	;8
-;	GLuint depthAttachment;		;12	//can also contain stencil attachment
-;	int width, height;			;16
-;};	24 bytes overall
+;	GLuint colourAttachment2;	;12
+;	GLuint colourAttachment3;	;16
+;	GLuint depthAttachment;		;20	//can also contain stencil attachment
+;	int width, height;			;24
+;};	32 bytes overall
 
 section .rodata use32
 	global FRAMEBUFFER_RGB
 	global FRAMEBUFFER_RGBA
 
 	;colour attachment types
-	FRAMEBUFFER_RGB dd GL_RGB
-	FRAMEBUFFER_RGBA dd GL_RGBA
+	FRAMEBUFFER_RGB:
+	dd GL_RGB			;internal format
+	dd GL_RGB			;base format
+	dd GL_UNSIGNED_BYTE	;pixel data type (not exactly necessary)
+	
+	FRAMEBUFFER_RGBA:
+	dd GL_RGBA			;internal format
+	dd GL_RGBA			;base format
+	dd GL_UNSIGNED_BYTE	;pixel data type (not exactly necessary)
+	
+	FRAMEBUFFER_RGB16F:
+	dd GL_RGB16F		;internal format
+	dd GL_RGB			;base format
+	dd GL_FLOAT			;pixel data type (not exactly necessary)
+	
+	FRAMEBUFFER_RGBA16F:
+	dd GL_RGBA16F		;internal format
+	dd GL_RGBA			;base format
+	dd GL_FLOAT			;pixel data type (not exactly necessary)
 	
 	print_int_nl db "%d",10,0
 	print_status db "framebuffer is complete: %d",10,0
 	
 	test_text db "drip chungus",10,0
-	
+
+	error_invalid_attachment_number db "framebuffer_colourAttachment: The colour attachment (currently %d) number should be between 0 and 3",10,0
 
 section .text use32
 
@@ -29,15 +49,12 @@ section .text use32
 	
 	global framebuffer_isComplete	;int framebuffer_isComplete(Framebuffer* framebuffer)
 	
-	global framebuffer_colourAttachment0	;void framebuffer_colourAttachment0(Framebuffer* framebuffer, int attachmentType)
-	global framebuffer_colourAttachment1	;void framebuffer_colourAttachment1(Framebuffer* framebuffer, int attachmentType)
+	global framebuffer_colourAttachment		;void framebuffer_colourAttachment(Framebuffer* framebuffer, int attachmentType, int attachmentNumber) //attachment type can be for example FRAMEBUFFER_RGB
 	global framebuffer_depthAttachment		;void framebuffer_depthAttachment(Framebuffer* framebuffer)
 	
 	;if framebuffer is 0, the default framebuffer is bound
 	;void framebuffer_bind(Framebuffer* framebuffer)
 	global framebuffer_bind
-	
-	global framebuffer_test			;void framebuffer_test()
 	
 	extern my_printf
 	extern my_malloc
@@ -68,7 +85,9 @@ section .text use32
 	extern GL_CLAMP_TO_EDGE
 	
 	extern GL_RGB
+	extern GL_RGB16F
 	extern GL_RGBA
+	extern GL_RGBA16F
 	extern GL_DEPTH_STENCIL
 	extern GL_DEPTH24_STENCIL8
 	extern GL_UNSIGNED_BYTE
@@ -94,19 +113,21 @@ framebuffer_create:
 	push 1
 	call [glGenFramebuffers]
 	
-	;init the other colour attachments
+	;init the other attachments
 	mov eax, dword[ebp-4]
 	mov dword[eax+4], 0
 	mov dword[eax+8], 0
 	mov dword[eax+12], 0
+	mov dword[eax+16], 0
+	mov dword[eax+20], 0
 	
 	;set the size
 	mov eax, dword[ebp-4]
 	
 	mov ecx, dword[ebp+8]
-	mov dword[eax+16], ecx
+	mov dword[eax+24], ecx
 	mov ecx, dword[ebp+12]
-	mov dword[eax+20], ecx
+	mov dword[eax+28], ecx
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -122,31 +143,10 @@ framebuffer_destroy:
 	
 	;delete textures
 	mov eax, dword[ebp+8]
-	cmp dword[eax+4], 0
-	je framebuffer_destroy_no_colour0
-		lea ecx, [eax+4]
-		push ecx
-		push 1
-		call [glDeleteTextures]
-	framebuffer_destroy_no_colour0:
-	
-	mov eax, dword[ebp+8]
-	cmp dword[eax+8], 0
-	je framebuffer_destroy_no_colour1
-		lea ecx, [eax+8]
-		push ecx
-		push 1
-		call [glDeleteTextures]
-	framebuffer_destroy_no_colour1:
-	
-	mov eax, dword[ebp+8]
-	cmp dword[eax+12], 0
-	je framebuffer_destroy_no_depth
-		lea ecx, [eax+12]
-		push ecx
-		push 1
-		call [glDeleteTextures]
-	framebuffer_destroy_no_depth:
+	lea eax, [eax+4]
+	push eax
+	push 5
+	call [glDeleteTextures]
 	
 	;delete framebuffer
 	push dword[ebp+8]
@@ -200,22 +200,45 @@ framebuffer_isComplete:
 	ret
 	
 	
-framebuffer_colourAttachment0:
+framebuffer_colourAttachment:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 4		;texture		;4
+	sub esp, 4		;texture				4
+	sub esp, 4		;attachment address		8
+	
+	;is the attachment number kosher?
+	mov eax, dword[ebp+16]
+	test eax, 0x80000000
+	jnz framebuffer_colourAttachment_number_error
+	cmp eax, 3
+	jg framebuffer_colourAttachment_number_error
+	jmp framebuffer_colourAttachment_number_gg
+	framebuffer_colourAttachment_number_error:
+		push eax
+		push error_invalid_attachment_number
+		call my_printf
+		add esp, 8
+		jmp framebuffer_colourAttachment_end
+		
+	framebuffer_colourAttachment_number_gg:
+	
+	;calculate the attachment address
+	mov eax, dword[ebp+16]
+	mov ecx, dword[ebp+8]
+	lea ecx, [ecx+4+4*eax]
+	mov dword[ebp-8], ecx
 	
 	;delete the previous attachment if necessary
-	mov eax, dword[ebp+8]
-	cmp dword[eax+4], 0
-	je framebuffer_colourAttachment0_no_previous
-		lea ecx, [eax+4]
+	mov eax, dword[ebp-8]
+	cmp dword[eax], 0
+	je framebuffer_colourAttachment_no_previous
+		lea ecx, [eax]
 		push ecx
 		push 1
 		call [glDeleteTextures]
 		
-	framebuffer_colourAttachment0_no_previous:
+	framebuffer_colourAttachment_no_previous:
 	
 	;generate texture
 	lea eax, [ebp-4]
@@ -229,15 +252,19 @@ framebuffer_colourAttachment0:
 	call [glBindTexture]
 	
 	;specify texture format
-	push 0
-	push dword[GL_UNSIGNED_BYTE]
 	mov eax, dword[ebp+12]
-	push dword[eax]
+	
+	push 0
+	mov ecx, dword[eax+8]
+	push dword[ecx]				;pixel data type (unnecessary tbf)
+	mov ecx, dword[eax+4]
+	push dword[ecx]				;pixel format (also unnecessary)
 	push 0
 	mov ecx, dword[ebp+8]
-	push dword[ecx+20]
-	push dword[ecx+16]
-	push dword[eax]
+	push dword[ecx+28]			;height
+	push dword[ecx+24]			;width
+	mov ecx, dword[eax]
+	push dword[ecx]				;internal format
 	push 0
 	push dword[GL_TEXTURE_2D]
 	call [glTexImage2D]
@@ -275,101 +302,9 @@ framebuffer_colourAttachment0:
 	push 0
 	push dword[ebp-4]
 	push dword[GL_TEXTURE_2D]
-	push dword[GL_COLOR_ATTACHMENT0]
-	push dword[GL_FRAMEBUFFER]
-	call [glFramebufferTexture2D]
-	
-	;unbind the framebuffer
-	push 0
-	push dword[GL_FRAMEBUFFER]
-	call [glBindFramebuffer]
-	
-	;set the value in the fbo struct
-	mov eax, dword[ebp+8]
-	mov ecx, dword[ebp-4]
-	mov dword[eax+4], ecx
-	
-	mov esp, ebp
-	pop ebp
-	ret
-	
-	
-framebuffer_colourAttachment1:
-	push ebp
-	mov ebp, esp
-	
-	sub esp, 4		;texture		;4
-	
-	;delete the previous attachment if necessary
-	mov eax, dword[ebp+8]
-	cmp dword[eax+8], 0
-	je framebuffer_colourAttachment1_no_previous
-		lea ecx, [eax+8]
-		push ecx
-		push 1
-		call [glDeleteTextures]
-		
-	framebuffer_colourAttachment1_no_previous:
-	
-	;generate texture
-	lea eax, [ebp-4]
+	mov eax, dword[GL_COLOR_ATTACHMENT0]
+	add eax, dword[ebp+16]
 	push eax
-	push 1
-	call [glGenTextures]
-	
-	;bind texture
-	push dword[ebp-4]
-	push dword[GL_TEXTURE_2D]
-	call [glBindTexture]
-	
-	;specify texture format
-	push 0
-	push dword[GL_UNSIGNED_BYTE]
-	mov eax, dword[ebp+12]
-	push dword[eax]
-	push 0
-	mov ecx, dword[ebp+8]
-	push dword[ecx+20]
-	push dword[ecx+16]
-	push dword[eax]
-	push 0
-	push dword[GL_TEXTURE_2D]
-	call [glTexImage2D]
-	
-	;set texture parameters
-	push dword[GL_NEAREST]
-	push dword[GL_TEXTURE_MIN_FILTER]
-	push dword[GL_TEXTURE_2D]
-	call [glTexParameteri]
-	push dword[GL_NEAREST]
-	push dword[GL_TEXTURE_MAG_FILTER]
-	push dword[GL_TEXTURE_2D]
-	call [glTexParameteri]
-	push dword[GL_CLAMP_TO_EDGE]
-	push dword[GL_TEXTURE_WRAP_S]
-	push dword[GL_TEXTURE_2D]
-	call [glTexParameteri]
-	push dword[GL_CLAMP_TO_EDGE]
-	push dword[GL_TEXTURE_WRAP_T]
-	push dword[GL_TEXTURE_2D]
-	call [glTexParameteri]
-	
-	;unbind the texture
-	push 0
-	push dword[GL_TEXTURE_2D]
-	call [glBindTexture]
-	
-	;bind the framebuffer
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	push dword[GL_FRAMEBUFFER]
-	call [glBindFramebuffer]
-	
-	;attach the texture to the framebuffer
-	push 0
-	push dword[ebp-4]
-	push dword[GL_TEXTURE_2D]
-	push dword[GL_COLOR_ATTACHMENT1]
 	push dword[GL_FRAMEBUFFER]
 	call [glFramebufferTexture2D]
 	
@@ -379,10 +314,11 @@ framebuffer_colourAttachment1:
 	call [glBindFramebuffer]
 	
 	;set the value in the fbo struct
-	mov eax, dword[ebp+8]
+	mov eax, dword[ebp-8]
 	mov ecx, dword[ebp-4]
-	mov dword[eax+8], ecx
+	mov dword[eax], ecx
 	
+	framebuffer_colourAttachment_end:
 	mov esp, ebp
 	pop ebp
 	ret
@@ -396,9 +332,9 @@ framebuffer_depthAttachment:
 	
 	;delete the previous attachment if necessary
 	mov eax, dword[ebp+8]
-	cmp dword[eax+12], 0
+	cmp dword[eax+20], 0
 	je framebuffer_depthAttachment_no_previous
-		lea ecx, [eax+12]
+		lea ecx, [eax+20]
 		push ecx
 		push 1
 		call [glDeleteTextures]
@@ -422,8 +358,8 @@ framebuffer_depthAttachment:
 	push dword[GL_DEPTH_STENCIL]
 	push 0
 	mov ecx, dword[ebp+8]
-	push dword[ecx+20]
-	push dword[ecx+16]
+	push dword[ecx+28]
+	push dword[ecx+24]
 	push dword[GL_DEPTH24_STENCIL8]
 	push 0
 	push dword[GL_TEXTURE_2D]
@@ -474,7 +410,7 @@ framebuffer_depthAttachment:
 	;set the value in the fbo struct
 	mov eax, dword[ebp+8]
 	mov ecx, dword[ebp-4]
-	mov dword[eax+12], ecx
+	mov dword[eax+20], ecx
 	
 	mov esp, ebp
 	pop ebp
@@ -498,77 +434,6 @@ framebuffer_bind:
 		push dword[GL_FRAMEBUFFER]
 		call [glBindFramebuffer]
 	framebuffer_bind_done:
-	
-	mov esp, ebp
-	pop ebp
-	ret
-	
-	
-framebuffer_test:
-	push ebp
-	mov ebp, esp
-	
-	sub esp, 4
-	
-	call [glGetError]
-	push eax
-	push print_int_nl
-	call my_printf
-	add esp, 8
-	
-	;create framebuffer
-	push 69
-	push 420
-	call framebuffer_create
-	mov dword[ebp-4], eax
-	add esp, 8
-	
-	call [glGetError]
-	push eax
-	push print_int_nl
-	call my_printf
-	add esp, 8
-	
-	;create attachments
-	push dword[FRAMEBUFFER_RGBA]
-	push dword[ebp-4]
-	call framebuffer_colourAttachment0
-	add esp, 8
-	
-	call [glGetError]
-	push eax
-	push print_int_nl
-	call my_printf
-	add esp, 8
-	
-	push dword[ebp-4]
-	call framebuffer_depthAttachment
-	add esp, 4
-	
-	call [glGetError]
-	push eax
-	push print_int_nl
-	call my_printf
-	add esp, 8
-	
-	;check status
-	push dword[ebp-4]
-	call framebuffer_isComplete
-	mov dword[esp], eax
-	push print_status
-	call my_printf
-	add esp, 8
-	
-	;destroy framebuffer
-	push dword[ebp-4]
-	call framebuffer_destroy
-	add esp, 4
-	
-	call [glGetError]
-	push eax
-	push print_int_nl
-	call my_printf
-	add esp, 8
 	
 	mov esp, ebp
 	pop ebp

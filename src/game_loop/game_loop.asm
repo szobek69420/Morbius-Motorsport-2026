@@ -234,7 +234,7 @@ section .text use32
 	
 	extern framebuffer_create
 	extern framebuffer_destroy
-	extern framebuffer_colourAttachment0
+	extern framebuffer_colourAttachment
 	extern framebuffer_depthAttachment
 	extern framebuffer_isComplete
 	extern framebuffer_bind
@@ -345,12 +345,13 @@ game_loop:
 	mov dword[framebuffer], eax
 	add esp, 4
 	
-	push dword[FRAMEBUFFER_RGBA]
+	push 0
+	push FRAMEBUFFER_RGBA
 	push dword[framebuffer]
-	call framebuffer_colourAttachment0
+	call framebuffer_colourAttachment
 	call framebuffer_depthAttachment
 	call framebuffer_isComplete
-	add esp, 8
+	add esp, 12
 	
 	test eax, eax
 	jnz game_loop_framebuffer_gg

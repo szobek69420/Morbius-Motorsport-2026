@@ -123,8 +123,10 @@ section .rodata use32
 	glDefine GL_RENDERER, 0x1f01
 	glDefine GL_REPEAT, 0x2901
 	glDefine GL_RGB, 0x1907
+	glDefine GL_RGB16F, 0x881b
 	glDefine GL_RGB8, 0x8051
 	glDefine GL_RGBA, 0x1908
+	glDefine GL_RGBA16F, 0x881a
 	glDefine GL_RGBA8, 0x8058
 	glDefine GL_SRC_ALPHA, 0x302
 	glDefine GL_SRC_COLOR, 0x300
