@@ -50,6 +50,8 @@ section .text use32
 	global mat4_perspective		;void mat4_perspective(mat4* buffer, float fovInDegrees, float aspectXY, float near, float far)
 	global mat4_perspective2	;void mat4_perspective2(mat4* buffer, float fovInDegrees, float aspectXY, float near, float far)
 	
+	global mat4_convertToMat3	;void mat4_convertToMat3(mat3* buffer, mat4* mat)
+	
 mat4_print:
 	push ebp
 	push edi
@@ -1208,4 +1210,30 @@ mat4_perspective2:		;https://vec3.ca/code/math/projection-direct3d
 	
 	mov esp, ebp
 	pop ebp
+	ret
+	
+	
+mat4_convertToMat3:	
+	mov eax, dword[esp+4]		;buffer in eax
+	mov ecx, dword[esp+8]		;mat in ecx
+	
+	mov edx, dword[ecx]
+	mov dword[eax], edx
+	mov edx, dword[ecx+4]
+	mov dword[eax+4], edx
+	mov edx, dword[ecx+8]
+	mov dword[eax+8], edx
+	mov edx, dword[ecx+16]
+	mov dword[eax+12], edx
+	mov edx, dword[ecx+20]
+	mov dword[eax+16], edx
+	mov edx, dword[ecx+24]
+	mov dword[eax+20], edx
+	mov edx, dword[ecx+32]
+	mov dword[eax+24], edx
+	mov edx, dword[ecx+36]
+	mov dword[eax+28], edx
+	mov edx, dword[ecx+40]
+	mov dword[eax+32], edx
+	
 	ret

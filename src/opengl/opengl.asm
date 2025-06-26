@@ -218,6 +218,7 @@ section .rodata use32
 	name_glDisableVertexAttribArray db "glDisableVertexAttribArray",0
 	name_glDrawArrays db "glDrawArrays",0
 	name_glDrawArraysInstanced db "glDrawArraysInstanced",0
+	name_glDrawBuffers db "glDrawBuffers",0
 	name_glDrawElements db "glDrawElements",0
 	name_glDrawElementsInstanced db "glDrawElementsInstanced",0
 	name_glEnable db "glEnable",0
@@ -307,7 +308,8 @@ section .bss use32
 	glFunc glDisable
 	glFunc glDisableVertexAttribArray
 	glFunc glDrawArrays
-	glFunc glDrawArraysInstanced 
+	glFunc glDrawArraysInstanced
+	glFunc glDrawBuffers
 	glFunc glDrawElements
 	glFunc glDrawElementsInstanced
 	glFunc glEnable
@@ -405,7 +407,8 @@ load_gl_functions:
 	load dword[ebp+8], glDisable
 	load dword[ebp+8], glDisableVertexAttribArray
 	load dword[ebp+8], glDrawArrays
-	load dword[ebp+8], glDrawArraysInstanced 
+	load dword[ebp+8], glDrawArraysInstanced
+	load dword[ebp+8], glDrawBuffers
 	load dword[ebp+8], glDrawElements
 	load dword[ebp+8], glDrawElementsInstanced
 	load dword[ebp+8], glEnable

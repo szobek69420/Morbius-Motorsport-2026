@@ -160,6 +160,9 @@ section .text use32
 	;enable should be 0, if the blending should be disabled
 	global renderable_enableBlending	;void renderable_enableBlending(int enable)
 	
+	
+	global renderable_calculateNormalMatrix	;void* renderable_calculateNormalMatrix(mat3* buffer, mat4* model_or_viewModel_matrix)
+	
 	extern glGenVertexArrays
 	extern glGenBuffers
 	extern glDeleteVertexArrays
@@ -224,10 +227,14 @@ section .text use32
 	extern textureHandler_load
 	extern textureHandler_unload
 	
+	extern mat3_transpose
+	extern mat3_inverse
+	extern mat3_print
 	extern mat4_init
 	extern mat4_scale
 	extern mat4_rotate
 	extern mat4_translate
+	extern mat4_convertToMat3
 	
 renderable_init:
 	push ebp
@@ -1382,6 +1389,34 @@ renderable_enableBlending:
 		call [glDisable]
 	
 	renderable_enableBlending_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+renderable_calculateNormalMatrix:
+	push ebp
+	mov ebp, esp
+	
+	;convert the mat4 to a mat3
+	push dword[ebp+12]
+	push dword[ebp+8]
+	call mat4_convertToMat3
+	add esp, 8
+	
+	
+	;calculate the inverse of the mat3
+	mov eax, dword[ebp+8]
+	sub esp, 8
+	mov dword[esp], eax
+	mov dword[esp+4], eax
+	call mat3_inverse
+	
+	
+	;calculate the transpose of the inverse of the mat3
+	call mat3_transpose
+	add esp, 8
+	
 	mov esp, ebp
 	pop ebp
 	ret

@@ -479,84 +479,89 @@ player_drawRaycastHypercube:
 	call hyperCubeRenderable_render
 	add esp, 16
 	
-	;draw the debug normal
-	;get the normal direction
-	mov dword[ebp-8], debug_normal_directions
-	mov eax, dword[ebp+8]
-	mov eax, dword[eax+60]		;raycast direction in eax
-	mov ecx, 1					;mask in ecx
-	player_drawRaycastHypercube_normal_loop_start:
-		test eax, ecx
-		jnz player_drawRaycastHypercube_normal_loop_end
-		
-		add dword[ebp-8], 16
-		shl ecx, 1
-		jmp player_drawRaycastHypercube_normal_loop_start
-		
-	player_drawRaycastHypercube_normal_loop_end:
 	
-	;calculate lineStart
-	lea eax, [ebp-24]
-	push eax
-	mov eax, dword[ebp+8]
-	push dword[eax+56]
-	push dword[ebp-4]
-	call hyperPlane_positionTo3d
-	add esp, 12
+	jmp player_drawRaycastHypercube_skip_normal
 	
-	;calculate lineDirection
-	push dword[debug_normal_length]
-	push dword[ebp-8]
-	lea eax, [ebp-40]
-	push eax
-	call vec4_scale
+		;draw the debug normal
+		;get the normal direction
+		mov dword[ebp-8], debug_normal_directions
+		mov eax, dword[ebp+8]
+		mov eax, dword[eax+60]		;raycast direction in eax
+		mov ecx, 1					;mask in ecx
+		player_drawRaycastHypercube_normal_loop_start:
+			test eax, ecx
+			jnz player_drawRaycastHypercube_normal_loop_end
+			
+			add dword[ebp-8], 16
+			shl ecx, 1
+			jmp player_drawRaycastHypercube_normal_loop_start
+			
+		player_drawRaycastHypercube_normal_loop_end:
+		
+		;calculate lineStart
+		lea eax, [ebp-24]
+		push eax
+		mov eax, dword[ebp+8]
+		push dword[eax+56]
+		push dword[ebp-4]
+		call hyperPlane_positionTo3d
+		add esp, 12
+		
+		;calculate lineDirection
+		push dword[debug_normal_length]
+		push dword[ebp-8]
+		lea eax, [ebp-40]
+		push eax
+		call vec4_scale
 
-	lea eax, [ebp-40]
-	push eax
-	push eax
-	push dword[ebp-4]
-	call hyperPlane_directionTo3d
-	add esp, 24
-	
-	
-	;set uniforms
-	mov eax, dword[ebp+8]
-	push dword[eax+68]
-	call renderable_useShader
-	add esp, 4
-	
-	push dword[ebp-16]
-	push dword[ebp-20]
-	push dword[ebp-24]
-	push dword[RENDERABLE_UNIFORM_VEC3]
-	push uniform_debug_normal_lineStart_name
-	mov eax, dword[ebp+8]
-	push dword[eax+68]
-	call renderable_setUniform
-	add esp, 24
-	
-	push dword[ebp-32]
-	push dword[ebp-36]
-	push dword[ebp-40]
-	push dword[RENDERABLE_UNIFORM_VEC3]
-	push uniform_debug_normal_lineDirection_name
-	mov eax, dword[ebp+8]
-	push dword[eax+68]
-	call renderable_setUniform
-	add esp, 24
-	
-	;actually draw the line
-	push dword[GL_LINES]
-	call renderable_setPrimitive
-	add esp, 4
-	
-	push 0
-	mov eax, dword[ebp+8]
-	push dword[eax+68]
-	push dword[ebp+12]
-	push dword[eax+64]
-	call renderable_renderCustom
-	add esp, 16
+		lea eax, [ebp-40]
+		push eax
+		push eax
+		push dword[ebp-4]
+		call hyperPlane_directionTo3d
+		add esp, 24
+		
+		
+		;set uniforms
+		mov eax, dword[ebp+8]
+		push dword[eax+68]
+		call renderable_useShader
+		add esp, 4
+		
+		push dword[ebp-16]
+		push dword[ebp-20]
+		push dword[ebp-24]
+		push dword[RENDERABLE_UNIFORM_VEC3]
+		push uniform_debug_normal_lineStart_name
+		mov eax, dword[ebp+8]
+		push dword[eax+68]
+		call renderable_setUniform
+		add esp, 24
+		
+		push dword[ebp-32]
+		push dword[ebp-36]
+		push dword[ebp-40]
+		push dword[RENDERABLE_UNIFORM_VEC3]
+		push uniform_debug_normal_lineDirection_name
+		mov eax, dword[ebp+8]
+		push dword[eax+68]
+		call renderable_setUniform
+		add esp, 24
+		
+		;actually draw the line
+		push dword[GL_LINES]
+		call renderable_setPrimitive
+		add esp, 4
+		
+		push 0
+		mov eax, dword[ebp+8]
+		push dword[eax+68]
+		push dword[ebp+12]
+		push dword[eax+64]
+		call renderable_renderCustom
+		add esp, 16
+		
+	player_drawRaycastHypercube_skip_normal:
 	
 	;set depth function to less
 	push dword[GL_LESS]

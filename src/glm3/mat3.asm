@@ -471,7 +471,7 @@ mat3_inverse:
 	fstp dword[ebp-76]	;store determinant
 	
 	;check if inverse exists
-	xor dword[ebp-76], 0x80000000		;remove the sign of the determinant
+	and dword[ebp-76], 0x7fffffff		;remove the sign of the determinant
 	movss xmm0, dword[epsilon]
 	ucomiss xmm0, dword[ebp-76]
 	jb _inverse_exists

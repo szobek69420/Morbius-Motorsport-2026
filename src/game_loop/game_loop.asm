@@ -80,6 +80,8 @@ section .bss use32
 	chunkLoader_thread resb 4			;thread*
 
 	camera resb 36
+	view_matrix resb 64
+	projection_matrix resb 64
 	pv_matrix resb 64
 	
 	hyperplane resb 64
@@ -88,7 +90,8 @@ section .bss use32
 	chunk_manager resb 4
 	chunk_manager_4d resb 4
 	
-	framebuffer resb 4
+	framebuffer_gbuffer resb 4
+	framebuffer_pp resb 4
 	
 section .data use32
 	render_distance dd 3
@@ -134,6 +137,8 @@ section .text use32
 
 	
 	extern camera_init
+	extern camera_view
+	extern camera_projection
 	extern camera_viewProjection
 	
 	extern my_printf
@@ -239,10 +244,13 @@ section .text use32
 	extern framebuffer_isComplete
 	extern framebuffer_bind
 	extern FRAMEBUFFER_RGBA
+	extern FRAMEBUFFER_RGB16F
+	extern FRAMEBUFFER_RGBA16F
 	
 	extern postProcessing_init
 	extern postProcessing_deinit
 	extern postProcessing_drawToScreen
+	extern postProcessing_ssao
 	
 	extern chunkManager_create
 	extern chunkManager_load
@@ -338,17 +346,37 @@ game_loop:
 	;init pp
 	call postProcessing_init
 	
-	;create framebuffer
+	;create post processing framebuffer
 	push dword[RENDER_HEIGHT]
 	push dword[RENDER_WIDTH]
 	call framebuffer_create
-	mov dword[framebuffer], eax
+	mov dword[framebuffer_pp], eax
 	add esp, 4
 
 	push 0
 	push FRAMEBUFFER_RGBA
-	push dword[framebuffer]
+	push dword[framebuffer_pp]
 	call framebuffer_colourAttachment
+	call framebuffer_depthAttachment
+	call framebuffer_isComplete
+	add esp, 12
+	
+	;create the gbuffer framebuffer
+	push dword[RENDER_HEIGHT]
+	push dword[RENDER_WIDTH]
+	call framebuffer_create
+	mov dword[framebuffer_gbuffer], eax
+	add esp, 4
+	
+	push 0
+	push FRAMEBUFFER_RGBA16F
+	push dword[framebuffer_gbuffer]
+	call framebuffer_colourAttachment			;colour attachment 0 is the position texture
+	mov dword[esp+8], 1
+	mov dword[esp+4], FRAMEBUFFER_RGB16F
+	call framebuffer_colourAttachment			;colour attachment 1 is the normal texture
+	mov dword[esp+8], 2
+	call framebuffer_colourAttachment			;colour attachment 2 is the albedo texture
 	call framebuffer_depthAttachment
 	call framebuffer_isComplete
 	add esp, 12
@@ -481,8 +509,8 @@ game_loop:
 		call player_update
 		add esp, 8
 		
-		;bind framebuffer and set viewport
-		push dword[framebuffer]
+		;bind the gbuffer and set viewport
+		push dword[framebuffer_gbuffer]
 		call framebuffer_bind
 		add esp, 4
 		
@@ -509,11 +537,19 @@ game_loop:
 		push eax
 		call [glClear]
 		
-		;get camera pv matrix
+		;get camera view, projection and pv matrix
+		push view_matrix
+		push camera
+		call camera_view
+		
+		push projection_matrix
+		push camera
+		call camera_projection
+		
 		push pv_matrix
 		push camera
 		call camera_viewProjection
-		add esp, 8
+		add esp, 24
 		
 		
 		;render sun (this should be drawn first)
@@ -531,19 +567,26 @@ game_loop:
 		call chunkManager4d_getHyperPlane
 		mov dword[esp], eax
 		push pv_matrix
-		call sun_render
+		;call sun_render
 		add esp, 12
 		
 		;render 4d chunks
-		push pv_matrix
+		push projection_matrix
+		push view_matrix
 		push dword[chunk_manager_4d]
 		call chunkManager4d_render
-		add esp, 8
+		add esp, 12
 		
 		;draw the raycast hypercube
 		push pv_matrix
 		push dword[pplayer]
-		call player_drawRaycastHypercube
+		;call player_drawRaycastHypercube
+		add esp, 8
+		
+		;do ssao
+		push dword[framebuffer_gbuffer]
+		push dword[framebuffer_pp]
+		call postProcessing_ssao
 		add esp, 8
 		
 		;bind the screen framebuffer and set viewport
@@ -558,7 +601,7 @@ game_loop:
 		call [glViewport]
 
 		;draw the render framebuffer to the screen
-		push dword[framebuffer]
+		push dword[framebuffer_pp]
 		call postProcessing_drawToScreen
 		add esp, 4
 		
@@ -616,8 +659,13 @@ game_loop:
 	call player_destroy
 	add esp, 4
 	
-	;destroy framebuffer
-	push dword[framebuffer]
+	;destroy the gbuffer framebuffer
+	push dword[framebuffer_gbuffer]
+	call framebuffer_destroy
+	add esp, 4
+	
+	;destroy the post processing framebuffer
+	push dword[framebuffer_pp]
 	call framebuffer_destroy
 	add esp, 4
 	

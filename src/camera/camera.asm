@@ -29,13 +29,13 @@ section .text use32
 	extern mat4_view
 	extern mat4_perspective2
 	
-	global camera_init		;void camera_init(camera* buffer);
-	global camera_view		;void camera_view(camera* cum, mat4* buffer)
-	global camera_projection	;void camera_projection(camera* cum, mat4* buffer)
+	global camera_init				;void camera_init(camera* buffer);
+	global camera_view				;void camera_view(camera* cum, mat4* buffer)
+	global camera_projection		;void camera_projection(camera* cum, mat4* buffer)
 	global camera_viewProjection	;void camera_viewProjection(camera* cum, mat4* buffer)
-	global camera_forward		;void camera_forward(camera* cum, vec3* buffer)
-	global camera_right		;void camera_right(camera* cum, vec3* buffer)
-	global camera_up		;void camera_up(camera* cum, vec3* buffer)
+	global camera_forward			;void camera_forward(camera* cum, vec3* buffer)
+	global camera_right				;void camera_right(camera* cum, vec3* buffer)
+	global camera_up				;void camera_up(camera* cum, vec3* buffer)
 	
 camera_init:
 	push ebp

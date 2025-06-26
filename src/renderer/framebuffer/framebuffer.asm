@@ -13,6 +13,8 @@
 section .rodata use32
 	global FRAMEBUFFER_RGB
 	global FRAMEBUFFER_RGBA
+	global FRAMEBUFFER_RGB16F
+	global FRAMEBUFFER_RGBA16F
 
 	;colour attachment types
 	FRAMEBUFFER_RGB:
@@ -66,6 +68,7 @@ section .text use32
 	extern glBindFramebuffer
 	extern glFramebufferTexture2D
 	extern glCheckFramebufferStatus
+	extern glDrawBuffers
 	extern GL_FRAMEBUFFER
 	extern GL_COLOR_ATTACHMENT0
 	extern GL_COLOR_ATTACHMENT1
@@ -313,6 +316,11 @@ framebuffer_colourAttachment:
 	push dword[GL_FRAMEBUFFER]
 	call [glFramebufferTexture2D]
 	
+	;update draw buffers
+	push dword[ebp+8]
+	call framebuffer_updateActiveBuffersInternal
+	add esp, 4
+	
 	;unbind the framebuffer
 	push 0
 	push dword[GL_FRAMEBUFFER]
@@ -441,5 +449,56 @@ framebuffer_bind:
 	framebuffer_bind_done:
 	
 	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;calls glDrawBuffer according to the active colour attachments
+;doesn't bind framebuffer
+;void framebuffer_updateActiveBuffersInternal(Framebuffer* currentlyActiveFramebuffer)
+framebuffer_updateActiveBuffersInternal:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 4				;active colour attachment count								4
+	sub esp, 36				;active colour attachment buffer (36 bytes is arbitrary)	40
+	
+	mov dword[ebp-4], 0
+
+	mov eax, dword[ebp+20]
+	lea esi, [eax+4]						;current attachment in esi
+	mov edi, dword[GL_COLOR_ATTACHMENT0]	;current value in edi
+	xor ebx, ebx							;index in ebx
+	framebuffer_updateActiveBuffersInternal_loop_start:
+		cmp dword[esi], 0
+		je framebuffer_updateActiveBuffersInternal_loop_continue	;no texture in the attachment slot
+			;set the value in the buffer
+			mov ecx, dword[ebp-4]
+			lea eax, [ebp-40+4*ecx]
+			mov dword[eax], edi
+			
+			;increment counter
+			inc dword[ebp-4]
+	
+		framebuffer_updateActiveBuffersInternal_loop_continue:
+		add esi, 4
+		inc edi
+		inc ebx
+		cmp ebx, 4
+		jl framebuffer_updateActiveBuffersInternal_loop_start
+		
+	;call glDrawBuffer
+	lea eax, [ebp-40]
+	push eax
+	push dword[ebp-4]
+	call [glDrawBuffers]
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
 	pop ebp
 	ret

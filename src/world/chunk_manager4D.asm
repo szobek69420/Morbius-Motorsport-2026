@@ -53,6 +53,10 @@ section .rodata use32
 	uniform_name_hyperPlaneNormal db "hyperPlaneNormal",0
 	uniform_name_sunDirection db "sunDirection",0
 	
+	uniform_name_view_mat db "view_mat",0
+	uniform_name_projection_mat db "projection_mat",0
+	uniform_name_normal_mat db "normal_mat",0
+	
 	test_text db "you're so portuguese",10,0
 	test_text2 db "you're so portuguese2",10,0
 	test_text3 db "you're so portuguese3",10,0
@@ -85,7 +89,7 @@ section .text use32
 	;should be called from the graphics thread
 	global chunkManager4d_processGraphicsUpdate	;void chunkManager4d_processGraphicsUpdate(ChunkManager4D* manager)
 	
-	global chunkManager4d_render					;void chunkManager4d_render(ChunkManager4D* manager, mat4* pv)
+	global chunkManager4d_render					;void chunkManager4d_render(ChunkManager4D* manager, mat4* view, mat4* projection)
 	
 	global chunkManager4d_getHyperPlane			;HyperPlane* chunkManager4d_getHyperPlane(ChunkManager4D* cm)
 	global chunkManager4d_setHyperPlane			;void chunkManager4d_setHyperPlane(ChunkManager4D* cm, HyperPlane* ph)
@@ -145,6 +149,7 @@ section .text use32
 	extern vec4_dot
 	extern vec4_mulWithMat
 	extern vec4_print
+	extern mat4_mul
 	
 	extern renderable_createCustom
 	extern renderable_destroy
@@ -154,8 +159,11 @@ section .text use32
 	extern renderable_useShader
 	extern renderable_setUniform
 	extern renderable_setPrimitive
+	extern renderable_calculateNormalMatrix
 	extern RENDERABLE_UNIFORM_VEC3
 	extern RENDERABLE_UNIFORM_VEC4
+	extern RENDERABLE_UNIFORM_MAT3
+	extern RENDERABLE_UNIFORM_MAT4
 	
 	extern textureHandler_bindArray
 	extern block_importTextures
@@ -279,6 +287,27 @@ chunkManager4d_render:
 	sub esp, 4					;hyperplane equation E			20
 	sub esp, 4					;hyperplane pointer				24
 	sub esp, 16					;sun direction 4d and then 3d	40
+	sub esp, 64					;pv	matrix						104
+	sub esp, 36					;normal matrix					140
+	
+	
+	;calculate the pv matrix
+	mov eax, dword[ebp+20]			;view
+	mov ecx, dword[ebp+24]			;projection
+	lea edx, [ebp-104]
+	push eax
+	push ecx
+	push edx
+	call mat4_mul
+	add esp, 12
+	
+	;calculate the normal matrix
+	;NOTE: the model matrix is not necessary for it as there only translation in the case of chomks
+	push dword[ebp+20]
+	lea eax, [ebp-140]
+	push eax
+	call renderable_calculateNormalMatrix
+	add esp, 8
 	
 	
 	;obtain hyperplane, hyperplane normal and E
@@ -424,6 +453,27 @@ chunkManager4d_render:
 	call renderable_setUniform
 	add esp, 28
 	
+
+	;set normal matrix uniform
+	lea eax, [ebp-140]
+	push eax
+	push dword[RENDERABLE_UNIFORM_MAT3]
+	push uniform_name_normal_mat
+	mov ecx, dword[ebp+16]
+	push dword[ecx+28]
+	call renderable_setUniform
+	add esp, 16
+	
+	;set view matrix uniform
+	lea eax, [ebp-104]
+	push eax
+	push dword[RENDERABLE_UNIFORM_MAT4]
+	push uniform_name_view_mat
+	mov ecx, dword[ebp+16]
+	push dword[ecx+28]
+	call renderable_setUniform
+	add esp, 16
+	
 	
 	mov edi, dword[ebp+16]
 	mov esi, dword[edi]				;chunk count in esi
@@ -438,7 +488,8 @@ chunkManager4d_render:
 		
 		;do frustum culling
 		push dword[ebp-24]			;hyperplane
-		push dword[ebp+20]			;pv
+		lea eax, [ebp-104]
+		push eax					;pv
 		push dword[ebp-20]			;E
 		lea eax, [ebp-16]
 		push eax					;normal
@@ -484,7 +535,8 @@ chunkManager4d_render:
 		push 69					;use textures
 		mov ecx, dword[ebp+16]
 		push dword[ecx+28]		;shader
-		push dword[ebp+20]
+		lea ecx, [ebp-104]
+		push ecx					;pv
 		push dword[eax+12]
 		call renderable_renderCustom
 		add esp, 16
@@ -548,7 +600,8 @@ chunkManager4d_render:
 			push 69					;use textures
 			mov ecx, dword[ebp+16]
 			push dword[ecx+28]		;shader
-			push dword[ebp+20]
+			lea eax, [ebp-104]
+			push eax					;pv
 			push dword[edi+12]
 			call renderable_renderCustom
 			add esp, 16

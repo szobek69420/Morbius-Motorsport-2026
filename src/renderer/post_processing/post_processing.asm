@@ -27,14 +27,18 @@ section .rodata use32
 	dd 0.0, 0.0, 1.0, 0.0
 	dd 0.0, 0.0, 0.0, 1.0
 	
-	vertex_shader_draw_to_screen db "shaders/pp/draw_to_screen.vag",0
-	fragment_shader_draw_to_screen db "shaders/pp/draw_to_screen.fag",0
+	vertex_shader_draw_to_screen db "shaders/pp/draw_to_screen/draw_to_screen.vag",0
+	fragment_shader_draw_to_screen db "shaders/pp/draw_to_screen/draw_to_screen.fag",0
+	
+	vertex_shader_ssao db "shaders/pp/ssao/ssao.vag",0
+	fragment_shader_ssao db "shaders/pp/ssao/ssao.fag",0
 
 section .data use32
 	initialized dd 0
 	renderable dd 0
 	
 	shader_draw_to_screen dd 0
+	shader_ssao dd 0
 	
 
 section .text use32
@@ -49,6 +53,14 @@ section .text use32
 	;sets the primitive to GL_TRIANGLES
 	;void postProcessing_drawToScreen(Framebuffer* framebuffer)
 	global postProcessing_drawToScreen
+
+	;src needs to have a colourAttachment0, a colourAttachment1 and a colourAttachment2
+	;DOESN'T CALL glViewport!!!!!!
+	;disables depth test
+	;disables blending
+	;sets the primitive to GL_TRIANGLES
+	;void postProcessing_ssao(Framebuffer* dest, Framebuffer* src)
+	global postProcessing_ssao
 	
 	extern renderable_createCustom
 	extern renderable_destroy
@@ -88,6 +100,14 @@ postProcessing_init:
 	mov dword[shader_draw_to_screen], eax
 	add esp, 12
 	
+	;create ssao shader
+	push 0
+	push fragment_shader_ssao
+	push vertex_shader_ssao
+	call renderable_createShader
+	mov dword[shader_ssao], eax
+	add esp, 12
+	
 	;set initialized flag
 	mov dword[initialized], 69
 	
@@ -99,6 +119,12 @@ postProcessing_init:
 postProcessing_deinit:
 	push ebp
 	mov ebp, esp
+	
+	;yeet ssao
+	push dword[shader_ssao]
+	call renderable_destroyShader
+	mov dword[shader_ssao], 0
+	add esp, 4
 	
 	;yeet draw to screen shader
 	push dword[shader_draw_to_screen]
@@ -147,6 +173,67 @@ postProcessing_drawToScreen:
 	
 	;bind the screen framebuffer
 	push 0
+	push dword[GL_FRAMEBUFFER]
+	call [glBindFramebuffer]
+	
+	;render the renderable
+	push 69
+	push dword[shader_draw_to_screen]
+	push mat4_identity
+	push dword[renderable]
+	call renderable_renderCustom
+	add esp, 16
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+postProcessing_ssao:
+	push ebp
+	mov ebp, esp
+	
+	;disable depth test
+	push 0
+	call renderable_enableDepthTest
+	add esp, 4
+	
+	;disable blending
+	push 0
+	call renderable_enableBlending
+	add esp, 4
+	
+	;set the primitive
+	push dword[GL_TRIANGLES]
+	call renderable_setPrimitive
+	add esp, 4
+	
+	;set the textures of the renderable
+	mov ecx, dword[ebp+12]
+	push dword[ecx+4]
+	push 0
+	push dword[renderable]
+	call renderable_setExtraTexture2D
+	add esp, 12
+	
+	mov ecx, dword[ebp+12]
+	push dword[ecx+8]
+	push 1
+	push dword[renderable]
+	call renderable_setExtraTexture2D
+	add esp, 12
+	
+	mov ecx, dword[ebp+12]
+	push dword[ecx+12]
+	push 2
+	push dword[renderable]
+	call renderable_setExtraTexture2D
+	add esp, 12
+	
+	
+	;bind the destination framebuffer
+	mov eax, dword[ebp+8]
+	push dword[eax]
 	push dword[GL_FRAMEBUFFER]
 	call [glBindFramebuffer]
 	
