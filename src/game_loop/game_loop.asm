@@ -527,21 +527,18 @@ game_loop:
 		call [glViewport]
 		
 	
-		;calculate and set clear color
-		sub esp, 16
-		mov eax, esp
-		push eax
-		push dword[TIME_OF_DAY]
-		call sky_getColour
-		add esp, 8
+		;clear color and depth buffer bit
+		push 0
+		push 0
+		push 0
+		push 0
 		call [glClearColor]
 		
-		
-		;clear color and depth buffer bit
 		mov eax, dword[GL_COLOR_BUFFER_BIT]
 		or eax, dword[GL_DEPTH_BUFFER_BIT]
 		push eax
 		call [glClear]
+		
 		
 		;get camera view, projection and pv matrix
 		push view_matrix
@@ -588,6 +585,23 @@ game_loop:
 		push dword[pplayer]
 		;call player_drawRaycastHypercube
 		add esp, 8
+		
+		;bind next framebuffer and clear it with the sky colour
+		push dword[framebuffer_pp]
+		call framebuffer_bind
+		add esp, 4
+		
+		sub esp, 16
+		mov eax, esp
+		push eax
+		push dword[TIME_OF_DAY]
+		call sky_getColour
+		add esp, 8
+		call [glClearColor]
+		
+		
+		push dword[GL_COLOR_BUFFER_BIT]
+		call [glClear]
 		
 		;do ssao
 		push dword[framebuffer_gbuffer]

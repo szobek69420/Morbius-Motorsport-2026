@@ -8,7 +8,7 @@ in uint cellData[1];
 out vec3 uv;
 
 out vec3 viewSpace_normal;
-out vec4 viewSpace_position;
+out vec3 viewSpace_position;
 
 uniform mat4 pv;
 uniform mat4 view_mat;
@@ -473,14 +473,14 @@ void main()
 		if(i%2==1)
 		{
 			uv=vec3(intersectionsUV[sortedIndices[i/2]], float(blockUvZ));
-			viewSpace_position=view_mat*vec4(intersections3D[sortedIndices[intersectionCount-i/2-1]],1.0);
+			viewSpace_position=(view_mat*vec4(intersections3D[sortedIndices[i/2]],1.0)).xyz;
 			
 			gl_Position=pv*vec4(intersections3D[sortedIndices[i/2]],1.0);
 		}
 		else
 		{
 			uv=vec3(intersectionsUV[sortedIndices[intersectionCount-i/2-1]], float(blockUvZ));
-			viewSpace_position=view_mat*vec4(intersections3D[sortedIndices[intersectionCount-i/2-1]],1.0);
+			viewSpace_position=(view_mat*vec4(intersections3D[sortedIndices[intersectionCount-i/2-1]],1.0)).xyz;
 			
 			gl_Position=pv*vec4(intersections3D[sortedIndices[intersectionCount-i/2-1]],1.0);
 		}
