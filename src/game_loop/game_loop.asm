@@ -185,6 +185,7 @@ section .text use32
 	extern renderable_render
 	extern renderable_setAlbedo
 	extern renderable_setPosition
+	extern renderable_enableDepthTest
 	extern RENDERABLE_ATTRIB_P3
 	extern RENDERABLE_ATTRIB_P3UV2
 	
@@ -509,6 +510,11 @@ game_loop:
 		call player_update
 		add esp, 8
 		
+		;enable depth test
+		push 69
+		call renderable_enableDepthTest
+		add esp, 4
+		
 		;bind the gbuffer and set viewport
 		push dword[framebuffer_gbuffer]
 		call framebuffer_bind
@@ -589,11 +595,7 @@ game_loop:
 		call postProcessing_ssao
 		add esp, 8
 		
-		;bind the screen framebuffer and set viewport
-		push 0
-		call framebuffer_bind
-		add esp, 4
-
+		;set viewport
 		push dword[WINDOW_SIZE_Y]
 		push dword[WINDOW_SIZE_X]
 		push 0

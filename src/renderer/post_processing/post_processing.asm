@@ -239,7 +239,7 @@ postProcessing_ssao:
 	
 	;render the renderable
 	push 69
-	push dword[shader_draw_to_screen]
+	push dword[shader_ssao]
 	push mat4_identity
 	push dword[renderable]
 	call renderable_renderCustom

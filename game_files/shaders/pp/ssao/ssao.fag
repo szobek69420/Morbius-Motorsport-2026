@@ -9,5 +9,5 @@ uniform sampler2D extra2DTexture2;	//albedo, vec3
 
 void main()
 {
-	fragmentColour=vec4(texture(extra2DTexture0, uv).rgb, 1.0);
+	fragmentColour=vec4(texture(extra2DTexture2, uv).rgb, 1.0);
 }

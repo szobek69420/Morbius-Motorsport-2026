@@ -39,6 +39,7 @@ section .rodata use32
 	
 	print_int_nl db "%d",10,0
 	print_two_ints_nl db "%d %d",10,0
+	print_three_ints_nl db "%d %d %d",10,0
 	print_status db "framebuffer is complete: %d",10,0
 	
 	test_text db "drip chungus",10,0
@@ -121,11 +122,11 @@ framebuffer_create:
 	
 	;init the other attachments
 	mov eax, dword[ebp-4]
-	mov dword[eax+4], 0
-	mov dword[eax+8], 0
-	mov dword[eax+12], 0
-	mov dword[eax+16], 0
-	mov dword[eax+20], 0
+	mov dword[eax+4], -1
+	mov dword[eax+8], -1
+	mov dword[eax+12], -1
+	mov dword[eax+16], -1
+	mov dword[eax+20], -1
 	
 	;set the size
 	mov eax, dword[ebp-4]
@@ -217,8 +218,8 @@ framebuffer_colourAttachment:
 	mov eax, dword[ebp+16]
 	test eax, 0x80000000
 	jnz framebuffer_colourAttachment_number_error
-	cmp eax, 3
-	jg framebuffer_colourAttachment_number_error
+	cmp eax, 4
+	jge framebuffer_colourAttachment_number_error
 	jmp framebuffer_colourAttachment_number_gg
 	framebuffer_colourAttachment_number_error:
 		push eax
@@ -237,7 +238,7 @@ framebuffer_colourAttachment:
 	
 	;delete the previous attachment if necessary
 	mov eax, dword[ebp-8]
-	cmp dword[eax], 0
+	cmp dword[eax], -1
 	je framebuffer_colourAttachment_no_previous
 		push eax
 		push 1
@@ -316,6 +317,11 @@ framebuffer_colourAttachment:
 	push dword[GL_FRAMEBUFFER]
 	call [glFramebufferTexture2D]
 	
+	;set the value in the fbo struct
+	mov eax, dword[ebp-8]
+	mov ecx, dword[ebp-4]
+	mov dword[eax], ecx
+	
 	;update draw buffers
 	push dword[ebp+8]
 	call framebuffer_updateActiveBuffersInternal
@@ -326,10 +332,6 @@ framebuffer_colourAttachment:
 	push dword[GL_FRAMEBUFFER]
 	call [glBindFramebuffer]
 	
-	;set the value in the fbo struct
-	mov eax, dword[ebp-8]
-	mov ecx, dword[ebp-4]
-	mov dword[eax], ecx
 	
 	framebuffer_colourAttachment_end:
 	mov esp, ebp
@@ -345,7 +347,7 @@ framebuffer_depthAttachment:
 	
 	;delete the previous attachment if necessary
 	mov eax, dword[ebp+8]
-	cmp dword[eax+20], 0
+	cmp dword[eax+20], -1
 	je framebuffer_depthAttachment_no_previous
 		lea ecx, [eax+20]
 		push ecx
@@ -473,12 +475,11 @@ framebuffer_updateActiveBuffersInternal:
 	mov edi, dword[GL_COLOR_ATTACHMENT0]	;current value in edi
 	xor ebx, ebx							;index in ebx
 	framebuffer_updateActiveBuffersInternal_loop_start:
-		cmp dword[esi], 0
+		cmp dword[esi], -1
 		je framebuffer_updateActiveBuffersInternal_loop_continue	;no texture in the attachment slot
 			;set the value in the buffer
-			mov ecx, dword[ebp-4]
-			lea eax, [ebp-40+4*ecx]
-			mov dword[eax], edi
+			mov eax, dword[ebp-4]
+			mov dword[ebp-40+4*eax], edi
 			
 			;increment counter
 			inc dword[ebp-4]
@@ -495,6 +496,7 @@ framebuffer_updateActiveBuffersInternal:
 	push eax
 	push dword[ebp-4]
 	call [glDrawBuffers]
+	
 	
 	mov esp, ebp
 	pop ebx
