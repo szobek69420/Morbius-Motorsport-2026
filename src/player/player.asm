@@ -190,12 +190,14 @@ section .text use32
 	extern renderable_useShader
 	extern renderable_setPrimitive
 	extern renderable_enableBlending
+	extern renderable_enableDepthTest
 	extern renderable_setDepthFunc
 	extern hyperCubeRenderable_create
 	extern hyperCubeRenderable_destroy
 	extern hyperCubeRenderable_render
 	extern RENDERABLE_UNIFORM_VEC3
 	
+	extern GL_POINTS
 	extern GL_LINES
 	extern GL_TRIANGLES
 	extern GL_LESS
@@ -458,6 +460,11 @@ player_drawRaycastHypercube:
 	push dword[eax+28]
 	call chunkManager4d_getHyperPlane
 	mov dword[ebp-4], eax
+	add esp, 4
+	
+	;set primitive to point
+	push dword[GL_POINTS]
+	call renderable_setPrimitive
 	add esp, 4
 	
 	;enable blending

@@ -60,6 +60,10 @@ section .text use32
 	;void framebuffer_bind(Framebuffer* framebuffer)
 	global framebuffer_bind
 	
+	;overrides GL_READ_FRAMEBUFFER and GL_DRAW_FRAMEBUFFER
+	;void framebuffer_copyDepthBuffer(Framebuffer* dst, Framebuffer* src)
+	global framebuffer_copyDepthBuffer
+	
 	extern my_printf
 	extern my_malloc
 	extern my_free
@@ -71,6 +75,8 @@ section .text use32
 	extern glCheckFramebufferStatus
 	extern glDrawBuffers
 	extern GL_FRAMEBUFFER
+	extern GL_DRAW_FRAMEBUFFER
+	extern GL_READ_FRAMEBUFFER
 	extern GL_COLOR_ATTACHMENT0
 	extern GL_COLOR_ATTACHMENT1
 	extern GL_DEPTH_STENCIL_ATTACHMENT
@@ -82,6 +88,7 @@ section .text use32
 	extern glActiveTexture
 	extern glTexImage2D
 	extern glTexParameteri
+	extern glBlitFramebuffer
 	extern GL_TEXTURE_2D
 	extern GL_TEXTURE_MIN_FILTER
 	extern GL_TEXTURE_MAG_FILTER
@@ -100,6 +107,8 @@ section .text use32
 	extern GL_UNSIGNED_BYTE
 	extern GL_FLOAT
 	extern GL_UNSIGNED_INT_24_8
+	
+	extern GL_DEPTH_BUFFER_BIT
 	
 	extern glGetError
 
@@ -502,5 +511,44 @@ framebuffer_updateActiveBuffersInternal:
 	pop ebx
 	pop edi
 	pop esi
+	pop ebp
+	ret
+	
+	
+	
+framebuffer_copyDepthBuffer:
+	push ebp
+	mov ebp, esp
+	
+	;bind framebuffers
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	push dword[GL_DRAW_FRAMEBUFFER]
+	call [glBindFramebuffer]
+	
+	mov ecx, dword[ebp+12]
+	push dword[ecx]
+	push dword[GL_READ_FRAMEBUFFER]
+	call [glBindFramebuffer]
+	
+	
+	
+	;copy the inhalt
+	push dword[GL_NEAREST]
+	push dword[GL_DEPTH_BUFFER_BIT]
+	mov eax, dword[ebp+8]
+	push dword[eax+28]					;dst->height
+	push dword[eax+24]					;dst->width
+	push 0
+	push 0
+	mov ecx, dword[ebp+12]
+	push dword[ecx+28]					;src->height
+	push dword[ecx+24]					;src->width
+	push 0
+	push 0
+	call [glBlitFramebuffer]
+	
+	
+	mov esp, ebp
 	pop ebp
 	ret

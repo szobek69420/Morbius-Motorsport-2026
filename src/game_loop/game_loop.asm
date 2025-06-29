@@ -244,6 +244,7 @@ section .text use32
 	extern framebuffer_depthAttachment
 	extern framebuffer_isComplete
 	extern framebuffer_bind
+	extern framebuffer_copyDepthBuffer
 	extern FRAMEBUFFER_RGBA
 	extern FRAMEBUFFER_RGB16F
 	extern FRAMEBUFFER_RGBA16F
@@ -510,6 +511,9 @@ game_loop:
 		call player_update
 		add esp, 8
 		
+		
+		;do the deferred rendering things--------------------------
+		
 		;enable depth test
 		push 69
 		call renderable_enableDepthTest
@@ -580,11 +584,6 @@ game_loop:
 		call chunkManager4d_render
 		add esp, 12
 		
-		;draw the raycast hypercube
-		push pv_matrix
-		push dword[pplayer]
-		;call player_drawRaycastHypercube
-		add esp, 8
 		
 		;bind next framebuffer and clear it with the sky colour
 		push dword[framebuffer_pp]
@@ -603,11 +602,31 @@ game_loop:
 		push dword[GL_COLOR_BUFFER_BIT]
 		call [glClear]
 		
-		;do ssao
+		;do deferred rendering and ssao
 		push dword[framebuffer_gbuffer]
 		push dword[framebuffer_pp]
 		call postProcessing_ssao
 		add esp, 8
+		
+		;also copy the depth buffer
+		push dword[framebuffer_gbuffer]
+		push dword[framebuffer_pp]
+		call framebuffer_copyDepthBuffer
+		add esp, 8
+		
+		;do the forward rendering things--------------------------
+		
+		;enable depth test
+		push 69
+		call renderable_enableDepthTest
+		add esp, 4
+		
+		;draw the raycast hypercube
+		push pv_matrix
+		push dword[pplayer]
+		call player_drawRaycastHypercube
+		add esp, 8
+		
 		
 		;set viewport
 		push dword[WINDOW_SIZE_Y]

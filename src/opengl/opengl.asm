@@ -195,6 +195,7 @@ section .rodata use32
 	name_glBindRenderbuffer db "glBindRenderbuffer",0
 	name_glBindTexture db "glBindTexture",0
 	name_glBindVertexArray db "glBindVertexArray",0
+	name_glBlitFramebuffer db "glBlitFramebuffer",0
 	name_glBufferData db "glBufferData",0
 	name_glBufferSubData db "glBufferSubData",0
 	name_glCheckFramebufferStatus db "glCheckFramebufferStatus",0
@@ -286,6 +287,7 @@ section .bss use32
 	glFunc glBindRenderbuffer
 	glFunc glBindTexture
 	glFunc glBindVertexArray
+	glFunc glBlitFramebuffer
 	glFunc glBufferData
 	glFunc glBufferSubData
 	glFunc glCheckFramebufferStatus
@@ -385,6 +387,7 @@ load_gl_functions:
 	load dword[ebp+8], glBindRenderbuffer
 	load dword[ebp+8], glBindTexture
 	load dword[ebp+8], glBindVertexArray
+	load dword[ebp+8], glBlitFramebuffer
 	load dword[ebp+8], glBufferData
 	load dword[ebp+8], glBufferSubData
 	load dword[ebp+8], glCheckFramebufferStatus
