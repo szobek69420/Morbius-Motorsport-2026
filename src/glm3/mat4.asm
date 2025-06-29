@@ -17,6 +17,8 @@ section .rodata use32
 	two dd 2.0
 	minusOne dd -1.0
 	DEG2RAD dd 0.017453293
+	
+	SIGN_FLIPPER dd 0x80000000
 
 section .text use32
 	extern my_memcpy
@@ -521,14 +523,12 @@ mat4_inverse:
 			
 			movaps xmm2, [ecx]
 			movaps xmm3, [eax]
-			mulps xmm3, xmm1
-			subps xmm2, xmm3
+			vfnmadd231ps xmm2, xmm1, xmm3
 			movaps [ecx], xmm2
 			
 			movaps xmm2, [ecx+16]
 			movaps xmm3, [eax+16]
-			mulps xmm3, xmm1
-			subps xmm2, xmm3
+			vfnmadd231ps xmm2, xmm1, xmm3
 			movaps [ecx+16], xmm2
 			
 			add ecx, 32
@@ -582,14 +582,12 @@ mat4_inverse:
 			
 			movaps xmm2, [ecx]
 			movaps xmm3, [eax]
-			mulps xmm3, xmm1
-			subps xmm2, xmm3
+			vfnmadd231ps xmm2, xmm1, xmm3
 			movaps [ecx], xmm2
 			
 			movaps xmm2, [ecx+16]
 			movaps xmm3, [eax+16]
-			mulps xmm3, xmm1
-			subps xmm2, xmm3
+			vfnmadd231ps xmm2, xmm1, xmm3
 			movaps [ecx+16], xmm2
 			
 			sub ecx, 32

@@ -32,6 +32,11 @@ section .rodata use32
 	
 	vertex_shader_ssao db "shaders/pp/ssao/ssao.vag",0
 	fragment_shader_ssao db "shaders/pp/ssao/ssao.fag",0
+	
+	ZERO dd 0.0
+	ONE dd 1.0
+	TWO dd 2.0
+	FLOAT_SCALER dd 65536.0
 
 section .data use32
 	initialized dd 0
@@ -246,5 +251,93 @@ postProcessing_ssao:
 	add esp, 16
 	
 	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;internal functions ------------------------------------------
+
+
+;void framebuffer_generateSamplesSSAO(int sampleCount, vec3 buffer[sampleCount])
+framebuffer_generateSamplesSSAO:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 16					;vec3 buffer + padding		16
+	
+	mov dword[ebp-4], 0
+	
+	;check if the sample count is kosher
+	cmp dword[ebp+20], 0
+	jle framebuffer_generateSamplesSSAO_end
+	
+	;generate samples
+	mov esi, dword[ebp+20]			;index in esi
+	mov edi, dword[ebp+24]			;current sample in edi
+	mov ebx, 42069					;random state in ebx
+	framebuffer_generateSamplesSSAO_loop_start:
+		;generate 3 random numbers
+		push 0					;for padding
+		imul ebx, 1103515245 
+		add ebx, 12345
+		mov eax, ebx
+		and eax, 0xffff
+		mov dword[ebp-8], eax
+		imul ebx, 1103515245 
+		add ebx, 12345
+		mov eax, ebx
+		and eax, 0xffff
+		mov dword[ebp-12], eax
+		imul ebx, 1103515245 
+		add ebx, 12345
+		mov eax, ebx
+		and eax, 0xffff
+		mov dword[ebp-16], eax
+		
+		;convert them to random floats in [0; 1]
+		fld dword[FLOAT_SCALER]
+		fild dword[ebp-8]
+		fmul st0, st1
+		fstp dword[ebp-8]
+		fild dword[ebp-12]
+		fmul st0, st1
+		fstp dword[ebp-12]
+		fild dword[ebp-16]
+		fmul st0, st1
+		fstp dword[ebp-16]
+		fstp st0
+		
+		;scale them (x and y component to [-1;1], z component to [0;1])
+		movss xmm1, dword[TWO]
+		movss xmm3, dword[ONE]
+		shufps xmm1, xmm3, 0
+		movss xmm2, dword[ONE]
+		movss xmm3, dword[ZERO]
+		shufps xmm2, xmm3, 0
+		movups xmm0, [ebp-16]
+		vfmsub213ps xmm0, xmm1, xmm2
+		movups [ebp-16], xmm0
+		
+		;copy results in the buffer
+		mov eax, dword[ebp-16]
+		mov dword[edi], eax
+		mov ecx, dword[ebp-12]
+		mov dword[edi+4], ecx
+		mov edx, dword[ebp-8]
+		mov dword[edi+8], edx
+		
+		add edi, 12
+		dec esi
+		test esi, esi
+		jnz framebuffer_generateSamplesSSAO_loop_start
+	
+	framebuffer_generateSamplesSSAO_end:
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
 	pop ebp
 	ret

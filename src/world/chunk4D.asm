@@ -133,7 +133,7 @@ chunk4d_vec4ToBlockPos:
 	
 	mov edx, dword[ebp-16]
 	mov ebx, edx
-	test ebx, 0x70000000
+	test ebx, 0x80000000
 	jnz chunk4d_vec4ToBlockPos_x_neg
 		shr ebx, 4
 		jmp chunk4d_vec4ToBlockPos_x_done
@@ -153,7 +153,7 @@ chunk4d_vec4ToBlockPos:
 	
 	mov edx, dword[ebp-8]
 	mov ebx, edx
-	test ebx, 0x70000000
+	test ebx, 0x80000000
 	jnz chunk4d_vec4ToBlockPos_z_neg
 		shr ebx, 4
 		jmp chunk4d_vec4ToBlockPos_z_done
@@ -170,7 +170,7 @@ chunk4d_vec4ToBlockPos:
 	
 	mov edx, dword[ebp-4]
 	mov ebx, edx
-	test ebx, 0x70000000
+	test ebx, 0x80000000
 	jnz chunk4d_vec4ToBlockPos_w_neg
 		shr ebx, 4
 		jmp chunk4d_vec4ToBlockPos_w_done
