@@ -48,6 +48,11 @@ section .rodata
 	RENDERABLE_UNIFORM_4I dd 7
 	RENDERABLE_UNIFORM_MAT3 dd 8
 	RENDERABLE_UNIFORM_MAT4 dd 9
+	RENDERABLE_UNIFORM_FLOAT_ARRAY dd 10
+	RENDERABLE_UNIFORM_VEC2_ARRAY dd 11
+	RENDERABLE_UNIFORM_VEC3_ARRAY dd 12
+	RENDERABLE_UNIFORM_VEC4_ARRAY dd 13
+	
 	
 	error_not_initialized db "renderable: renderable_init has not been called",10,0
 	error_unsupported_layout db "renderable_create: unsupported vertex attribute layout",10,0
@@ -184,6 +189,10 @@ section .text use32
 	extern glUniform4i
 	extern glUniformMatrix3fv
 	extern glUniformMatrix4fv
+	extern glUniform1fv
+	extern glUniform2fv
+	extern glUniform3fv
+	extern glUniform4fv
 	extern glUseProgram
 	extern glDrawArrays
 	extern glDrawElements
@@ -195,6 +204,7 @@ section .text use32
 	extern GL_TRUE
 	extern GL_FALSE
 	extern GL_TRIANGLES
+	
 	
 	extern glBindTexture
 	extern glActiveTexture
@@ -1249,6 +1259,10 @@ renderable_setUniform:
 	dd renderable_setUniform_4i
 	dd renderable_setUniform_mat3
 	dd renderable_setUniform_mat4
+	dd renderable_setUniform_1fv
+	dd renderable_setUniform_2fv
+	dd renderable_setUniform_3fv
+	dd renderable_setUniform_4fv
 	renderable_setUniform_nigga:
 	
 	renderable_setUniform_float:
@@ -1325,6 +1339,34 @@ renderable_setUniform:
 		push 1
 		push dword[ebp-4]
 		call [glUniformMatrix4fv]
+		jmp renderable_setUniform_end
+		
+	renderable_setUniform_1fv:
+		push dword[ebp+24]			;array
+		push dword[ebp+20]			;count
+		push dword[ebp-4]
+		call [glUniform1fv]
+		jmp renderable_setUniform_end
+		
+	renderable_setUniform_2fv:
+		push dword[ebp+24]			;array
+		push dword[ebp+20]			;count
+		push dword[ebp-4]
+		call [glUniform2fv]
+		jmp renderable_setUniform_end
+		
+	renderable_setUniform_3fv:
+		push dword[ebp+24]			;array
+		push dword[ebp+20]			;count
+		push dword[ebp-4]
+		call [glUniform3fv]
+		jmp renderable_setUniform_end
+		
+	renderable_setUniform_4fv:
+		push dword[ebp+24]			;array
+		push dword[ebp+20]			;count
+		push dword[ebp-4]
+		call [glUniform4fv]
 		jmp renderable_setUniform_end
 	
 	renderable_setUniform_end:
