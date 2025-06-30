@@ -36,7 +36,7 @@ section .rodata use32
 	ZERO dd 0.0
 	ONE dd 1.0
 	TWO dd 2.0
-	FLOAT_SCALER dd 65536.0
+	FLOAT_SCALER dd 0.000015258789		;1/(2^16)
 
 section .data use32
 	initialized dd 0
@@ -44,6 +44,8 @@ section .data use32
 	
 	shader_draw_to_screen dd 0
 	shader_ssao dd 0
+	
+	texture_ssao_noise dd 0				;the random rotation texture of the ssao
 	
 
 section .text use32
@@ -77,10 +79,27 @@ section .text use32
 	extern renderable_createShader
 	extern renderable_destroyShader
 	
+	extern glGenTextures
+	extern glBindTexture
+	extern glTexImage2D
+	extern glTexParameteri
+	extern GL_TEXTURE_2D
+	extern GL_TEXTURE_MIN_FILTER
+	extern GL_TEXTURE_MAG_FILTER
+	extern GL_TEXTURE_WRAP_S
+	extern GL_TEXTURE_WRAP_T
+	extern GL_NEAREST
+	extern GL_REPEAT
+	extern GL_RGB16F
+	extern GL_RGB
+	extern GL_FLOAT
+	
 	extern glBindFramebuffer
 	extern GL_FRAMEBUFFER
 	
 	extern GL_TRIANGLES
+	
+	extern vec3_print
 	
 	
 postProcessing_init:
@@ -105,13 +124,8 @@ postProcessing_init:
 	mov dword[shader_draw_to_screen], eax
 	add esp, 12
 	
-	;create ssao shader
-	push 0
-	push fragment_shader_ssao
-	push vertex_shader_ssao
-	call renderable_createShader
-	mov dword[shader_ssao], eax
-	add esp, 12
+	;init deferred part
+	call postProcessing_initDeferredPart
 	
 	;set initialized flag
 	mov dword[initialized], 69
@@ -257,9 +271,48 @@ postProcessing_ssao:
 	
 ;internal functions ------------------------------------------
 
+;initializes the ssao kernel and the random rotation texture
+;handles the shaders as well
+;void postProcessing_initDeferredPart()
+postProcessing_initDeferredPart:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 384			;32*sizeof(vec3)		384
+	
+	;create ssao shader
+	push 0
+	push fragment_shader_ssao
+	push vertex_shader_ssao
+	call renderable_createShader
+	mov dword[shader_ssao], eax
+	add esp, 12
+	
+	;generate the random kernel
+	lea eax, [ebp-384]
+	push eax
+	push 32
+	call postProcessing_generateSamplesSSAO
+	add esp, 8
+	
+	
+	;generate noise texture
+	call postProcessing_generateSSAONoiseTexture
+	
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
 
-;void framebuffer_generateSamplesSSAO(int sampleCount, vec3 buffer[sampleCount])
-framebuffer_generateSamplesSSAO:
+
+;void postProcessing_generateSamplesSSAO(int sampleCount, vec3 buffer[sampleCount])
+postProcessing_generateSamplesSSAO:
 	push ebp
 	push esi
 	push edi
@@ -272,15 +325,15 @@ framebuffer_generateSamplesSSAO:
 	
 	;check if the sample count is kosher
 	cmp dword[ebp+20], 0
-	jle framebuffer_generateSamplesSSAO_end
+	jle postProcessing_generateSamplesSSAO_end
 	
 	;generate samples
 	mov esi, dword[ebp+20]			;index in esi
 	mov edi, dword[ebp+24]			;current sample in edi
 	mov ebx, 42069					;random state in ebx
-	framebuffer_generateSamplesSSAO_loop_start:
+	postProcessing_generateSamplesSSAO_loop_start:
 		;generate 3 random numbers
-		push 0					;for padding
+		mov dword[ebp-4], 0			;for padding
 		imul ebx, 1103515245 
 		add ebx, 12345
 		mov eax, ebx
@@ -329,12 +382,120 @@ framebuffer_generateSamplesSSAO:
 		mov edx, dword[ebp-8]
 		mov dword[edi+8], edx
 		
+		
 		add edi, 12
 		dec esi
 		test esi, esi
-		jnz framebuffer_generateSamplesSSAO_loop_start
+		jnz postProcessing_generateSamplesSSAO_loop_start
 	
-	framebuffer_generateSamplesSSAO_end:
+	postProcessing_generateSamplesSSAO_end:
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+
+;generates a 4x4 texture and fills it with random rotation vectors
+;void postProcessing_generateSSAONoiseTexture()
+postProcessing_generateSSAONoiseTexture:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 192	;16*sizeof(vec3)		192
+	
+	
+	;generate random vec3s
+	mov esi, 16						;index in esi
+	lea edi, [ebp-192]				;current sample in edi
+	mov ebx, -42069					;random state in ebx
+	postProcessing_generateSSAONoiseTexture_loop_start:
+		;generate 2 random numbers
+		mov dword[edi+8], 0				;z is always 0
+		imul ebx, 1103515245 
+		add ebx, 12345
+		mov eax, ebx
+		and eax, 0xffff
+		mov dword[edi+4], eax
+		imul ebx, 1103515245 
+		add ebx, 12345
+		mov eax, ebx
+		and eax, 0xffff
+		mov dword[edi], eax
+
+		
+		;convert them to random floats in [0; 1]
+		fld dword[FLOAT_SCALER]
+		fild dword[edi]
+		fmul st0, st1
+		fstp dword[edi]
+		fild dword[edi+4]
+		fmul st0, st1
+		fstp dword[edi+4]
+		fstp st0
+		
+		;scale them to [-1;1]
+		movss xmm1, dword[TWO]
+		movss xmm2, dword[ONE]
+		
+		movss xmm0, dword[edi]
+		vfmsub213ss xmm0, xmm1, xmm2
+		movss dword[edi], xmm0
+		
+		movss xmm0, dword[edi+4]
+		vfmsub213ss xmm0, xmm1, xmm2
+		movss dword[edi+4], xmm0
+		
+		add edi, 12
+		dec esi
+		test esi, esi
+		jnz postProcessing_generateSSAONoiseTexture_loop_start
+	
+	
+	;create texture
+	push texture_ssao_noise
+	push 1
+	call [glGenTextures]
+	
+	push dword[texture_ssao_noise]
+	push dword[GL_TEXTURE_2D]
+	call [glBindTexture]
+	
+	push dword[GL_NEAREST]
+	push dword[GL_TEXTURE_MIN_FILTER]
+	push dword[GL_TEXTURE_2D]
+	call [glTexParameteri]
+	push dword[GL_NEAREST]
+	push dword[GL_TEXTURE_MAG_FILTER]
+	push dword[GL_TEXTURE_2D]
+	call [glTexParameteri]
+	push dword[GL_REPEAT]
+	push dword[GL_TEXTURE_WRAP_S]
+	push dword[GL_TEXTURE_2D]
+	call [glTexParameteri]
+	push dword[GL_REPEAT]
+	push dword[GL_TEXTURE_WRAP_T]
+	push dword[GL_TEXTURE_2D]
+	call [glTexParameteri]
+	
+	
+	lea eax, [ebp-192]
+	push eax
+	push dword[GL_FLOAT]
+	push dword[GL_RGB]
+	push 0
+	push 4
+	push 4
+	push dword[GL_RGB16F]
+	push 0
+	push dword[GL_TEXTURE_2D]
+	call [glTexImage2D]
+	
+	
 	mov esp, ebp
 	pop ebx
 	pop edi
