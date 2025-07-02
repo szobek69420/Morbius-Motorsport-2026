@@ -346,7 +346,10 @@ game_loop:
 	call textureHandler_init
 	
 	;init pp
+	push dword[RENDER_HEIGHT]
+	push dword[RENDER_WIDTH]
 	call postProcessing_init
+	add esp, 8
 	
 	;create post processing framebuffer
 	push dword[RENDER_HEIGHT]
@@ -427,7 +430,7 @@ game_loop:
 	
 	push 100000000
 	push eax
-	call audio_playSound
+	;call audio_playSound
 	add esp, 8
 	
 	;init last frame time
@@ -603,10 +606,12 @@ game_loop:
 		call [glClear]
 		
 		;do deferred rendering and ssao
+		push projection_matrix
+		push view_matrix
 		push dword[framebuffer_gbuffer]
 		push dword[framebuffer_pp]
 		call postProcessing_ssao
-		add esp, 8
+		add esp, 16
 		
 		;also copy the depth buffer
 		push dword[framebuffer_gbuffer]

@@ -37,6 +37,10 @@ section .rodata
 	global RENDERABLE_UNIFORM_4I
 	global RENDERABLE_UNIFORM_MAT3
 	global RENDERABLE_UNIFORM_MAT4
+	global RENDERABLE_UNIFORM_FLOAT_ARRAY
+	global RENDERABLE_UNIFORM_VEC2_ARRAY
+	global RENDERABLE_UNIFORM_VEC3_ARRAY
+	global RENDERABLE_UNIFORM_VEC4_ARRAY
 	
 	RENDERABLE_UNIFORM_FLOAT dd 0
 	RENDERABLE_UNIFORM_VEC2 dd 1
@@ -241,6 +245,8 @@ section .text use32
 	extern mat3_inverse
 	extern mat3_print
 	extern mat4_init
+	extern mat4_transpose
+	extern mat4_inverse
 	extern mat4_scale
 	extern mat4_rotate
 	extern mat4_translate

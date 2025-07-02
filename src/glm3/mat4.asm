@@ -678,7 +678,7 @@ mat4_translate:
 	mov dword[eax+32], edx
 	
 	;mol
-	mov eax, esp
+	lea eax, [ebp-64]
 	mov ecx, dword[ebp+8]
 	push eax
 	push ecx
@@ -855,6 +855,7 @@ mat4_rotate:
 	ret
 	
 	
+;void mat4_view(mat4* buffer, vec3* position, vec3* direction, vec3* worldup)
 mat4_view:
 	push ebp
 	mov ebp, esp

@@ -33,9 +33,16 @@ section .rodata use32
 	vertex_shader_ssao db "shaders/pp/ssao/ssao.vag",0
 	fragment_shader_ssao db "shaders/pp/ssao/ssao.fag",0
 	
+	uniform_name_ssaoKernel db "samples",0
+	uniform_name_ssaoFramebufferSize db "screenSize",0
+	uniform_name_viewMatrix db "view",0
+	uniform_name_projectionMatrix db "projection",0
+	
 	ZERO dd 0.0
 	ONE dd 1.0
 	TWO dd 2.0
+	P1 dd 0.1
+	SIXTY_FOUR dd 64.0
 	FLOAT_SCALER dd 0.000015258789		;1/(2^16)
 
 section .data use32
@@ -45,12 +52,12 @@ section .data use32
 	shader_draw_to_screen dd 0
 	shader_ssao dd 0
 	
-	texture_ssao_noise dd 0				;the random rotation texture of the ssao
+	texture_ssaoNoise dd 0				;the random rotation texture of the ssao
 	
 
 section .text use32
 
-	global postProcessing_init		;void postProcessing_init()
+	global postProcessing_init		;void postProcessing_init(int fboWidth, int fboHeight)
 	global postProcessing_deinit	;void postProcessing_deinit()
 	
 	;draws the colourAttachment0 of the given framebuffer to the screen framebuffer
@@ -66,7 +73,7 @@ section .text use32
 	;disables depth test
 	;disables blending
 	;sets the primitive to GL_TRIANGLES
-	;void postProcessing_ssao(Framebuffer* dest, Framebuffer* src)
+	;void postProcessing_ssao(Framebuffer* dest, Framebuffer* src, mat4* view, mat4* projection)
 	global postProcessing_ssao
 	
 	extern renderable_createCustom
@@ -78,8 +85,14 @@ section .text use32
 	extern renderable_setPrimitive
 	extern renderable_createShader
 	extern renderable_destroyShader
+	extern renderable_useShader
+	extern renderable_setUniform
+	extern RENDERABLE_UNIFORM_VEC2
+	extern RENDERABLE_UNIFORM_VEC3_ARRAY
+	extern RENDERABLE_UNIFORM_MAT4
 	
 	extern glGenTextures
+	extern glDeleteTextures
 	extern glBindTexture
 	extern glTexImage2D
 	extern glTexParameteri
@@ -100,6 +113,8 @@ section .text use32
 	extern GL_TRIANGLES
 	
 	extern vec3_print
+	extern vec4_scale
+	extern math_lerp
 	
 	
 postProcessing_init:
@@ -125,7 +140,10 @@ postProcessing_init:
 	add esp, 12
 	
 	;init deferred part
+	push dword[ebp+12]
+	push dword[ebp+8]
 	call postProcessing_initDeferredPart
+	add esp, 8
 	
 	;set initialized flag
 	mov dword[initialized], 69
@@ -140,10 +158,7 @@ postProcessing_deinit:
 	mov ebp, esp
 	
 	;yeet ssao
-	push dword[shader_ssao]
-	call renderable_destroyShader
-	mov dword[shader_ssao], 0
-	add esp, 4
+	call postProcessing_deinitDeferredPart
 	
 	;yeet draw to screen shader
 	push dword[shader_draw_to_screen]
@@ -229,25 +244,43 @@ postProcessing_ssao:
 	
 	;set the textures of the renderable
 	mov ecx, dword[ebp+12]
-	push dword[ecx+4]
+	push dword[ecx+4]					;positions
 	push 0
 	push dword[renderable]
 	call renderable_setExtraTexture2D
 	add esp, 12
 	
 	mov ecx, dword[ebp+12]
-	push dword[ecx+8]
+	push dword[ecx+8]					;normals
 	push 1
 	push dword[renderable]
 	call renderable_setExtraTexture2D
 	add esp, 12
 	
-	mov ecx, dword[ebp+12]
-	push dword[ecx+12]
+	push dword[texture_ssaoNoise]		;noise texture
 	push 2
 	push dword[renderable]
 	call renderable_setExtraTexture2D
 	add esp, 12
+	
+	;send over the view and projection matrices
+	push dword[shader_ssao]
+	call renderable_useShader
+	add esp, 4
+	
+	push dword[ebp+16]
+	push dword[RENDERABLE_UNIFORM_MAT4]
+	push uniform_name_viewMatrix
+	push dword[shader_ssao]
+	call renderable_setUniform
+	add esp, 16
+	
+	push dword[ebp+20]
+	push dword[RENDERABLE_UNIFORM_MAT4]
+	push uniform_name_projectionMatrix
+	push dword[shader_ssao]
+	call renderable_setUniform
+	add esp, 16
 	
 	
 	;bind the destination framebuffer
@@ -273,7 +306,7 @@ postProcessing_ssao:
 
 ;initializes the ssao kernel and the random rotation texture
 ;handles the shaders as well
-;void postProcessing_initDeferredPart()
+;void postProcessing_initDeferredPart(int fboWidth, int fboHeight)
 postProcessing_initDeferredPart:
 	push ebp
 	push esi
@@ -291,12 +324,40 @@ postProcessing_initDeferredPart:
 	mov dword[shader_ssao], eax
 	add esp, 12
 	
+	
+	;use shader
+	push dword[shader_ssao]
+	call renderable_useShader
+	add esp, 4
+	
+	;set screen size
+	sub esp, 8
+	fild dword[ebp+20]
+	fstp dword[esp]
+	fild dword[ebp+24]
+	fstp dword[esp+4]
+	push dword[RENDERABLE_UNIFORM_VEC2]
+	push uniform_name_ssaoFramebufferSize
+	push dword[shader_ssao]
+	call renderable_setUniform
+	add esp, 20
+	
 	;generate the random kernel
 	lea eax, [ebp-384]
 	push eax
 	push 32
 	call postProcessing_generateSamplesSSAO
 	add esp, 8
+	
+	;send the samples to the gpu
+	lea eax, [ebp-384]
+	push eax
+	push 32
+	push dword[RENDERABLE_UNIFORM_VEC3_ARRAY]
+	push uniform_name_ssaoKernel
+	push dword[shader_ssao]
+	call renderable_setUniform
+	add esp, 20
 	
 	
 	;generate noise texture
@@ -307,6 +368,29 @@ postProcessing_initDeferredPart:
 	pop ebx
 	pop edi
 	pop esi
+	pop ebp
+	ret
+	
+;opposite of postProcessing_initDeferredPart
+;void postProcessing_deinitDeferredPart()
+postProcessing_deinitDeferredPart:
+	push ebp
+	mov ebp, esp
+	
+	;yeet noise texture
+	push texture_ssaoNoise
+	push 1
+	call [glDeleteTextures]
+	mov dword[texture_ssaoNoise], 0
+	
+	;destroy ssao shader
+	push dword[shader_ssao]
+	call renderable_destroyShader
+	add esp, 4
+	mov dword[shader_ssao], 0
+	
+	
+	mov esp, ebp
 	pop ebp
 	ret
 
@@ -373,6 +457,24 @@ postProcessing_generateSamplesSSAO:
 		movups xmm0, [ebp-16]
 		vfmsub213ps xmm0, xmm1, xmm2
 		movups [ebp-16], xmm0
+		
+		;make them closer to the middle
+		fld dword[SIXTY_FOUR]
+		push esi
+		fild dword[esp]
+		fdivp
+		fmul st0, st0
+		fstp dword[esp]
+		push dword[ONE]
+		push dword[P1]
+		call math_lerp
+		add esp, 8
+		fstp dword[esp]
+		lea eax, [ebp-16]
+		push eax
+		push eax
+		call vec4_scale
+		add esp, 12
 		
 		;copy results in the buffer
 		mov eax, dword[ebp-16]
@@ -457,11 +559,11 @@ postProcessing_generateSSAONoiseTexture:
 	
 	
 	;create texture
-	push texture_ssao_noise
+	push texture_ssaoNoise
 	push 1
 	call [glGenTextures]
 	
-	push dword[texture_ssao_noise]
+	push dword[texture_ssaoNoise]
 	push dword[GL_TEXTURE_2D]
 	call [glBindTexture]
 	
