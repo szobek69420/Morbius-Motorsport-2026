@@ -59,6 +59,7 @@ section .rodata use32
 	print_vec4 db "(%f; %f; %f; %f)",0
 	text_player_pos_4d db "Player position",0
 	text_player_pos db "Player position on plane",0
+	text_player_view_dir db "View direction on plane",0
 	print_vec3 db "(%f; %f; %f)",0
 	
 	print_loaded_chunk_count db "Loaded chunks: %d",0
@@ -113,6 +114,16 @@ section .data use32
 
 	TIME_OF_DAY dd 0.0	;values are in [0;1], 0 and 1 are dawn
 	
+	
+	WORLD_UP dd 0.0, 1.0, 0.0
+	FORWARD dd 0.0, 0.0, -1.0
+	POSITION dd -6.9, 4.2, 6.66
+	TEST_POSITION dd -5.9, 5.2,	6.66, 1.0
+	
+	FOV dd 30.0
+	NEAR_CLIP dd 0.1
+	FAR_CLIP dd 10.0
+	ASPECT_XY dd 1.0
 
 section .text use32
 
@@ -137,6 +148,7 @@ section .text use32
 
 	
 	extern camera_init
+	extern camera_forward
 	extern camera_view
 	extern camera_projection
 	extern camera_viewProjection
@@ -283,6 +295,12 @@ section .text use32
 	extern perlin_init3d
 	extern perlin_deinit3d
 	
+	extern mat4_view
+	extern mat4_perspective
+	extern mat4_perspective2
+	extern mat4_print
+	extern vec4_mulWithMat
+	extern vec4_print
 	
 game_loop:
 	push ebp
@@ -292,6 +310,35 @@ game_loop:
 	mov eax, dword[ebp+8]
 	mov dword[current_window], eax
 	
+	push WORLD_UP
+	push FORWARD
+	push POSITION
+	push view_matrix
+	call mat4_view
+	call mat4_print
+	add esp, 16
+	
+	;void mat4_perspective(mat4* buffer, float fovInDegrees, float aspectXY, float near, float far)
+	push dword[FAR_CLIP]
+	push dword[NEAR_CLIP]
+	push dword[ASPECT_XY]
+	push dword[FOV]
+	push projection_matrix
+	call mat4_perspective
+	call mat4_print
+	add esp, 20
+	
+	push view_matrix
+	push TEST_POSITION
+	call vec4_mulWithMat
+	call vec4_print
+	add esp, 8
+	
+	push projection_matrix
+	push TEST_POSITION
+	call vec4_mulWithMat
+	call vec4_print
+	add esp, 8
 	
 	;init should_close
 	push 4
@@ -1074,12 +1121,30 @@ gameLoop_drawData:
 	lea eax, [ebp-100]
 	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 185
 	
+	
+	render_text text_player_view_dir, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 205
+	
+	sub esp, 12
+	mov eax, esp
+	push eax
+	push camera
+	call camera_forward
+	add esp, 8
+	push print_vec3
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 20
+	lea eax, [ebp-100]
+	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 220
+	
+	
 	;draw raycast hit
 	mov eax, dword[pplayer]
 	cmp dword[eax+56], 0
 	jne gameLoop_drawData_raycast_hit
 		;no hit
-		render_text print_raycast_no_hit_info, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 205
+		render_text print_raycast_no_hit_info, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 240
 		jmp gameLoop_drawData_raycast_done
 		
 	gameLoop_drawData_raycast_hit:
@@ -1095,7 +1160,7 @@ gameLoop_drawData:
 		add esp, 24
 		
 		lea eax, [ebp-100]
-		render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 205
+		render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 240
 	
 	gameLoop_drawData_raycast_done:
 	

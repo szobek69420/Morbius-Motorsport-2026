@@ -9,7 +9,6 @@ uniform sampler2D extra2DTexture2;	//random rotation vector, vec3
 
 uniform vec3 samples[32];
 
-uniform mat4 view;
 uniform mat4 projection;
 
 uniform vec2 screenSize;			//size of the framebuffer
@@ -44,10 +43,10 @@ void main()
 		
 		//is it occluding?
 		float rangeCheck = smoothstep(0.0, 1.0, kernelRadius / abs(viewSpacePosition.z - geometryPos.z));	//i stole this line from learnopengl
-		oneMinusOcclusion += (geometryPos.z >= samplePos.z + bias ? 1.0 : 0.0)*rangeCheck;  
+		oneMinusOcclusion += (geometryPos.z <= samplePos.z + bias ? 1.0 : 0.0)*rangeCheck;  
 	}
 	
 	float occlusion = 1.0 - (oneMinusOcclusion / 32.0);
 	fragmentColour = vec4(occlusion,0,0,1);
-	//fragmentColour=vec4(viewSpacePosition.xyz, 1.0);
+	fragmentColour=vec4(viewSpacePosition.xyz, 1.0);
 }

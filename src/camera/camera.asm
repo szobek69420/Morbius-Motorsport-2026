@@ -27,6 +27,7 @@ section .text use32
 	
 	extern mat4_mul
 	extern mat4_view
+	extern mat4_perspective
 	extern mat4_perspective2
 	
 	global camera_init				;void camera_init(camera* buffer);
@@ -107,7 +108,7 @@ camera_projection:
 	push dword[eax+32]
 	push dword[eax+28]
 	push ecx
-	call mat4_perspective2
+	call mat4_perspective
 	add esp, 20
 	
 	ret
@@ -150,46 +151,51 @@ camera_forward:
 	push ebp
 	mov ebp, esp
 	
-	;calculate direction
-	mov eax, dword[ebp+8]		;camera in eax
-	mov edx, dword[ebp+12]		;buffer in edx
+	sub esp, 4					;pitch in radians		4
+	sub esp, 4					;yaw in radians			8
+	sub esp, 4					;sin(pitch)				12
+	sub esp, 4					;cos(pitch)				16
+	sub esp, 4					;sin(yaw)				20
+	sub esp, 4					;cos(yaw)				24
+	
+	;convert pitch and yaw
+	mov eax, dword[ebp+8]
 	movss xmm0, dword[DEG2RAD]
 	
 	movss xmm1, dword[eax+12]
-	mulss xmm1, xmm0		;pitch in xmm1
-	movss dword[edx+4], xmm1
-	fld dword[edx+4]
-	fsin
-	fstp dword[edx+4]		;sin(pitch) in direction.y
+	mulss xmm1, xmm0
+	movss dword[ebp-4], xmm1
 	
-	sub esp, 4			;temp place for cos(pitch)
-	movss dword[esp], xmm1
-	fld dword[esp]
-	fcos
-	fstp dword[esp]			
-	movss xmm1, dword[esp]		;cos(pitch) in xmm1
-	add esp, 4
+	movss xmm1, dword[eax+16]
+	mulss xmm1, xmm0
+	movss dword[ebp-8], xmm1
 	
-	movss xmm2, dword[eax+16]
-	mulss xmm2, xmm0
-	movss dword[edx], xmm2
-	fld dword[edx]
-	fsin
-	fstp dword[edx]
-	movss xmm2, dword[edx]
-	mulss xmm2, xmm1
-	movss dword[edx], xmm2	;sin(yaw)*cos(pitch) in direction.x
+	;do trigonometry
+	fld dword[ebp-4]
+	fsincos
+	fstp dword[ebp-16]
+	fstp dword[ebp-12]
 	
-	movss xmm2, dword[eax+16]
-	mulss xmm2, xmm0
-	movss dword[edx+8], xmm2
-	fld dword[edx+8]
-	fcos
-	fstp dword[edx+8]
-	movss xmm2, dword[edx+8]
-	mulss xmm2, xmm1
-	movss dword[edx+8], xmm2
-	xor dword[edx+8], 0x80000000	;-cos(yaw)*cos(pitch) in direction.z
+	fld dword[ebp-8]
+	fsincos
+	fstp dword[ebp-24]
+	fstp dword[ebp-20]
+	
+	;calculate direction
+	mov eax, dword[ebp+12]		;buffer in eax
+	
+	movss xmm0, dword[ebp-12]
+	movss dword[eax+4], xmm0		;direction.y = sin(pitch)
+	
+	movss xmm0, dword[ebp-16]
+	movss xmm1, dword[ebp-20]
+	mulss xmm1, xmm0
+	movss dword[eax], xmm1			;direction.x = cos(pitch)*sin(yaw)
+	
+	movss xmm1, dword[ebp-24]
+	mulss xmm1, xmm0
+	movss dword[eax+8], xmm1
+	xor dword[eax+8], 0x80000000	;direction.z = -cos(pitch)*cos(yaw)
 	
 	mov esp, ebp
 	pop ebp

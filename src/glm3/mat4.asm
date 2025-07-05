@@ -12,6 +12,7 @@
 section .rodata use32
 	print_line_format db "| %f %f %f %f |",10,0
 	print_float db "%f",10,0
+	print_two_floats_nl db "%f %f",10,0
 	half dd 0.5
 	one dd 1.0
 	two dd 2.0
@@ -19,6 +20,8 @@ section .rodata use32
 	DEG2RAD dd 0.017453293
 	
 	SIGN_FLIPPER dd 0x80000000
+	
+	ONE dd 1.0
 
 section .text use32
 	extern my_memcpy
@@ -1061,6 +1064,7 @@ mat4_ortho:
 	pop ebp
 	ret
 	
+;void mat4_perspective(mat4* buffer, float fovInDegrees, float aspectXY, float near, float far)
 mat4_perspective:
 	push ebp
 	mov ebp, esp
@@ -1073,6 +1077,7 @@ mat4_perspective:
 	call my_memset
 	add esp, 12
 	
+	
 	;calculate t (it will remain in xmm0)
 	sub esp, 4
 	movss xmm0, dword[ebp+12]
@@ -1080,7 +1085,7 @@ mat4_perspective:
 	mulss xmm0, dword[DEG2RAD]
 	movss dword[esp], xmm0
 	fld dword[esp]
-	fptan		; ST(0): cos, ST(1): sin
+	fsincos		; ST(0): cos, ST(1): sin
 	fdivp
 	fstp dword[esp]
 	movss xmm0, dword[esp]

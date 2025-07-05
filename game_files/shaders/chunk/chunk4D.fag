@@ -11,7 +11,7 @@ layout (binding=0) uniform sampler2DArray blockTextures;
 
 void main()
 {
-	gPosition=vec4(viewSpace_position.xy, -viewSpace_position.z, 1.0); //for some fucking reason the z coordinate is flipped
-	gNormal=viewSpace_normal;
+	gPosition=vec4(viewSpace_position.xyz, 1.0);
+	gNormal=viewSpace_normal.xyz;
 	gAlbedo=texture(blockTextures, uv).rgb;
 }
