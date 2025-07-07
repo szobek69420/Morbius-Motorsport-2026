@@ -47,14 +47,13 @@ void main()
 		clipSamplePos/=clipSamplePos.w;
 		
 		//get the geometry position in the same position
-		vec4 geometryPos=texture(extra2DTexture0, 0.5*clipSamplePos.xy+0.5);
+		float geometryDepth=2*texture(extra2DTexture0, 0.5*clipSamplePos.xy+0.5).x-1;
 		
 		//is it occluding?
-		float rangeCheck = smoothstep(0.0, 1.0, kernelRadius / abs(viewSpacePosition.z - geometryPos.z));	//i stole this line from learnopengl
-		oneMinusOcclusion += (geometryPos.z <= samplePos.z + bias ? 1.0 : 0.0)*rangeCheck;  
+		oneMinusOcclusion += (geometryDepth <= clipSamplePos.z ? 1.0 : 0.0);  
 	}
 	
 	float occlusion = 1.0 - (oneMinusOcclusion / 32.0);
 	fragmentColour = vec4(occlusion,0,0,1);
-	fragmentColour=vec4(viewSpaceNormal.xyz, 1.0);
+	//fragmentColour=vec4(viewSpaceNormal.xyz, 1.0);
 }
