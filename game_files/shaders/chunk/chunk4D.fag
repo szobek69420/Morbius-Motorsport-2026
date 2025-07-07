@@ -1,17 +1,14 @@
 #version 460 core
 in vec3 uv;
 in vec3 viewSpace_normal;
-in vec3 viewSpace_position;
 
-layout (location = 0) out vec4 gPosition;
-layout (location = 1) out vec3 gNormal;
-layout (location = 2) out vec3 gAlbedo;
+layout (location = 0) out vec3 gNormal;
+layout (location = 1) out vec3 gAlbedo;
 
 layout (binding=0) uniform sampler2DArray blockTextures;
 
 void main()
 {
-	gPosition=vec4(viewSpace_position.xyz, 1.0);
 	gNormal=viewSpace_normal.xyz;
 	gAlbedo=texture(blockTextures, uv).rgb;
 }

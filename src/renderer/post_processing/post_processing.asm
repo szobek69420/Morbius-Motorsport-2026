@@ -37,6 +37,7 @@ section .rodata use32
 	uniform_name_ssaoFramebufferSize db "screenSize",0
 	uniform_name_viewMatrix db "view",0
 	uniform_name_projectionMatrix db "projection",0
+	uniform_name_projectionInverseMatrix db "projection_inverse",0
 	
 	ZERO dd 0.0
 	ONE dd 1.0
@@ -114,6 +115,7 @@ section .text use32
 	
 	extern vec3_print
 	extern vec4_scale
+	extern mat4_inverse
 	extern math_lerp
 	
 	
@@ -227,6 +229,15 @@ postProcessing_ssao:
 	push ebp
 	mov ebp, esp
 	
+	sub esp, 64				;projection mat inverse		64
+	
+	;calculate the inverse of the projection matrix
+	push dword[ebp+20]
+	lea eax, [ebp-64]
+	push eax
+	call mat4_inverse
+	add esp, 8
+	
 	;disable depth test
 	push 0
 	call renderable_enableDepthTest
@@ -244,14 +255,14 @@ postProcessing_ssao:
 	
 	;set the textures of the renderable
 	mov ecx, dword[ebp+12]
-	push dword[ecx+4]					;positions
+	push dword[ecx+20]					;depth
 	push 0
 	push dword[renderable]
 	call renderable_setExtraTexture2D
 	add esp, 12
 	
 	mov ecx, dword[ebp+12]
-	push dword[ecx+8]					;normals
+	push dword[ecx+4]					;normals
 	push 1
 	push dword[renderable]
 	call renderable_setExtraTexture2D
@@ -263,7 +274,7 @@ postProcessing_ssao:
 	call renderable_setExtraTexture2D
 	add esp, 12
 	
-	;send over the view and projection matrices
+	;send over the view and projection and inverse projection matrices
 	push dword[shader_ssao]
 	call renderable_useShader
 	add esp, 4
@@ -278,6 +289,14 @@ postProcessing_ssao:
 	push dword[ebp+20]
 	push dword[RENDERABLE_UNIFORM_MAT4]
 	push uniform_name_projectionMatrix
+	push dword[shader_ssao]
+	call renderable_setUniform
+	add esp, 16
+	
+	lea eax, [ebp-64]
+	push eax
+	push dword[RENDERABLE_UNIFORM_MAT4]	
+	push uniform_name_projectionInverseMatrix
 	push dword[shader_ssao]
 	call renderable_setUniform
 	add esp, 16

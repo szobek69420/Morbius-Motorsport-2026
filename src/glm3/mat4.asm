@@ -31,6 +31,7 @@ section .text use32
 	extern mat3_print
 	extern vec3_normalize
 	extern vec3_cross
+	extern vec3_dot
 	
 	global mat4_print		;void mat4_print(mat4* mat)
 	global mat4_init		;void mat4_init(mat4* buffer, float value)		;fills the hauptdiagonal with value
@@ -51,9 +52,11 @@ section .text use32
 	global mat4_translate		;void mat4_translate(mat4* mat, vec3* vec)
 	
 	global mat4_view		;void mat4_view(mat4* buffer, vec3* position, vec3* direction, vec3* worldup)
+	global mat4_viewGlm		;void mat4_viewGlm(mat4* buffer, vec3* position, vec3* direction, vec3* worldup)
 	global mat4_ortho		;void mat4_ortho(mat4* buffer, float left, float right, float bottom, float top, float near, float far)
 	global mat4_perspective		;void mat4_perspective(mat4* buffer, float fovInDegrees, float aspectXY, float near, float far)
 	global mat4_perspective2	;void mat4_perspective2(mat4* buffer, float fovInDegrees, float aspectXY, float near, float far)
+	global mat4_perspectiveGlm	;void mat4_perspectiveGlm(mat4* buffer, float fovInDegrees, float aspectXY, float near, float far)
 	
 	global mat4_convertToMat3	;void mat4_convertToMat3(mat3* buffer, mat4* mat)
 	
@@ -972,6 +975,120 @@ mat4_view:
 	ret
 	
 
+;https://github.com/g-truc/glm/blob/master/glm/ext/matrix_transform.inl
+;void mat4_viewGlm(mat4* buffer, vec3* position, vec3* direction, vec3* worldup)
+mat4_viewGlm:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 12			;direction		12
+	sub esp, 12			;right			24
+	sub esp, 12			;up				36
+	
+	;copy and normalize direction
+	mov eax, dword[ebp+16]
+	mov ecx, dword[eax]
+	mov dword[ebp-12], ecx
+	mov ecx, dword[eax+4]
+	mov dword[ebp-8], ecx
+	mov ecx, dword[eax+8]
+	mov dword[ebp-4], ecx
+	lea eax, [ebp-12]
+	push eax
+	call vec3_normalize
+	add esp, 4
+	
+	;calculate right
+	push dword[ebp+20]
+	lea eax, [ebp-12]
+	push eax
+	lea ecx, [ebp-24]
+	push ecx
+	call vec3_cross
+	call vec3_normalize
+	add esp, 12
+	
+	;calculate up
+	lea eax, [ebp-12]
+	lea ecx, [ebp-24]
+	lea edx, [ebp-36]
+	push eax
+	push ecx
+	push edx
+	call vec3_cross
+	add esp, 12
+	
+	;zero out the buffer
+	push 64
+	push 0
+	push dword[ebp+8]
+	call my_memset
+	add esp, 12
+	
+	;set the values
+	push 12
+	lea eax, [ebp-24]
+	push eax
+	push dword[ebp+8]
+	call my_memcpy
+	add esp, 12
+	
+	push 12
+	lea eax, [ebp-36]
+	push eax
+	mov ecx, dword[ebp+8]
+	add ecx, 16
+	push ecx
+	call my_memcpy
+	add esp, 12
+	
+	push 12
+	lea eax, [ebp-12]
+	push eax
+	mov ecx, dword[ebp+8]
+	add ecx, 32
+	push ecx
+	call my_memcpy
+	add esp, 12
+	mov eax, dword[ebp+8]
+	xor dword[eax+32], 0x80000000
+	xor dword[eax+36], 0x80000000
+	xor dword[eax+40], 0x80000000
+	
+	lea eax, [ebp-24]
+	push eax
+	push dword[ebp+12]
+	call vec3_dot
+	add esp, 8
+	mov eax, dword[ebp+8]
+	fchs
+	fstp dword[eax+12]
+	
+	lea eax, [ebp-36]
+	push eax
+	push dword[ebp+12]
+	call vec3_dot
+	add esp, 8
+	mov eax, dword[ebp+8]
+	fchs
+	fstp dword[eax+28]
+	
+	lea eax, [ebp-12]
+	push eax
+	push dword[ebp+12]
+	call vec3_dot
+	add esp, 8
+	mov eax, dword[ebp+8]
+	fstp dword[eax+44]
+	
+	mov ecx, dword[ONE]
+	mov dword[eax+60], ecx
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+
 mat4_ortho:
 	push ebp
 	mov ebp, esp
@@ -1211,6 +1328,68 @@ mat4_perspective2:		;https://vec3.ca/code/math/projection-direct3d
 	;(3,2): -1
 	mov ecx, dword[minusOne]
 	mov dword[eax+56], ecx
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+;perspectiveRH_NO here:
+;https://github.com/g-truc/glm/blob/master/glm/ext/matrix_clip_space.inl
+;void mat4_perspectiveGlm(mat4* buffer, float fovInDegrees, float aspectXY, float near, float far)
+mat4_perspectiveGlm:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;tan(fov/2)		4
+	sub esp, 4			;-1*(far-near)	8
+	
+	
+	;zero out buffer
+	push 64
+	push 0
+	push dword[ebp+8]
+	call my_memset
+	add esp, 12
+	
+	;calculate helper values
+	movss xmm0, dword[ebp+12]
+	mulss xmm0, dword[half]
+	mulss xmm0, dword[DEG2RAD]
+	movss dword[ebp-4], xmm0
+	fld dword[ebp-4]
+	fsincos
+	fdivp
+	fstp dword[ebp-4]
+	
+	movss xmm0, dword[ebp+20]
+	subss xmm0, dword[ebp+24]
+	movss dword[ebp-8], xmm0
+	
+	;set cells
+	mov eax, dword[ebp+8]			;buffer in eax
+	
+	movss xmm0, dword[one]
+	movss xmm1, dword[ebp+16]
+	mulss xmm1, dword[ebp-4]
+	divss xmm0, xmm1
+	movss dword[eax], xmm0			;(0;0) = 1/(aspect*tan(...))
+	
+	mulss xmm0, dword[ebp+16]
+	movss dword[eax+20], xmm0		;(1;1) = 1/tan(...)
+	
+	movss xmm0, dword[ebp+20]
+	addss xmm0, dword[ebp+24]
+	divss xmm0, dword[ebp-8]
+	movss dword[eax+40], xmm0		;(2;2) = -(far+near)/(far-near)
+	
+	movss xmm0, dword[ebp+20]
+	mulss xmm0, dword[ebp+24]
+	mulss xmm0, dword[two]
+	divss xmm0, dword[ebp-8]
+	movss dword[eax+44], xmm0		;(2;3) = -2*far*near/(far-near)
+	
+	movss xmm0, dword[minusOne]
+	movss dword[eax+56], xmm0		;(3;2) = -1
 	
 	mov esp, ebp
 	pop ebp

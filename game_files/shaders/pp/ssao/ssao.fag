@@ -3,13 +3,14 @@ in vec2 uv;
 
 layout (location = 0) out vec4 fragmentColour;
 
-uniform sampler2D extra2DTexture0;	//view space positions, vec4
+uniform sampler2D extra2DTexture0;	//depth buffer, float
 uniform sampler2D extra2DTexture1;	//view space normals, vec3
 uniform sampler2D extra2DTexture2;	//random rotation vector, vec3
 
 uniform vec3 samples[32];
 
 uniform mat4 projection;
+uniform mat4 projection_inverse;
 
 uniform vec2 screenSize;			//size of the framebuffer
 
@@ -18,11 +19,18 @@ const float bias=0.025;
 
 void main()
 {
-	vec4 viewSpacePosition=texture(extra2DTexture0, uv);
-	if(viewSpacePosition.w!=1.0)
+	float ndcDepth=texture(extra2DTexture0, uv).x;
+	if(ndcDepth==1.0)
 		discard;
+	
+	//sample the normal and the random rotation
 	vec3 viewSpaceNormal=texture(extra2DTexture1, uv).xyz;
 	vec3 rotator=texture(extra2DTexture2, uv*screenSize/4.0).xyz;
+	
+	//calculate the view space position
+	vec3 projectionSpacePosition=vec3(uv, ndcDepth)*2-1;
+	vec4 tempPos = projection_inverse * vec4(projectionSpacePosition,1);
+	vec3 viewSpacePosition = tempPos.xyz / tempPos.w;
 	
 	//create the TBN matrix
 	vec3 tangent   = normalize(rotator - viewSpaceNormal * dot(rotator, viewSpaceNormal));
@@ -48,5 +56,5 @@ void main()
 	
 	float occlusion = 1.0 - (oneMinusOcclusion / 32.0);
 	fragmentColour = vec4(occlusion,0,0,1);
-	fragmentColour=vec4(viewSpacePosition.xyz, 1.0);
+	fragmentColour=vec4(viewSpaceNormal.xyz, 1.0);
 }

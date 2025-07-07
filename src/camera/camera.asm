@@ -26,9 +26,8 @@ section .text use32
 	extern vec3_cross
 	
 	extern mat4_mul
-	extern mat4_view
-	extern mat4_perspective
-	extern mat4_perspective2
+	extern mat4_viewGlm
+	extern mat4_perspectiveGlm
 	
 	global camera_init				;void camera_init(camera* buffer);
 	global camera_view				;void camera_view(camera* cum, mat4* buffer)
@@ -91,7 +90,7 @@ camera_view:
 	push edx
 	push eax
 	push ecx
-	call mat4_view
+	call mat4_viewGlm
 	
 	mov esp, ebp
 	pop ebp
@@ -108,7 +107,7 @@ camera_projection:
 	push dword[eax+32]
 	push dword[eax+28]
 	push ecx
-	call mat4_perspective
+	call mat4_perspectiveGlm
 	add esp, 20
 	
 	ret

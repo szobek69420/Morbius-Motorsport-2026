@@ -118,7 +118,7 @@ section .data use32
 	WORLD_UP dd 0.0, 1.0, 0.0
 	FORWARD dd 0.0, 0.0, -1.0
 	POSITION dd -6.9, 4.2, 6.66
-	TEST_POSITION dd -5.9, 5.2,	6.66, 1.0
+	TEST_POSITION dd -5.9, 5.2,	5.66, 1.0
 	
 	FOV dd 30.0
 	NEAR_CLIP dd 0.1
@@ -295,9 +295,9 @@ section .text use32
 	extern perlin_init3d
 	extern perlin_deinit3d
 	
-	extern mat4_view
+	extern mat4_viewGlm
 	extern mat4_perspective
-	extern mat4_perspective2
+	extern mat4_perspectiveGlm
 	extern mat4_print
 	extern vec4_mulWithMat
 	extern vec4_print
@@ -314,7 +314,7 @@ game_loop:
 	push FORWARD
 	push POSITION
 	push view_matrix
-	call mat4_view
+	call mat4_viewGlm
 	call mat4_print
 	add esp, 16
 	
@@ -324,7 +324,7 @@ game_loop:
 	push dword[ASPECT_XY]
 	push dword[FOV]
 	push projection_matrix
-	call mat4_perspective
+	call mat4_perspectiveGlm
 	call mat4_print
 	add esp, 20
 	
@@ -421,14 +421,11 @@ game_loop:
 	add esp, 4
 	
 	push 0
-	push FRAMEBUFFER_RGBA16F
+	push FRAMEBUFFER_RGB16F
 	push dword[framebuffer_gbuffer]
-	call framebuffer_colourAttachment			;colour attachment 0 is the position texture
+	call framebuffer_colourAttachment			;colour attachment 0 is the normal texture
 	mov dword[esp+8], 1
-	mov dword[esp+4], FRAMEBUFFER_RGB16F
-	call framebuffer_colourAttachment			;colour attachment 1 is the normal texture
-	mov dword[esp+8], 2
-	call framebuffer_colourAttachment			;colour attachment 2 is the albedo texture
+	call framebuffer_colourAttachment			;colour attachment 1 is the albedo texture
 	call framebuffer_depthAttachment
 	call framebuffer_isComplete
 	add esp, 12

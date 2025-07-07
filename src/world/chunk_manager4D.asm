@@ -464,16 +464,6 @@ chunkManager4d_render:
 	call renderable_setUniform
 	add esp, 16
 	
-	;set view matrix uniform
-	lea eax, [ebp-104]
-	push eax
-	push dword[RENDERABLE_UNIFORM_MAT4]
-	push uniform_name_view_mat
-	mov ecx, dword[ebp+16]
-	push dword[ecx+28]
-	call renderable_setUniform
-	add esp, 16
-	
 	
 	mov edi, dword[ebp+16]
 	mov esi, dword[edi]				;chunk count in esi
