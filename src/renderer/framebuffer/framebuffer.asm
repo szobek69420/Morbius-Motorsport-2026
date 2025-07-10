@@ -11,12 +11,18 @@
 ;};	32 bytes overall
 
 section .rodata use32
+	global FRAMEBUFFER_RED
 	global FRAMEBUFFER_RGB
 	global FRAMEBUFFER_RGBA
 	global FRAMEBUFFER_RGB16F
 	global FRAMEBUFFER_RGBA16F
 
 	;colour attachment types
+	FRAMEBUFFER_RED:
+	dd GL_RED			;internal format
+	dd GL_RED			;base format
+	dd GL_UNSIGNED_BYTE	;pixel data type (not exactly necessary)
+	
 	FRAMEBUFFER_RGB:
 	dd GL_RGB			;internal format
 	dd GL_RGB			;base format
@@ -98,6 +104,7 @@ section .text use32
 	extern GL_CLAMP_TO_EDGE
 	extern GL_TEXTURE0
 	
+	extern GL_RED
 	extern GL_RGB
 	extern GL_RGB16F
 	extern GL_RGBA

@@ -202,6 +202,7 @@ section .rodata use32
 	name_glClear db "glClear",0
 	name_glClearColor db "glClearColor",0
 	name_glClearDepth db "glClearDepth",0
+	name_glClearDepthf db "glClearDepthf",0
 	name_glCompileShader db "glCompileShader",0
 	name_glCreateProgram db "glCreateProgram",0
 	name_glCreateShader db "glCreateShader",0
@@ -294,6 +295,7 @@ section .bss use32
 	glFunc glClear
 	glFunc glClearColor
 	glFunc glClearDepth
+	glFunc glClearDepthf
 	glFunc glCompileShader
 	glFunc glCreateProgram
 	glFunc glCreateShader
@@ -394,6 +396,7 @@ load_gl_functions:
 	load dword[ebp+8], glClear
 	load dword[ebp+8], glClearColor
 	load dword[ebp+8], glClearDepth
+	load dword[ebp+8], glClearDepthf
 	load dword[ebp+8], glCompileShader
 	load dword[ebp+8], glCreateProgram
 	load dword[ebp+8], glCreateShader

@@ -33,11 +33,15 @@ section .rodata use32
 	vertex_shader_ssao db "shaders/pp/ssao/ssao.vag",0
 	fragment_shader_ssao db "shaders/pp/ssao/ssao.fag",0
 	
+	vertex_shader_deferred_lighting db "shaders/pp/deferred_lighting/deferred_lighting.vag",0
+	fragment_shader_deferred_lighting db "shaders/pp/deferred_lighting/deferred_lighting.fag",0
+	
 	uniform_name_ssaoKernel db "samples",0
 	uniform_name_ssaoFramebufferSize db "screenSize",0
 	uniform_name_viewMatrix db "view",0
 	uniform_name_projectionMatrix db "projection",0
 	uniform_name_projectionInverseMatrix db "projection_inverse",0
+	uniform_name_sunDirection db "viewSpaceSunDirection",0
 	
 	ZERO dd 0.0
 	ONE dd 1.0
@@ -52,6 +56,7 @@ section .data use32
 	
 	shader_draw_to_screen dd 0
 	shader_ssao dd 0
+	shader_deferred_lighting dd 0
 	
 	texture_ssaoNoise dd 0				;the random rotation texture of the ssao
 	
@@ -77,6 +82,14 @@ section .text use32
 	;void postProcessing_ssao(Framebuffer* dest, Framebuffer* src, mat4* view, mat4* projection)
 	global postProcessing_ssao
 	
+	;draws the shaded scene into the dest buffers colourAttachment0
+	;DOESN'T CALL glViewport
+	;disables depth test
+	;disables blending
+	;;sets the primitive to GL_TRIANGLES
+	;void postProcessing_deferredLighting(Framebuffer* dest, Framebuffer* gBuffer, Framebuffer* ssaoBuffer, vec3* sunDirection, mat4* view)
+	global postProcessing_deferredLighting
+	
 	extern renderable_createCustom
 	extern renderable_destroy
 	extern renderable_renderCustom
@@ -88,7 +101,9 @@ section .text use32
 	extern renderable_destroyShader
 	extern renderable_useShader
 	extern renderable_setUniform
+	extern renderable_calculateNormalMatrix
 	extern RENDERABLE_UNIFORM_VEC2
+	extern RENDERABLE_UNIFORM_VEC3
 	extern RENDERABLE_UNIFORM_VEC3_ARRAY
 	extern RENDERABLE_UNIFORM_MAT4
 	
@@ -114,6 +129,7 @@ section .text use32
 	extern GL_TRIANGLES
 	
 	extern vec3_print
+	extern vec3_mulWithMat
 	extern vec4_scale
 	extern mat4_inverse
 	extern math_lerp
@@ -159,7 +175,7 @@ postProcessing_deinit:
 	push ebp
 	mov ebp, esp
 	
-	;yeet ssao
+	;yeet deferred part
 	call postProcessing_deinitDeferredPart
 	
 	;yeet draw to screen shader
@@ -320,6 +336,105 @@ postProcessing_ssao:
 	pop ebp
 	ret
 	
+postProcessing_deferredLighting:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 36		;normal matrix		36
+	sub esp, 12		;viewspace sun dir	48
+	
+	;calculate the view space sun direction
+	push dword[ebp+24]
+	lea eax, [ebp-36]
+	push eax
+	call renderable_calculateNormalMatrix
+	add esp, 8
+	
+	mov eax, dword[ebp+20]
+	mov ecx, dword[eax]
+	mov dword[ebp-48], ecx
+	mov ecx, dword[eax+4]
+	mov dword[ebp-44], ecx
+	mov ecx, dword[eax+8]
+	mov dword[ebp-40], ecx
+	
+	lea eax, [ebp-36]
+	push eax
+	lea ecx, [ebp-48]
+	push ecx
+	call vec3_mulWithMat
+	add esp, 8
+	
+	;disable depth test
+	push 0
+	call renderable_enableDepthTest
+	add esp, 4
+	
+	;disable blending
+	push 0
+	call renderable_enableBlending
+	add esp, 4
+	
+	;set the primitive
+	push dword[GL_TRIANGLES]
+	call renderable_setPrimitive
+	add esp, 4
+	
+	;set the textures of the renderable
+	mov ecx, dword[ebp+12]
+	push dword[ecx+4]					;normal
+	push 0
+	push dword[renderable]
+	call renderable_setExtraTexture2D
+	add esp, 12
+	
+	mov ecx, dword[ebp+12]
+	push dword[ecx+8]					;albedo
+	push 1
+	push dword[renderable]
+	call renderable_setExtraTexture2D
+	add esp, 12
+	
+	mov ecx, dword[ebp+16]
+	push dword[ecx+4]					;ssao
+	push 2
+	push dword[renderable]
+	call renderable_setExtraTexture2D
+	add esp, 12
+	
+	;send over the sun direction
+	push dword[shader_deferred_lighting]
+	call renderable_useShader
+	add esp, 4
+	
+	push dword[ebp-40]
+	push dword[ebp-44]
+	push dword[ebp-48]
+	push dword[RENDERABLE_UNIFORM_VEC3]
+	push uniform_name_sunDirection
+	push dword[shader_deferred_lighting]
+	call renderable_setUniform
+	add esp, 24
+	
+	;bind the destination framebuffer
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	push dword[GL_FRAMEBUFFER]
+	call [glBindFramebuffer]
+	
+	;render the renderable
+	push 69
+	push dword[shader_deferred_lighting]
+	push mat4_identity
+	push dword[renderable]
+	call renderable_renderCustom
+	add esp, 16
+	
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
 	
 ;internal functions ------------------------------------------
 
@@ -341,6 +456,14 @@ postProcessing_initDeferredPart:
 	push vertex_shader_ssao
 	call renderable_createShader
 	mov dword[shader_ssao], eax
+	add esp, 12
+	
+	;create deferred lighting shader
+	push 0
+	push fragment_shader_deferred_lighting
+	push vertex_shader_deferred_lighting
+	call renderable_createShader
+	mov dword[shader_deferred_lighting], eax
 	add esp, 12
 	
 	
@@ -407,6 +530,12 @@ postProcessing_deinitDeferredPart:
 	call renderable_destroyShader
 	add esp, 4
 	mov dword[shader_ssao], 0
+	
+	;yeet defererd lighting shader
+	push dword[shader_deferred_lighting]
+	call renderable_destroyShader
+	mov dword[shader_deferred_lighting], 0
+	add esp, 4
 	
 	
 	mov esp, ebp

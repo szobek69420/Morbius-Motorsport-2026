@@ -49,7 +49,7 @@ section .rodata use32
 	sound_path db "./sfx/battlecry.wav",0
 	music_path db "./sfx/music.wav",0
 	
-	error_incomplete_framebuffer db "game_loop: L framebuffer",10,0
+	error_incomplete_framebuffer db "game_loop: L framebuffer uhuhu ahah",10,0
 	
 	test_text_main db "main",10,0
 	test_text_physics db "physics",10,0
@@ -92,6 +92,7 @@ section .bss use32
 	chunk_manager_4d resb 4
 	
 	framebuffer_gbuffer resb 4
+	framebuffer_ssao resb 4
 	framebuffer_pp resb 4
 	
 section .data use32
@@ -114,16 +115,7 @@ section .data use32
 
 	TIME_OF_DAY dd 0.0	;values are in [0;1], 0 and 1 are dawn
 	
-	
-	WORLD_UP dd 0.0, 1.0, 0.0
-	FORWARD dd 0.0, 0.0, -1.0
-	POSITION dd -6.9, 4.2, 6.66
-	TEST_POSITION dd -5.9, 5.2,	5.66, 1.0
-	
-	FOV dd 30.0
-	NEAR_CLIP dd 0.1
-	FAR_CLIP dd 10.0
-	ASPECT_XY dd 1.0
+	SUN_DIRECTION dd 0.0, 1.0, 0.0, 0.0
 
 section .text use32
 
@@ -134,6 +126,7 @@ section .text use32
 	
 	extern glClear
 	extern glClearColor
+	extern glClearDepthf
 	extern glEnable
 	extern glFrontFace
 	extern glViewport
@@ -257,6 +250,8 @@ section .text use32
 	extern framebuffer_isComplete
 	extern framebuffer_bind
 	extern framebuffer_copyDepthBuffer
+	extern FRAMEBUFFER_RED
+	extern FRAMEBUFFER_RGB
 	extern FRAMEBUFFER_RGBA
 	extern FRAMEBUFFER_RGB16F
 	extern FRAMEBUFFER_RGBA16F
@@ -265,6 +260,7 @@ section .text use32
 	extern postProcessing_deinit
 	extern postProcessing_drawToScreen
 	extern postProcessing_ssao
+	extern postProcessing_deferredLighting
 	
 	extern chunkManager_create
 	extern chunkManager_load
@@ -309,36 +305,6 @@ game_loop:
 	;save pwindow
 	mov eax, dword[ebp+8]
 	mov dword[current_window], eax
-	
-	push WORLD_UP
-	push FORWARD
-	push POSITION
-	push view_matrix
-	call mat4_viewGlm
-	call mat4_print
-	add esp, 16
-	
-	;void mat4_perspective(mat4* buffer, float fovInDegrees, float aspectXY, float near, float far)
-	push dword[FAR_CLIP]
-	push dword[NEAR_CLIP]
-	push dword[ASPECT_XY]
-	push dword[FOV]
-	push projection_matrix
-	call mat4_perspectiveGlm
-	call mat4_print
-	add esp, 20
-	
-	push view_matrix
-	push TEST_POSITION
-	call vec4_mulWithMat
-	call vec4_print
-	add esp, 8
-	
-	push projection_matrix
-	push TEST_POSITION
-	call vec4_mulWithMat
-	call vec4_print
-	add esp, 8
 	
 	;init should_close
 	push 4
@@ -398,45 +364,8 @@ game_loop:
 	call postProcessing_init
 	add esp, 8
 	
-	;create post processing framebuffer
-	push dword[RENDER_HEIGHT]
-	push dword[RENDER_WIDTH]
-	call framebuffer_create
-	mov dword[framebuffer_pp], eax
-	add esp, 4
-
-	push 0
-	push FRAMEBUFFER_RGBA
-	push dword[framebuffer_pp]
-	call framebuffer_colourAttachment
-	call framebuffer_depthAttachment
-	call framebuffer_isComplete
-	add esp, 12
-	
-	;create the gbuffer framebuffer
-	push dword[RENDER_HEIGHT]
-	push dword[RENDER_WIDTH]
-	call framebuffer_create
-	mov dword[framebuffer_gbuffer], eax
-	add esp, 4
-	
-	push 0
-	push FRAMEBUFFER_RGB16F
-	push dword[framebuffer_gbuffer]
-	call framebuffer_colourAttachment			;colour attachment 0 is the normal texture
-	mov dword[esp+8], 1
-	call framebuffer_colourAttachment			;colour attachment 1 is the albedo texture
-	call framebuffer_depthAttachment
-	call framebuffer_isComplete
-	add esp, 12
-	
-	test eax, eax
-	jnz game_loop_framebuffer_gg
-		;send error message and do nothing (even though it will crash anyway skull emoji)
-		push error_incomplete_framebuffer
-		call my_printf
-		add esp, 4
-	game_loop_framebuffer_gg:
+	;create framebuffers
+	call gameLoop_createFramebuffers
 	
 	;create hyperplane
 	push hyperplane
@@ -561,6 +490,16 @@ game_loop:
 		
 		;do the deferred rendering things--------------------------
 		
+		;set the viewport
+		push dword[RENDER_HEIGHT]
+		push dword[RENDER_WIDTH]
+		push 0
+		push 0
+		call [glViewport]
+		
+		;clear the framebuffers
+		call gameLoop_clearFramebuffers
+		
 		;enable depth test
 		push 69
 		call renderable_enableDepthTest
@@ -570,25 +509,6 @@ game_loop:
 		push dword[framebuffer_gbuffer]
 		call framebuffer_bind
 		add esp, 4
-		
-		push dword[RENDER_HEIGHT]
-		push dword[RENDER_WIDTH]
-		push 0
-		push 0
-		call [glViewport]
-		
-	
-		;clear color and depth buffer bit
-		push 0
-		push 0
-		push 0
-		push 0
-		call [glClearColor]
-		
-		mov eax, dword[GL_COLOR_BUFFER_BIT]
-		or eax, dword[GL_DEPTH_BUFFER_BIT]
-		push eax
-		call [glClear]
 		
 		
 		;get camera view, projection and pv matrix
@@ -631,37 +551,40 @@ game_loop:
 		call chunkManager4d_render
 		add esp, 12
 		
+		;bind the ssao fbo
+		push dword[framebuffer_ssao]
+		call framebuffer_bind
+		add esp, 4
 		
-		;bind next framebuffer and clear it with the sky colour
+		;do ssao
+		push projection_matrix
+		push view_matrix
+		push dword[framebuffer_gbuffer]
+		push dword[framebuffer_ssao]
+		call postProcessing_ssao
+		add esp, 16
+		
+		
+		;bind the post processing fbo
 		push dword[framebuffer_pp]
 		call framebuffer_bind
 		add esp, 4
 		
-		sub esp, 16
-		mov eax, esp
-		push eax
-		push dword[TIME_OF_DAY]
-		call sky_getColour
-		add esp, 8
-		call [glClearColor]
 		
-		
-		push dword[GL_COLOR_BUFFER_BIT]
-		call [glClear]
-		
-		;do deferred rendering and ssao
-		push projection_matrix
-		push view_matrix
-		push dword[framebuffer_gbuffer]
-		push dword[framebuffer_pp]
-		call postProcessing_ssao
-		add esp, 16
-		
-		;also copy the depth buffer
+		;copy the depth buffer
 		push dword[framebuffer_gbuffer]
 		push dword[framebuffer_pp]
 		call framebuffer_copyDepthBuffer
 		add esp, 8
+		
+		;do the deferred shading part
+		push view_matrix
+		push SUN_DIRECTION
+		push dword[framebuffer_ssao]
+		push dword[framebuffer_gbuffer]
+		push dword[framebuffer_pp]
+		call postProcessing_deferredLighting
+		add esp, 20
 		
 		;do the forward rendering things--------------------------
 		
@@ -743,15 +666,8 @@ game_loop:
 	call player_destroy
 	add esp, 4
 	
-	;destroy the gbuffer framebuffer
-	push dword[framebuffer_gbuffer]
-	call framebuffer_destroy
-	add esp, 4
-	
-	;destroy the post processing framebuffer
-	push dword[framebuffer_pp]
-	call framebuffer_destroy
-	add esp, 4
+	;destroy the framebuffers
+	call gameLoop_yeetFramebuffers
 	
 	;deinit texture handler
 	call textureHandler_deinit
@@ -960,6 +876,179 @@ gameLoop_windowResizeCallback:
 	ret
 	
 	
+
+;void gameLoop_createFramebuffers()
+gameLoop_createFramebuffers:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;is there a problem?		4
+	
+	mov dword[ebp-4], 0
+	
+	
+	;create post processing framebuffer
+	push dword[RENDER_HEIGHT]
+	push dword[RENDER_WIDTH]
+	call framebuffer_create
+	mov dword[framebuffer_pp], eax
+	add esp, 4
+
+	push 0
+	push FRAMEBUFFER_RGB
+	push dword[framebuffer_pp]
+	call framebuffer_colourAttachment
+	call framebuffer_depthAttachment
+	call framebuffer_isComplete
+	or dword[ebp-4], eax
+	add esp, 12
+	
+	;create the gbuffer framebuffer
+	push dword[RENDER_HEIGHT]
+	push dword[RENDER_WIDTH]
+	call framebuffer_create
+	mov dword[framebuffer_gbuffer], eax
+	add esp, 4
+	
+	push 0
+	push FRAMEBUFFER_RGBA16F
+	push dword[framebuffer_gbuffer]
+	call framebuffer_colourAttachment			;colour attachment 0 is the position texture (vec4)
+	add esp, 12
+	
+	push 1
+	push FRAMEBUFFER_RGB16F
+	push dword[framebuffer_gbuffer]
+	call framebuffer_colourAttachment			;colour attachment 1 is the normal texture (vec3)
+	add esp, 12
+	
+	push 2
+	push FRAMEBUFFER_RGB
+	push dword[framebuffer_gbuffer]
+	call framebuffer_colourAttachment			;colour attachment 2 is the albedo texture (vec3)
+	add esp, 12
+	
+	push dword[framebuffer_gbuffer]
+	call framebuffer_depthAttachment
+	add esp, 4
+	
+	push dword[framebuffer_gbuffer]
+	call framebuffer_isComplete
+	or dword[ebp-4], eax
+	add esp, 4
+	
+	;create the ssao framebuffer
+	push dword[RENDER_HEIGHT]
+	push dword[RENDER_WIDTH]
+	call framebuffer_create
+	mov dword[framebuffer_ssao], eax
+	add esp, 4
+	
+	push 0
+	push FRAMEBUFFER_RED
+	push dword[framebuffer_ssao]
+	call framebuffer_colourAttachment
+	call framebuffer_isComplete
+	or dword[ebp-4], eax
+	add esp, 12
+	
+	;print error message if error
+	test dword[ebp-4], 0xffffffff
+	jnz gameLoop_createFramebuffers_no_error
+		push error_incomplete_framebuffer
+		call my_printf
+		add esp, 4
+		
+	gameLoop_createFramebuffers_no_error:
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;void gameLoop_yeetFramebuffers()
+gameLoop_yeetFramebuffers:
+	push ebp
+	mov ebp, esp
+	
+	push dword[framebuffer_pp]
+	call framebuffer_destroy
+	add esp, 4
+	
+	push dword[framebuffer_gbuffer]
+	call framebuffer_destroy
+	add esp, 4
+	
+	push dword[framebuffer_ssao]
+	call framebuffer_destroy
+	add esp, 4
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+
+;doesn't set the viewport to the render size
+;void gameLoop_clearFramebuffers()
+gameLoop_clearFramebuffers:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT		;4
+	
+	;precalcute the helper value
+	mov eax, dword[GL_COLOR_BUFFER_BIT]
+	or eax, dword[GL_DEPTH_BUFFER_BIT]
+	mov dword[ebp-4], eax
+	
+	;set the clear depth
+	push 0x3f800000
+	call dword[glClearDepthf]
+	
+	;clear the framebuffers with colour=(0,0,0,0)
+	push 0
+	push 0
+	push 0
+	push 0
+	call [glClearColor]
+	
+	
+	push dword[framebuffer_gbuffer]
+	call framebuffer_bind
+	add esp, 4
+	
+	push dword[ebp-4]
+	call [glClear]
+	
+	
+	push dword[framebuffer_ssao]
+	call framebuffer_bind
+	add esp, 4
+	
+	push dword[ebp-4]
+	call [glClear]
+	
+	
+	;clear the framebuffers with colour=sky colour
+	sub esp, 16
+	mov eax, esp
+	push eax
+	push dword[TIME_OF_DAY]
+	call sky_getColour
+	add esp, 8
+	call [glClearColor]
+	
+	push dword[framebuffer_pp]
+	call framebuffer_bind
+	add esp, 4
+	
+	push dword[ebp-4]
+	call [glClear]
+	
+	
+	mov esp, ebp
+	pop ebp
+	ret
 	
 
 ;void gameLoop_handleWindowResize()
