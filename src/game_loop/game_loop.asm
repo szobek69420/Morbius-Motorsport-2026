@@ -488,29 +488,6 @@ game_loop:
 		add esp, 8
 		
 		
-		;do the deferred rendering things--------------------------
-		
-		;set the viewport
-		push dword[RENDER_HEIGHT]
-		push dword[RENDER_WIDTH]
-		push 0
-		push 0
-		call [glViewport]
-		
-		;clear the framebuffers
-		call gameLoop_clearFramebuffers
-		
-		;enable depth test
-		push 69
-		call renderable_enableDepthTest
-		add esp, 4
-		
-		;bind the gbuffer and set viewport
-		push dword[framebuffer_gbuffer]
-		call framebuffer_bind
-		add esp, 4
-		
-		
 		;get camera view, projection and pv matrix
 		push view_matrix
 		push camera
@@ -525,6 +502,28 @@ game_loop:
 		call camera_viewProjection
 		add esp, 24
 		
+		
+		;do the deferred rendering things--------------------------
+		
+		;set the viewport
+		push dword[RENDER_HEIGHT]
+		push dword[RENDER_WIDTH]
+		push 0
+		push 0
+		call [glViewport]
+		
+		;clear the framebuffers
+		call gameLoop_clearFramebuffers
+		
+		;bind the gbuffer and set viewport
+		push dword[framebuffer_gbuffer]
+		call framebuffer_bind
+		add esp, 4
+		
+		;enable depth test
+		push 69
+		call renderable_enableDepthTest
+		add esp, 4
 		
 		;render sun (this should be drawn first)
 		fld dword[TIME_OF_DAY]
@@ -551,6 +550,8 @@ game_loop:
 		call chunkManager4d_render
 		add esp, 12
 		
+		
+		
 		;bind the ssao fbo
 		push dword[framebuffer_ssao]
 		call framebuffer_bind
@@ -569,7 +570,6 @@ game_loop:
 		push dword[framebuffer_pp]
 		call framebuffer_bind
 		add esp, 4
-		
 		
 		;copy the depth buffer
 		push dword[framebuffer_gbuffer]
@@ -900,7 +900,7 @@ gameLoop_createFramebuffers:
 	call framebuffer_colourAttachment
 	call framebuffer_depthAttachment
 	call framebuffer_isComplete
-	or dword[ebp-4], eax
+	add dword[ebp-4], eax
 	add esp, 12
 	
 	;create the gbuffer framebuffer
@@ -934,7 +934,7 @@ gameLoop_createFramebuffers:
 	
 	push dword[framebuffer_gbuffer]
 	call framebuffer_isComplete
-	or dword[ebp-4], eax
+	add dword[ebp-4], eax
 	add esp, 4
 	
 	;create the ssao framebuffer
@@ -949,7 +949,7 @@ gameLoop_createFramebuffers:
 	push dword[framebuffer_ssao]
 	call framebuffer_colourAttachment
 	call framebuffer_isComplete
-	or dword[ebp-4], eax
+	add dword[ebp-4], eax
 	add esp, 12
 	
 	;print error message if error
@@ -994,7 +994,7 @@ gameLoop_clearFramebuffers:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 4			;GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT		;4
+	sub esp, 4			;GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT		4
 	
 	;precalcute the helper value
 	mov eax, dword[GL_COLOR_BUFFER_BIT]
@@ -1044,7 +1044,6 @@ gameLoop_clearFramebuffers:
 	
 	push dword[ebp-4]
 	call [glClear]
-	
 	
 	mov esp, ebp
 	pop ebp

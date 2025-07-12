@@ -271,14 +271,14 @@ postProcessing_ssao:
 	
 	;set the textures of the renderable
 	mov ecx, dword[ebp+12]
-	push dword[ecx+20]					;depth
+	push dword[ecx+4]					;position
 	push 0
 	push dword[renderable]
 	call renderable_setExtraTexture2D
 	add esp, 12
 	
 	mov ecx, dword[ebp+12]
-	push dword[ecx+4]					;normals
+	push dword[ecx+8]					;normals
 	push 1
 	push dword[renderable]
 	call renderable_setExtraTexture2D
@@ -382,14 +382,14 @@ postProcessing_deferredLighting:
 	
 	;set the textures of the renderable
 	mov ecx, dword[ebp+12]
-	push dword[ecx+4]					;normal
+	push dword[ecx+8]					;normal
 	push 0
 	push dword[renderable]
 	call renderable_setExtraTexture2D
 	add esp, 12
 	
 	mov ecx, dword[ebp+12]
-	push dword[ecx+8]					;albedo
+	push dword[ecx+12]					;albedo
 	push 1
 	push dword[renderable]
 	call renderable_setExtraTexture2D

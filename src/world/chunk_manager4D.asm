@@ -453,6 +453,14 @@ chunkManager4d_render:
 	call renderable_setUniform
 	add esp, 28
 	
+	;set normal matrix uniform
+	push dword[ebp+20]
+	push dword[RENDERABLE_UNIFORM_MAT4]
+	push uniform_name_view_mat
+	mov ecx, dword[ebp+16]
+	push dword[ecx+28]
+	call renderable_setUniform
+	add esp, 16
 
 	;set normal matrix uniform
 	lea eax, [ebp-140]
