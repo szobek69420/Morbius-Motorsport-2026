@@ -402,6 +402,13 @@ postProcessing_deferredLighting:
 	call renderable_setExtraTexture2D
 	add esp, 12
 	
+	mov ecx, dword[ebp+12]
+	push dword[ecx+4]					;positions
+	push 3
+	push dword[renderable]
+	call renderable_setExtraTexture2D
+	add esp, 12
+	
 	;send over the sun direction
 	push dword[shader_deferred_lighting]
 	call renderable_useShader

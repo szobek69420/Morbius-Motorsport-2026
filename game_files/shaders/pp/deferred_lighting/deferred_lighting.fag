@@ -19,5 +19,4 @@ void main()
 	vec3 albedo=texture(albedoTexture,uv).rgb;
 	
 	fragmentColour=vec3(occlusion, 1.0, 1.0);
-	//fragmentColour=albedo;
 }

@@ -1,11 +1,11 @@
-#version 330 core
+#version 460 core
 in vec2 uv;
 
 layout (location = 0) out float ssaoLevel; //0 means that the fragment has not been ssao'd
 
-uniform sampler2D extra2DTexture0;	//view space positions, vec4
-uniform sampler2D extra2DTexture1;	//view space normals, vec3
-uniform sampler2D extra2DTexture2;	//random rotation vector, vec3
+layout (binding=2) uniform sampler2D texPositions;	//view space positions, vec4
+layout (binding=3) uniform sampler2D texNormals;	//view space normals, vec3
+layout (binding=4) uniform sampler2D texRandomVecs;	//random rotation vector, vec3
 
 uniform vec3 samples[32];
 
@@ -19,20 +19,17 @@ const float bias=0.025;
 
 void main()
 {
-	vec4 temp=texture(extra2DTexture0, uv);
-	if(temp.w==0)
+	vec2 noiseScale=screenSize/4;
+	
+	//sample things
+	vec3 viewSpacePosition;
+	vec3 viewSpaceNormal=texture(texNormals, uv).xyz;
+	vec3 rotator=texture(texRandomVecs, uv*noiseScale).xyz;
+	vec4 temp=texture(texPositions, uv);
+	
+	if(temp.w==0)	//position.w==0 means bruh
 		discard;
-		
-	float ndcDepth=texture(extra2DTexture0, uv).x;
-	
-	//sample the normal and the random rotation
-	vec3 viewSpaceNormal=texture(extra2DTexture1, uv).xyz;
-	vec3 rotator=texture(extra2DTexture2, uv*screenSize/4.0).xyz;
-	
-	//calculate the view space position
-	vec3 projectionSpacePosition=vec3(uv, ndcDepth)*2-1;
-	vec4 tempPos = projection_inverse * vec4(projectionSpacePosition,1);
-	vec3 viewSpacePosition = tempPos.xyz / tempPos.w;
+	viewSpacePosition=temp.xyz;
 	
 	//create the TBN matrix
 	vec3 tangent   = normalize(rotator - viewSpaceNormal * dot(rotator, viewSpaceNormal));
@@ -49,10 +46,11 @@ void main()
 		clipSamplePos/=clipSamplePos.w;
 		
 		//get the geometry position in the same position
-		float geometryDepth=2*texture(extra2DTexture0, 0.5*clipSamplePos.xy+0.5).x-1;
+		float geometryDepth=texture(texPositions, 0.5*clipSamplePos.xy+0.5).z;
 		
 		//is it occluding?
-		oneMinusOcclusion += (geometryDepth <= clipSamplePos.z ? 1.0 : 0.0);  
+		float rangeCheck = smoothstep(0.0, 1.0, kernelRadius / abs(viewSpacePosition.z - geometryDepth));
+		oneMinusOcclusion += (geometryDepth >= samplePos.z + bias ? 1.0 : 0.0);  
 	}
 	
 	float occlusion = 1.0 - (oneMinusOcclusion / 32.0);
