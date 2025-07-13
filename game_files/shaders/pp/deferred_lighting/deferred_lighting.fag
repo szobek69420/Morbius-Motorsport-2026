@@ -4,19 +4,45 @@ in vec2 uv;
 
 layout (location=0) out vec3 fragmentColour;
 
-layout (binding=2) uniform sampler2D normalTexture;
-layout (binding=3) uniform sampler2D albedoTexture;
-layout (binding=4) uniform sampler2D ssaoTexture;
+layout (binding=2) uniform sampler2D positionTexture;
+layout (binding=3) uniform sampler2D normalTexture;
+layout (binding=4) uniform sampler2D albedoTexture;
+layout (binding=5) uniform sampler2D ssaoTexture;
 
 uniform vec3 viewSpaceSunDirection;
 
+const vec2 sampleKernel[9]={
+	vec2(-0.01, -0.01), vec2(-0.01, 0), vec2(-0.01, 0.01),
+	vec2(0, -0.01), vec2(0, 0), vec2(0, 0.01),
+	vec2(0.01, -0.01), vec2(0.01, 0), vec2(0.01, 0.01)
+};
+
 void main()
 {
-	float occlusion=texture(ssaoTexture, uv).r;
-	if(occlusion==0)	//an occlusion of 0 means a non-processed texel
-		discard;
+	vec4 position=texture(positionTexture, uv);
 	vec3 normal=texture(normalTexture, uv).xyz;
 	vec3 albedo=texture(albedoTexture,uv).rgb;
 	
-	fragmentColour=vec3(occlusion, 1.0, 1.0);
+	if(position.w==0)
+		discard;
+	
+	//calculate ambient occlusion
+	float occlusion=0;
+	float occlusionCount=0;
+	for(int i=0;i<9;i++)
+	{
+		float ssaoSample=texture(ssaoTexture, uv+sampleKernel[i]).r;
+		if(ssaoSample==0) //an ssao level of 0 means a non-processed texel
+			continue;
+			
+		occlusion+=ssaoSample;
+		occlusionCount+=1;
+	}
+	occlusion/=occlusionCount; //occlusionCount can't be 0
+	
+	//calculate lighting
+	vec3 viewDir=normalize(-position.xyz);
+	vec3 halfwayVec=0.5*(viewDir+viewSpaceSunDirection);
+	
+	fragmentColour=(0.7*max(0, dot(halfwayVec, viewDir))+0.3*occlusion)*albedo;
 }
