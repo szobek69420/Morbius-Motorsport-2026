@@ -4,10 +4,10 @@ in vec2 uv;
 
 layout (location=0) out vec3 fragmentColour;
 
-layout (binding=2) uniform sampler2D positionTexture;
-layout (binding=3) uniform sampler2D normalTexture;
-layout (binding=4) uniform sampler2D albedoTexture;
-layout (binding=5) uniform sampler2D ssaoTexture;
+//layout (binding=2) uniform sampler2D positionTexture; will be necessary if there is a specular lighting
+layout (binding=2) uniform sampler2D normalTexture;
+layout (binding=3) uniform sampler2D albedoTexture;
+layout (binding=4) uniform sampler2D ssaoTexture;
 
 uniform vec3 viewSpaceSunDirection;
 
@@ -19,12 +19,14 @@ const vec2 sampleKernel[9]={
 
 void main()
 {
-	vec4 position=texture(positionTexture, uv);
+	//test if fragment should be shaded
+	float fragmentTest=texture(ssaoTexture, uv).r;
+	if(fragmentTest==0)
+		discard;
+
+	//sample things
 	vec3 normal=texture(normalTexture, uv).xyz;
 	vec3 albedo=texture(albedoTexture,uv).rgb;
-	
-	if(position.w==0)
-		discard;
 	
 	//calculate ambient occlusion
 	float occlusion=0;
@@ -41,8 +43,5 @@ void main()
 	occlusion/=occlusionCount; //occlusionCount can't be 0
 	
 	//calculate lighting
-	vec3 viewDir=normalize(-position.xyz);
-	vec3 halfwayVec=0.5*(viewDir+viewSpaceSunDirection);
-	
-	fragmentColour=(0.7*max(0, dot(halfwayVec, viewDir))+0.3*occlusion)*albedo;
+	fragmentColour=(0.7*max(0, dot(normal, viewSpaceSunDirection))+0.3*occlusion)*albedo;
 }

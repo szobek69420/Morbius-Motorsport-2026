@@ -85,7 +85,6 @@ section .bss use32
 	projection_matrix resb 64
 	pv_matrix resb 64
 	
-	hyperplane resb 64
 	pplayer resb 4
 	
 	chunk_manager resb 4
@@ -115,7 +114,7 @@ section .data use32
 
 	TIME_OF_DAY dd 0.0	;values are in [0;1], 0 and 1 are dawn
 	
-	SUN_DIRECTION dd 0.0, 1.0, 0.0, 0.0
+	SUN_DIRECTION_BUFFER dd 0.0, 1.0, 0.0, 0.0
 
 section .text use32
 
@@ -181,7 +180,7 @@ section .text use32
 	extern player_updatePhysics
 	extern player_drawRaycastHypercube
 	
-	extern hyperPlane_create
+	extern hyperPlane_directionTo3d
 	
 	extern renderable_init
 	extern renderable_deinit
@@ -283,6 +282,7 @@ section .text use32
 	extern sun_render
 	extern sun_setAngle
 	extern sun_setDistance
+	extern sun_getDirection
 	
 	extern sky_getColour
 	
@@ -366,11 +366,6 @@ game_loop:
 	
 	;create framebuffers
 	call gameLoop_createFramebuffers
-	
-	;create hyperplane
-	push hyperplane
-	call hyperPlane_create
-	add esp, 4
 	
 	;create chunk manager 4d
 	call chunkManager4d_create
@@ -487,6 +482,18 @@ game_loop:
 		call player_update
 		add esp, 8
 		
+		;get sun direction
+		push SUN_DIRECTION_BUFFER
+		call sun_getDirection
+		add esp, 4
+		
+		push SUN_DIRECTION_BUFFER
+		push SUN_DIRECTION_BUFFER
+		push dword[chunk_manager_4d]
+		call chunkManager4d_getHyperPlane
+		mov dword[esp], eax
+		call hyperPlane_directionTo3d
+		add esp, 12
 		
 		;get camera view, projection and pv matrix
 		push view_matrix
@@ -579,7 +586,7 @@ game_loop:
 		
 		;do the deferred shading part
 		push view_matrix
-		push SUN_DIRECTION
+		push SUN_DIRECTION_BUFFER
 		push dword[framebuffer_ssao]
 		push dword[framebuffer_gbuffer]
 		push dword[framebuffer_pp]
