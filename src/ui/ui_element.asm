@@ -7,11 +7,11 @@
 ;	int16 anchorX, anchorY;								16	//anchor is the origin point of the uielement coordinates (relative to parent)
 ;	int16 pivotX, pivotY;								20	//tesco pivot indicates the point whose coordinates are given by (xPos; yPos)
 ;	vector<UIElement*> children;						24
-;
+;	UIElement* parent;									40
 ;	//internal
-;	int32 currentScreenPosX, currentScreenPosY;			40	//the position of the bottom left corner of the element in screen coordinates, where the bottom left corner of the screen is (0;0)
+;	int32 currentScreenPosX, currentScreenPosY;			44	//the position of the bottom left corner of the element in screen coordinates, where the bottom left corner of the screen is (0;0)
 ;
-;	padding of 16 bytes
+;	padding of 12 bytes
 ;	int32 isInteractable;								64
 ;	void (*render)(UIElement*);							68
 ;	void (*destroy)(UIElement*);						72
@@ -40,9 +40,110 @@ section .rodata use32
 	
 section .text use32
 
-	uiElement_calculateCurrentPosition	;void uiElement_cCP(UIElement* this, UIElement* parent)	//parent==NULL if root element
+	global uiElement_setPosition				;void uiElement_setPosition(UIElement* element, int xPos, int yPos)
+	global uiElement_setSize					;void uiElement_setSize(UIElement* element, int width, int height)
+	global uiElement_setAnchor					;void uiElement_setAnchor(int16 anchorX, int16 anchorY)
+	global uiElement_setPivot					;void uiElement_setPivot(int16 pivotX, int16 pivotY)
+	
+uiElement_setPosition:
+	push ebp
+	mov ebp, esp
+	
+	;set the new values
+	mov eax, dword[ebp+8]
+	
+	mov ecx, dword[ebp+12]
+	mov dword[eax], ecx
+	mov ecx, dword[ebp+16]
+	mov dword[eax+4], ecx
+	
+	;refresh the element
+	mov eax, dword[ebp+8]
+	push dword[eax+40]		;parent
+	push eax
+	call uiElement_calculateCurrentPosition
+	add esp, 8
+	
+	mov esp, ebp
+	pop ebp
+	ret
 	
 	
+uiElement_setSize:
+	push ebp
+	mov ebp, esp
+	
+	;set the new values
+	mov eax, dword[ebp+8]
+	
+	mov ecx, dword[ebp+12]
+	mov dword[eax+8], ecx
+	mov ecx, dword[ebp+16]
+	mov dword[eax+12], ecx
+	
+	;refresh the element
+	mov eax, dword[ebp+8]
+	push dword[eax+40]		;parent
+	push eax
+	call uiElement_calculateCurrentPosition
+	add esp, 8
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+uiElement_setAnchor:
+	push ebp
+	mov ebp, esp
+	
+	;set the new values
+	mov eax, dword[ebp+8]
+	
+	mov cx, word[ebp+12]
+	mov word[eax+16], cx
+	mov cx, word[ebp+14]
+	mov word[eax+18], cx
+	
+	;refresh the element
+	mov eax, dword[ebp+8]
+	push dword[eax+40]		;parent
+	push eax
+	call uiElement_calculateCurrentPosition
+	add esp, 8
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+uiElement_setPivot:
+	push ebp
+	mov ebp, esp
+	
+	;set the new values
+	mov eax, dword[ebp+8]
+	
+	mov cx, word[ebp+12]
+	mov word[eax+20], cx
+	mov cx, word[ebp+14]
+	mov word[eax+22], cx
+	
+	;refresh the element
+	mov eax, dword[ebp+8]
+	push dword[eax+40]		;parent
+	push eax
+	call uiElement_calculateCurrentPosition
+	add esp, 8
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;internal functions
+
+;parent==NULL if root element	
+;void uiElement_calculateCurrentPosition(UIElement* element, UIElement* parent)
 uiElement_calculateCurrentPosition:
 	push ebp
 	mov ebp, esp
@@ -57,11 +158,11 @@ uiElement_calculateCurrentPosition:
 		mov eax, dword[ebp+8]
 		
 		mov edx, dword[eax]
-		mov dword[eax+40], edx
-		mov edx, dword[eax+4]
 		mov dword[eax+44], edx
+		mov edx, dword[eax+4]
+		mov dword[eax+48], edx
 		
-		jmp uiElement_calculateCurrentPosition_end
+		jmp uiElement_calculateCurrentPosition_calculate_children
 	
 	uiElement_calculateCurrentPosition_parent:
 	
@@ -197,20 +298,87 @@ uiElement_calculateCurrentPosition:
 	;add the current position of the parent to the current position
 	mov eax, dword[ebp+12]
 	
-	mov ecx, dword[eax+40]
-	add dword[ebp-4], ecx
 	mov ecx, dword[eax+44]
+	add dword[ebp-4], ecx
+	mov ecx, dword[eax+48]
 	add dword[ebp-8], ecx
 	
 	;copy the results
 	mov eax, dword[ebp+8]
 	
 	mov ecx, dword[ebp-4]
-	mov dword[eax+40], ecx
-	mov ecx, dword[ebp-8]
 	mov dword[eax+44], ecx
+	mov ecx, dword[ebp-8]
+	mov dword[eax+48], ecx
+	
+	;calculate the results for the children as well
+	uiElement_calculateCurrentPosition_calculate_children:
+	mov eax, dword[ebp+8]
+	cmp dword[eax+24], 0		;is there a child?
+	jle uiElement_calculateCurrentPosition_end
+	
+	push esi		;save esi
+	push edi		;save edi
+	
+	mov esi, dword[eax+36]		;current element in esi
+	mov edi, dword[eax+24]		;index in edi
+	uiElement_calculateCurrentPosition_calculate_children_loop_start:
+		push dword[ebp+8]
+		push dword[esi]
+		call uiElement_calculateCurrentPosition
+		add esp, 8
+	
+		add esi, 4
+		dec edi
+		test edi, edi
+		jnz uiElement_calculateCurrentPosition_calculate_children_loop_start
+	
+	pop edi			;restore edi
+	pop esi			;restore esi
 	
 	uiElement_calculateCurrentPosition_end:
+	mov esp, ebp
+	pop ebp
+	ret
+
+;so that only one recalculation happens	
+;void uiElement_setEverything(
+;	UIElement* element,
+;	int xPos, int yPos,
+;	int width, int height,
+;	int16 anchorX, int16 anchorY,
+;	int16 pivotX, int16 pivotY
+;)
+uiElement_setEverything:
+	push ebp
+	mov ebp, esp
+	
+	;set values
+	mov eax, dword[ebp+8]
+	
+	mov ecx, dword[ebp+12]
+	mov dword[eax], ecx			;x pos
+	mov ecx, dword[ebp+16]
+	mov dword[eax+4], ecx		;y pos
+	
+	mov ecx, dword[ebp+20]
+	mov dword[eax+8], ecx		;width
+	mov ecx, dword[ebp+24]
+	mov dword[eax+12], ecx		;height
+	
+	mov ecx, dword[ebp+28]
+	mov dword[eax+16], ecx		;x and y anchors
+	mov ecx, dword[ebp+32]
+	mov dword[eax+20], ecx		;x and y pivots
+	
+	;refresh element
+	mov eax, dword[ebp+8]
+	
+	push dword[eax+40]
+	push eax
+	call uiElement_calculateCurrentPosition
+	add esp, 8
+	
 	mov esp, ebp
 	pop ebp
 	ret
