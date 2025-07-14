@@ -39,11 +39,94 @@ section .rodata use32
 	
 	
 section .text use32
+	
+	;destroys the children as well
+	;also deallocates the memory
+	;void uiElement_destroy(UIElement* element)
+	global uiElement_destroy
 
 	global uiElement_setPosition				;void uiElement_setPosition(UIElement* element, int xPos, int yPos)
 	global uiElement_setSize					;void uiElement_setSize(UIElement* element, int width, int height)
-	global uiElement_setAnchor					;void uiElement_setAnchor(int16 anchorX, int16 anchorY)
-	global uiElement_setPivot					;void uiElement_setPivot(int16 pivotX, int16 pivotY)
+	global uiElement_setAnchor					;void uiElement_setAnchor(UIElement* element, int16 anchorX, int16 anchorY)
+	global uiElement_setPivot					;void uiElement_setPivot(UIElement* element, int16 pivotX, int16 pivotY)
+	
+	;NULL means no parent
+	;removes the element from the children of the former parent (no alimony then)
+	;void uiElement_setParent(UIElement* element, UIElement* parent)
+	global uiElement_setParent
+	
+	;helper function for creating a ui element
+	;sets ALL function pointers to 0
+	;void uiElement_initGeneralPart(UIElement* element)
+	global uiElement_initGeneralPart
+	
+	
+	extern my_memset_dword
+	
+	extern vector_init
+	extern vector_destroy
+	extern vector_push_back
+	extern vector_remove
+	
+	
+uiElement_destroy:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	;removes itself from the parent's children list
+	push 0
+	push dword[ebp+16]
+	call uiElement_setParent
+	add esp, 8
+	
+	;do a jeffrey epstein (destroy the children)
+	;descending order is necessary
+	mov eax, dword[ebp+16]
+	mov esi, dword[eax+36]			;element array in esi
+	mov edi, dword[eax+24]			;index in edi
+	cmp edi, 0
+	jle uiElement_destroy_loop_end
+	uiElement_destroy_loop_start:
+		push dword[esi+4*edi-4]		;last element
+		call uiElement_destroy
+		add esp, 4
+		
+		dec edi
+		test edi, edi
+		jnz uiElement_destroy_loop_start
+		
+	uiElement_destroy_loop_end:
+	
+	;destroy the specific part if necessary
+	mov eax, dword[ebp+16]
+	test dword[eax+72], 0xffffffff
+	jz uiElement_destroy_no_custom_destroy
+		push eax
+		call dword[eax+72]
+		add esp, 4
+		
+	uiElement_destroy_no_custom_destroy:
+	
+	;deinit the general part
+	mov eax, dword[ebp+16]
+	lea eax, [eax+24]
+	push eax
+	call vector_destroy
+	add esp, 4
+	
+	;dealloc the memory
+	push dword[ebp+16]
+	call my_free
+	add esp, 4
+	
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
 	
 uiElement_setPosition:
 	push ebp
@@ -133,6 +216,94 @@ uiElement_setPivot:
 	push dword[eax+40]		;parent
 	push eax
 	call uiElement_calculateCurrentPosition
+	add esp, 8
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+
+uiElement_setParent:
+	push ebp
+	mov ebp, esp
+	
+	;is the new parent the same as the old one
+	mov eax, dword[ebp+8]
+	mov ecx, dword[ebp+12]
+	cmp dword[eax+40], ecx
+	je uiElement_setParent_end
+	
+	;remove the element from the ex-parent
+	mov eax, dword[ebp+8]
+	cmp dword[eax+40], 0
+	je uiElement_setParent_no_former_parent
+		;yeet
+		mov ecx, dword[eax+40]
+		lea ecx, [ecx+24]		;ex-parent's children in ecx
+		push eax
+		push ecx
+		call vector_remove
+		add esp, 8
+	
+	uiElement_setParent_no_former_parent:
+	
+	;set the parent field to the new one
+	mov eax, dword[ebp+8]
+	mov ecx, dword[ebp+12]
+	mov dword[eax+40], ecx
+	
+	;add the element to the children of the new parent
+	cmp dword[ebp+12], 0
+	je uiElement_setParent_no_new_parent
+		;add
+		mov eax, dword[ebp+12]
+		lea eax, [eax+24]
+		push dword[ebp+8]
+		push eax
+		call vector_push_back
+		add esp, 8
+		
+	uiElement_setParent_no_new_parent:
+	
+	uiElement_setParent_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+uiElement_initGeneralPart:
+	push ebp
+	mov ebp, esp
+	
+	;zero out everything
+	push 128
+	push 0
+	push dword[ebp+8]
+	call my_memset_dword
+	add esp, 12
+	
+	;set things
+	;default alignment is bottom left (both for anchor and pivot)
+	;default size is 100x100
+	;default position is (0;0)
+	push word[UI_LEFT]
+	push word[UI_BOTTOM]
+	push word[UI_LEFT]
+	push word[UI_BOTTOM]
+	push 100
+	push 100
+	push 0
+	push 0
+	push dword[ebp+8]
+	call uiElement_setEverything
+	add esp, 28
+	
+	;create children vector
+	mov eax, dword[ebp+8]
+	lea eax, [eax+24]
+	push 4
+	push eax
+	call vector_init
 	add esp, 8
 	
 	mov esp, ebp
