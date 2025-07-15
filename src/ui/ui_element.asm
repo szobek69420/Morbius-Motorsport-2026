@@ -37,13 +37,29 @@ section .rodata use32
 	global UI_RIGHT
 	global UI_TOP
 	
+	;types should be sequential
+	UI_FIRST:
+	UI_CANVAS	dd 0
+	UI_IMAGE	dd 1
+	UI_LAST:
+	
+	global UI_CANVAS
+	global UI_IMAGE
+	
+	error_create_invalid_type db "uiElement_create: %d is not a valid element type",10,0
 	
 section .text use32
+	
+	;type can be for example dword[UI_IMAGE]
+	;UIElement* uiElement_create(int type)
+	global uiElement_create
 	
 	;destroys the children as well
 	;also deallocates the memory
 	;void uiElement_destroy(UIElement* element)
 	global uiElement_destroy
+	
+	global uiElement_render						;void uiElement_render(UIElement* element)
 
 	global uiElement_setPosition				;void uiElement_setPosition(UIElement* element, int xPos, int yPos)
 	global uiElement_setSize					;void uiElement_setSize(UIElement* element, int width, int height)
@@ -68,6 +84,62 @@ section .text use32
 	extern vector_push_back
 	extern vector_remove
 	
+	
+uiElement_create:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;return value		4
+	
+	mov dword[ebp-4], 0
+	
+	;check if the type is valid
+	mov eax, dword[ebp+8]
+	cmp eax, dword[CANVAS_FIRST]
+	jl uiElement_create_type_invalid
+	mov ecx, dword[CANVAS_LAST]
+	cmp eax, dword[ecx-4]
+	jg uiElement_create_type_invalid
+	jmp uiElement_create_type_valid
+	
+	uiElement_create_type_invalid:
+		;invalid type
+		push dword[ebp+8]
+		push error_create_invalid_type
+		call my_printf
+		add esp, 8
+		
+		jmp uiElement_create_done
+		
+	uiElement_create_type_valid:
+	
+	mov eax, uiElement_create_switch
+	mov ecx, dword[ebp+8]
+	jmp dword[eax+4*ecx]
+	
+	uiElement_create_switch:
+	dd uiElement_create_canvas
+	dd uiElement_create_image
+	
+	uiElement_create_canvas:
+		;create canvas
+		
+		jmp uiElement_create_done
+		
+	uiElement_create_image:
+		;create image
+		
+		jmp uiElement_create_done
+	
+	uiElement_create_done:
+	
+	
+	uiElement_create_end:
+	mov eax, dword[ebp-4]		;set return value
+	
+	mov esp, ebp
+	pop ebp
+	ret
 	
 uiElement_destroy:
 	push ebp
@@ -120,6 +192,48 @@ uiElement_destroy:
 	push dword[ebp+16]
 	call my_free
 	add esp, 4
+	
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+uiElement_render:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	;render itself if there is a function
+	mov eax, dword[ebp+16]
+	test dword[eax+68], 0xffffffff
+	jz uiElement_render_no_bitches
+		push eax
+		call dword[eax+68]
+		add esp, 4
+		
+	uiElement_render_no_bitches:
+	
+	;render children
+	mov eax, dword[ebp+16]
+	mov esi, dword[eax+36]				;current child in esi
+	mov edi, dword[eax+24]				;index in edi
+	cmp edi, 0
+	jle uiElement_render_loop_end
+	uiElement_render_loop_start:
+		;render child
+		push dword[esi]
+		call uiElement_render
+		add esp, 4
+		
+		add esi, 4
+		dec edi
+		test edi, edi
+		jnz uiElement_render_loop_start
+	
+	uiElement_render_loop_end:
 	
 	mov esp, ebp
 	pop edi
