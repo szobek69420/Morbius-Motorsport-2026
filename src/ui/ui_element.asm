@@ -13,7 +13,7 @@
 ;
 ;	padding of 12 bytes
 ;	int32 isInteractable;								64
-;	void (*render)(UIElement*);							68
+;	void (*render)(UIElement*, const mat4* projection);	68
 ;	void (*destroy)(UIElement*);						72
 ;	void (*onWindowResize)(UIElement*, int w, int h)	76
 ;	void (*onClick)(UIElement*, void* param)			80
@@ -59,7 +59,7 @@ section .text use32
 	;void uiElement_destroy(UIElement* element)
 	global uiElement_destroy
 	
-	global uiElement_render						;void uiElement_render(UIElement* element)
+	global uiElement_render						;void uiElement_render(UIElement* element, const mat4* projection)
 
 	global uiElement_setPosition				;void uiElement_setPosition(UIElement* element, int xPos, int yPos)
 	global uiElement_setSize					;void uiElement_setSize(UIElement* element, int width, int height)
@@ -76,13 +76,16 @@ section .text use32
 	;void uiElement_initGeneralPart(UIElement* element)
 	global uiElement_initGeneralPart
 	
-	
+	extern my_free
+	extern my_printf
 	extern my_memset_dword
 	
 	extern vector_init
 	extern vector_destroy
 	extern vector_push_back
 	extern vector_remove
+	
+	extern uiCanvas_create
 	
 	
 uiElement_create:
@@ -123,7 +126,8 @@ uiElement_create:
 	
 	uiElement_create_canvas:
 		;create canvas
-		
+		call uiCanvas_create
+		mov dword[ebp-4], eax
 		jmp uiElement_create_done
 		
 	uiElement_create_image:
@@ -140,6 +144,8 @@ uiElement_create:
 	mov esp, ebp
 	pop ebp
 	ret
+	
+	
 	
 uiElement_destroy:
 	push ebp
@@ -210,9 +216,10 @@ uiElement_render:
 	mov eax, dword[ebp+16]
 	test dword[eax+68], 0xffffffff
 	jz uiElement_render_no_bitches
+		push dword[ebp+20]
 		push eax
 		call dword[eax+68]
-		add esp, 4
+		add esp, 8
 		
 	uiElement_render_no_bitches:
 	
@@ -224,9 +231,10 @@ uiElement_render:
 	jle uiElement_render_loop_end
 	uiElement_render_loop_start:
 		;render child
+		push dword[ebp+20]
 		push dword[esi]
 		call uiElement_render
-		add esp, 4
+		add esp, 8
 		
 		add esi, 4
 		dec edi
