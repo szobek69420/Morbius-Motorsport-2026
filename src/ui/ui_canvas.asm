@@ -6,12 +6,21 @@
 
 section .text use32
 	
+	global uiCanvas_init		;void uiCanvas_init()
+	global uiCanvas_deinit		;void uiCanvas_deinit()
+	
 	global uiCanvas_create		;UIElement* uiCanvas_create()
 	
 	extern my_malloc
 	
 	extern uiElement_setSize
 	extern uiElement_initGeneralPart
+	
+uiCanvas_init:
+	ret
+	
+uiCanvas_deinit:
+	ret
 	
 uiCanvas_create:
 	push ebp

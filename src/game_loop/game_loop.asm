@@ -298,6 +298,10 @@ section .text use32
 	extern vec4_mulWithMat
 	extern vec4_print
 	
+	extern uiElement_init
+	extern uiElement_deinit
+	extern uiElement_processInput
+	
 game_loop:
 	push ebp
 	mov ebp, esp
@@ -363,6 +367,9 @@ game_loop:
 	push dword[RENDER_WIDTH]
 	call postProcessing_init
 	add esp, 8
+	
+	;init ui
+	call uiElement_init
 	
 	;create framebuffers
 	call gameLoop_createFramebuffers
@@ -457,6 +464,9 @@ game_loop:
 			mov dword[should_resize], 0
 			call gameLoop_handleWindowResize
 		gameLoop_loop_no_resize:
+		
+		;process inputs for ui
+		call uiElement_processInput
 		
 		;process a chunk graphics update 4d
 		push dword[chunk_manager_4d]
@@ -675,6 +685,12 @@ game_loop:
 	
 	;destroy the framebuffers
 	call gameLoop_yeetFramebuffers
+	
+	;deinit ui
+	call uiElement_deinit
+	
+	;deinit pp
+	call postProcessing_deinit
 	
 	;deinit texture handler
 	call textureHandler_deinit

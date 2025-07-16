@@ -92,7 +92,7 @@ uiImage_init:
 	
 	;check if we are already morbin
 	cmp dword[is_initialized], 0
-	jne uiImage_init_not_initialized
+	je uiImage_init_not_initialized
 		;scheisse
 		push error_init_already_initialized
 		call my_printf
@@ -168,7 +168,7 @@ uiImage_deinit:
 	
 	;yeet renderable
 	push dword[renderable]
-	cal renderable_destroy
+	call renderable_destroy
 	mov dword[renderable], 0
 	add esp, 4
 	

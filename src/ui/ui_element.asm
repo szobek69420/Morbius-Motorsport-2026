@@ -48,7 +48,20 @@ section .rodata use32
 	
 	error_create_invalid_type db "uiElement_create: %d is not a valid element type",10,0
 	
+	print_two_ints_nl db "%d %d",10,0
+	
+section .bss use32
+
+	instantiated_vector resb 16			;vector<UIElement*>
+	window_size_x resb 4				;int
+	window_size_y resb 4				;int
+	
 section .text use32
+	
+	global uiElement_init		;void uiElement_init()
+	global uiElement_deinit		;void uiElement_deinit()
+	
+	global uiElement_processInput	;void uiElement_processInput()
 	
 	;type can be for example dword[UI_IMAGE]
 	;UIElement* uiElement_create(int type)
@@ -85,8 +98,132 @@ section .text use32
 	extern vector_push_back
 	extern vector_remove
 	
+	extern WINDOW_SIZE_X
+	extern WINDOW_SIZE_Y
+	
+	extern uiCanvas_init
+	extern uiCanvas_deinit
 	extern uiCanvas_create
+	
+	extern uiImage_init
+	extern uiImage_deinit
 	extern uiImage_create
+	
+	
+uiElement_init:
+	push ebp
+	mov ebp, esp
+	
+	;create instantiated vector
+	push 4
+	push instantiated_vector
+	call vector_init
+	add esp, 8
+	
+	;set window size
+	mov eax, dword[WINDOW_SIZE_X]
+	mov dword[window_size_x], eax
+	mov ecx, dword[WINDOW_SIZE_Y]
+	mov dword[window_size_y], ecx
+	
+	;init subsystems
+	call uiCanvas_init
+	call uiImage_init
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+uiElement_deinit:
+	push ebp
+	mov ebp, esp
+	
+	;destroy remaining elements
+	uiElement_deinit_loop_start:
+		cmp dword[instantiated_vector], 0
+		jle uiElement_deinit_loop_end
+		
+		;destroy element
+		mov eax, instantiated_vector
+		mov eax, dword[eax+12]
+		push dword[eax]
+		call uiElement_destroy
+		add esp, 4
+		
+		jmp uiElement_deinit_loop_start
+		
+	uiElement_deinit_loop_end:
+	
+	;destroy the vector
+	push instantiated_vector
+	call vector_destroy
+	add esp, 4
+	
+	;deinit subsystems
+	call uiCanvas_deinit
+	call uiImage_deinit
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+
+uiElement_processInput:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	
+	;window resize stuff -----------------------------
+	
+	;check if there was a window resize event
+	mov eax, dword[WINDOW_SIZE_X]
+	sub eax, dword[window_size_x]
+	mov ecx, dword[WINDOW_SIZE_Y]
+	sub ecx, dword[window_size_y]
+	or eax, ecx
+	test eax, eax
+	jz uiElement_processInput_window_resize_skip
+		;set the window size values
+		mov eax, dword[WINDOW_SIZE_X]
+		mov dword[window_size_x], eax
+		mov ecx, dword[WINDOW_SIZE_Y]
+		mov dword[window_size_y], ecx
+	
+		;call the window resize callbacks if necessary
+		;from last element to first
+		mov eax, instantiated_vector
+		mov esi, dword[eax]			;index in esi
+		mov edi, dword[eax+12]		;data in edi
+		cmp esi, 0
+		jle uiElement_processInput_window_resize_loop_end
+		uiElement_processInput_window_resize_loop_start:
+			mov ebx, dword[edi+4*esi-4]		;current ui element in ebx
+			test dword[ebx+76], 0xffffffff
+			jz uiElement_processInput_window_resize_loop_continue
+				push dword[window_size_y]
+				push dword[window_size_x]
+				push ebx
+				call dword[ebx+76]
+				add esp, 12
+		
+			uiElement_processInput_window_resize_loop_continue:
+			dec esi
+			test esi, esi
+			jnz uiElement_processInput_window_resize_loop_start
+			
+		uiElement_processInput_window_resize_loop_end:
+	
+	uiElement_processInput_window_resize_skip:
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
 	
 	
 uiElement_create:
@@ -99,9 +236,9 @@ uiElement_create:
 	
 	;check if the type is valid
 	mov eax, dword[ebp+8]
-	cmp eax, dword[CANVAS_FIRST]
+	cmp eax, dword[UI_FIRST]
 	jl uiElement_create_type_invalid
-	mov ecx, dword[CANVAS_LAST]
+	mov ecx, dword[UI_LAST]
 	cmp eax, dword[ecx-4]
 	jg uiElement_create_type_invalid
 	jmp uiElement_create_type_valid
@@ -117,7 +254,7 @@ uiElement_create:
 		
 	uiElement_create_type_valid:
 	
-	mov eax, uiElement_create_switch
+	mov eax, uiElement_create_functions
 	mov ecx, dword[ebp+8]
 	call dword[eax+4*ecx]
 	mov dword[ebp-4], eax
@@ -128,6 +265,11 @@ uiElement_create:
 	dd uiImage_create
 	uiElement_create_done:
 	
+	;add the element to the instantiated vector
+	push dword[ebp-4]
+	push instantiated_vector
+	call vector_push_back
+	add esp, 8
 	
 	uiElement_create_end:
 	mov eax, dword[ebp-4]		;set return value
@@ -143,6 +285,12 @@ uiElement_destroy:
 	push esi
 	push edi
 	mov ebp, esp
+	
+	;remove from the instantiated vector
+	push dword[ebp+8]
+	push instantiated_vector
+	call vector_remove
+	add esp, 8
 	
 	;removes itself from the parent's children list
 	push 0

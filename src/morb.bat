@@ -14,6 +14,9 @@ mkdir build
 ..\build_tools\nasm.exe -fobj glfw/glfw.asm -o build/glfw.o
 ..\build_tools\nasm.exe -fobj opengl/opengl.asm -o build/opengl.o
 ..\build_tools\nasm.exe -fobj shader/shader.asm -o build/shader.o
+..\build_tools\nasm.exe -fobj ui/ui_image.asm -o build/ui_image.o
+..\build_tools\nasm.exe -fobj ui/ui_canvas.asm -o build/ui_canvas.o
+..\build_tools\nasm.exe -fobj ui/ui_element.asm -o build/ui_element.o
 ..\build_tools\nasm.exe -fobj physics/physics4D.asm -o build/physics4D.o
 ..\build_tools\nasm.exe -fobj physics/collider_group_4D.asm -o build/collider_group_4D.o
 ..\build_tools\nasm.exe -fobj physics/aabb4D.asm -o build/aabb4D.o
@@ -68,6 +71,9 @@ build/renderable.o ^
 build/opengl.o ^
 build/shader.o ^
 build/player.o ^
+build/ui_image.o ^
+build/ui_canvas.o ^
+build/ui_element.o ^
 build/physics4D.o ^
 build/collider_group_4D.o ^
 build/aabb4D.o ^
