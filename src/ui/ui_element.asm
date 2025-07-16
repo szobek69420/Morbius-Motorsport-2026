@@ -86,6 +86,7 @@ section .text use32
 	extern vector_remove
 	
 	extern uiCanvas_create
+	extern uiImage_create
 	
 	
 uiElement_create:
@@ -118,23 +119,13 @@ uiElement_create:
 	
 	mov eax, uiElement_create_switch
 	mov ecx, dword[ebp+8]
-	jmp dword[eax+4*ecx]
+	call dword[eax+4*ecx]
+	mov dword[ebp-4], eax
+	jmp uiElement_create_done
 	
-	uiElement_create_switch:
-	dd uiElement_create_canvas
-	dd uiElement_create_image
-	
-	uiElement_create_canvas:
-		;create canvas
-		call uiCanvas_create
-		mov dword[ebp-4], eax
-		jmp uiElement_create_done
-		
-	uiElement_create_image:
-		;create image
-		
-		jmp uiElement_create_done
-	
+	uiElement_create_functions:
+	dd uiCanvas_create
+	dd uiImage_create
 	uiElement_create_done:
 	
 	
