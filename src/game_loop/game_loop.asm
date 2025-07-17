@@ -51,6 +51,8 @@ section .rodata use32
 	
 	error_incomplete_framebuffer db "game_loop: L framebuffer uhuhu ahah",10,0
 	
+	message_deinit_successful db "Deinitialization successful gg ez",10,0
+	
 	test_text_main db "main",10,0
 	test_text_physics db "physics",10,0
 	
@@ -115,6 +117,8 @@ section .data use32
 	TIME_OF_DAY dd 0.0	;values are in [0;1], 0 and 1 are dawn
 	
 	SUN_DIRECTION_BUFFER dd 0.0, 1.0, 0.0, 0.0
+	
+	TEST_CANVAS dd 0
 
 section .text use32
 
@@ -301,6 +305,10 @@ section .text use32
 	extern uiElement_init
 	extern uiElement_deinit
 	extern uiElement_processInput
+	extern uiElement_create
+	extern uiElement_destroy
+	extern UI_CANVAS
+	extern UI_IMAGE
 	
 game_loop:
 	push ebp
@@ -370,6 +378,12 @@ game_loop:
 	
 	;init ui
 	call uiElement_init
+	
+	;create test ui elements
+	push dword[UI_CANVAS]
+	call uiElement_create
+	mov dword[TEST_CANVAS], eax
+	add esp, 4
 	
 	;create framebuffers
 	call gameLoop_createFramebuffers
@@ -686,6 +700,11 @@ game_loop:
 	;destroy the framebuffers
 	call gameLoop_yeetFramebuffers
 	
+	;destroy test ui elements
+	push dword[TEST_CANVAS]
+	call uiElement_destroy
+	add esp, 4
+	
 	;deinit ui
 	call uiElement_deinit
 	
@@ -715,6 +734,11 @@ game_loop:
 	
 	
 	mov dword[current_window], 0
+	
+	;gg
+	push message_deinit_successful
+	call my_printf
+	add esp, 4
 	
 	mov esp, ebp
 	pop ebp

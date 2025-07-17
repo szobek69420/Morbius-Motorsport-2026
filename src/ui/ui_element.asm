@@ -238,7 +238,7 @@ uiElement_create:
 	mov eax, dword[ebp+8]
 	cmp eax, dword[UI_FIRST]
 	jl uiElement_create_type_invalid
-	mov ecx, dword[UI_LAST]
+	mov ecx, UI_LAST
 	cmp eax, dword[ecx-4]
 	jg uiElement_create_type_invalid
 	jmp uiElement_create_type_valid
@@ -265,11 +265,15 @@ uiElement_create:
 	dd uiImage_create
 	uiElement_create_done:
 	
-	;add the element to the instantiated vector
-	push dword[ebp-4]
-	push instantiated_vector
-	call vector_push_back
-	add esp, 8
+	;was the element actually created?
+	cmp dword[ebp-4], 0
+	je uiElement_create_end
+	
+		;add the element to the instantiated vector
+		push dword[ebp-4]
+		push instantiated_vector
+		call vector_push_back
+		add esp, 8
 	
 	uiElement_create_end:
 	mov eax, dword[ebp-4]		;set return value
@@ -287,7 +291,7 @@ uiElement_destroy:
 	mov ebp, esp
 	
 	;remove from the instantiated vector
-	push dword[ebp+8]
+	push dword[ebp+16]
 	push instantiated_vector
 	call vector_remove
 	add esp, 8
