@@ -38,11 +38,16 @@ section .rodata use32
 	error_init_already_initialized db "uiImage_init: system is already initialized",10,0
 	error_deinit_already_deinitialized db "uiImage_deinit: system is already deinitialized",10,0
 	
+	debug_text_destroy db "ui_image destroyed",10,0
+	debug_text_render db "ui_image rendered",10,0
+	
 	uniform_name_colour db "colour",0
 	uniform_name_position db "position",0
 	uniform_name_scale db "scale",0
 	
 	ONE dd 1.0
+	
+	print_four_ints_nl db "%d %d %d %d",10,0
 	
 section .data use32
 	is_initialized dd 0
@@ -281,6 +286,10 @@ uiImage_destroy:
 	push ebp
 	mov ebp, esp
 	
+	push debug_text_destroy
+	call my_printf
+	add esp, 4
+	
 	;delete the texture if necessary
 	mov eax, dword[ebp+8]
 	test dword[eax+128], 0xffffffff
@@ -325,7 +334,7 @@ uiImage_render:
 	push dword[RENDERABLE_UNIFORM_VEC2]
 	push uniform_name_scale
 	push dword[shader]
-	call renderable_setUniform	
+	call renderable_setUniform				;scale
 
 	mov eax, dword[ebp+8]
 	lea eax, [eax+132]
@@ -334,7 +343,7 @@ uiImage_render:
 	push dword[RENDERABLE_UNIFORM_VEC4_ARRAY]
 	push uniform_name_colour
 	push dword[shader]
-	call renderable_setUniform
+	call renderable_setUniform				;colour
 	
 	;set texture
 	mov eax, dword[ebp+8]

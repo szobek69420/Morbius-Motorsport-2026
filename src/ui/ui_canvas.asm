@@ -4,6 +4,10 @@
 ;	<UIElement>
 ;}	128 bytes overall
 
+section .rodata use32
+
+	debug_text_destroy db "ui_canvas destroyed",10,0
+
 section .text use32
 	
 	global uiCanvas_init		;void uiCanvas_init()
@@ -11,6 +15,7 @@ section .text use32
 	
 	global uiCanvas_create		;UIElement* uiCanvas_create()
 	
+	extern my_printf
 	extern my_malloc
 	
 	extern uiElement_setSize
@@ -37,6 +42,10 @@ uiCanvas_create:
 	push dword[ebp-4]
 	call uiElement_initGeneralPart
 	
+	;set destroy
+	mov eax, dword[ebp-4]
+	mov dword[eax+72], uiCanvas_destroy
+	
 	;set onWindowResize
 	mov eax, dword[ebp-4]
 	mov dword[eax+76], uiCanvas_onWindowResize
@@ -46,6 +55,15 @@ uiCanvas_create:
 	
 	mov esp, ebp
 	pop ebp
+	ret
+	
+	
+;void uiCanvas_destroy(UICanvas* canvas)
+uiCanvas_destroy:
+	push debug_text_destroy
+	call my_printf
+	add esp, 4
+	
 	ret
 	
 

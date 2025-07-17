@@ -87,6 +87,8 @@ section .bss use32
 	projection_matrix resb 64
 	pv_matrix resb 64
 	
+	projection_matrix_ui resb 64
+	
 	pplayer resb 4
 	
 	chunk_manager resb 4
@@ -119,6 +121,7 @@ section .data use32
 	SUN_DIRECTION_BUFFER dd 0.0, 1.0, 0.0, 0.0
 	
 	TEST_CANVAS dd 0
+	TEST_IMAGE dd 0
 
 section .text use32
 
@@ -194,6 +197,7 @@ section .text use32
 	extern renderable_setAlbedo
 	extern renderable_setPosition
 	extern renderable_enableDepthTest
+	extern renderable_enableBlending
 	extern RENDERABLE_ATTRIB_P3
 	extern RENDERABLE_ATTRIB_P3UV2
 	
@@ -305,8 +309,11 @@ section .text use32
 	extern uiElement_init
 	extern uiElement_deinit
 	extern uiElement_processInput
+	extern uiElement_render
 	extern uiElement_create
 	extern uiElement_destroy
+	extern uiElement_setParent
+	extern uiElement_createProjection
 	extern UI_CANVAS
 	extern UI_IMAGE
 	
@@ -384,6 +391,17 @@ game_loop:
 	call uiElement_create
 	mov dword[TEST_CANVAS], eax
 	add esp, 4
+	
+	push dword[UI_IMAGE]
+	call uiElement_create
+	mov dword[TEST_IMAGE], eax
+	add esp, 4
+	
+	push dword[TEST_CANVAS]
+	push dword[TEST_IMAGE]
+	call uiElement_setParent
+	add esp, 8
+	
 	
 	;create framebuffers
 	call gameLoop_createFramebuffers
@@ -643,8 +661,34 @@ game_loop:
 		call postProcessing_drawToScreen
 		add esp, 4
 		
+		;disable depth test and enable blending
+		push 0
+		call renderable_enableDepthTest
+		push 69
+		call renderable_enableBlending
+		add esp, 8
+		
+		;render ui
+		push dword[WINDOW_SIZE_Y]
+		push dword[WINDOW_SIZE_X]
+		push projection_matrix_ui
+		call uiElement_createProjection
+		add esp, 12
+		
+		push projection_matrix_ui
+		push dword[TEST_CANVAS]
+		call uiElement_render
+		add esp, 8
+		
 		;draw infos
 		call gameLoop_drawData
+		
+		;enable depth test and disable blending
+		push 69
+		call renderable_enableDepthTest
+		push 0
+		call renderable_enableBlending
+		add esp, 8
 		
 		;swap buffers
 		push dword[current_window]

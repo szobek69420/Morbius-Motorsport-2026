@@ -50,6 +50,9 @@ section .rodata use32
 	
 	print_two_ints_nl db "%d %d",10,0
 	
+	ONE dd 1.0
+	MINUS_ONE dd -1.0
+	
 section .bss use32
 
 	instantiated_vector resb 16			;vector<UIElement*>
@@ -62,6 +65,8 @@ section .text use32
 	global uiElement_deinit		;void uiElement_deinit()
 	
 	global uiElement_processInput	;void uiElement_processInput()
+	
+	global uiElement_createProjection	;void uiElement_createProjection(mat4* buffer, int screenWidth, int screenHeight)
 	
 	;type can be for example dword[UI_IMAGE]
 	;UIElement* uiElement_create(int type)
@@ -97,6 +102,8 @@ section .text use32
 	extern vector_destroy
 	extern vector_push_back
 	extern vector_remove
+	
+	extern mat4_ortho
 	
 	extern WINDOW_SIZE_X
 	extern WINDOW_SIZE_Y
@@ -225,6 +232,27 @@ uiElement_processInput:
 	pop ebp
 	ret
 	
+	
+uiElement_createProjection:
+	push ebp
+	mov ebp, esp
+	
+	push dword[ONE]
+	push dword[MINUS_ONE]
+	push dword[ebp+16]
+	push 0
+	push dword[ebp+12]
+	push 0
+	push dword[ebp+8]
+	fild dword[esp+8]
+	fstp dword[esp+8]
+	fild dword[esp+16]
+	fstp dword[esp+16]
+	call mat4_ortho
+	
+	mov esp, ebp
+	pop ebp
+	ret
 	
 uiElement_create:
 	push ebp
