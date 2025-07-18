@@ -1,6 +1,7 @@
 [BITS 32]
 section .rodata use32
 	window_name db "Morbius Motorsport 2026",0
+	test_text db "bingus my beloved",10,0
 	
 section .bss use32
 	pwindow resb 4		;GLFWwindow*
@@ -39,7 +40,6 @@ section .text use32
 		push dword[pwindow]
 		call game_loop
 		add esp, 4
-		
 		
 		;destroy window and opengl context
 		push dword[pwindow]

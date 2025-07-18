@@ -11,6 +11,9 @@
 
 section .rodata use32
 	debug_text_destroy db "ui_text destroyed",10,0
+	
+	print_int_nl db "%d",10,0
+	print_two_ints_nl db "%d %d",10,0
 
 	ONE dd 1.0
 	
@@ -83,7 +86,7 @@ uiText_create:
 	sub esp, 4		;element		4
 	
 	;alloc space
-	push 152
+	push 160
 	call my_malloc
 	mov dword[ebp-4], eax
 	

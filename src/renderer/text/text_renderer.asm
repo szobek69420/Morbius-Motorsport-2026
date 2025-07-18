@@ -25,7 +25,10 @@ section .rodata use32
 	test_text db "szigmakos guba",10,0
 
 	print_int_nl db "%d",10,0
-	print_two_floats db "%f %f",10,0
+	print_two_ints_nl db "%d %d",10,0
+	print_two_floats_nl db "%f %f",10,0
+	
+	print_string_nl db "%s",10,0
 
 	ZERO dd 0.0
 	ONE dd 1.0
@@ -400,7 +403,6 @@ textRenderer_drawText:
 	
 	sub esp, 4			;ypos
 	sub esp, 4			;xpos
-	
 	
 	;set the uniform values
 	push dword[shader]

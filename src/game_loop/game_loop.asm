@@ -445,9 +445,14 @@ game_loop:
 	push word[UI_CENTER]
 	push word[UI_CENTER]
 	push dword[TEST_TEXT]
-	call uiElement_setAnchor
 	call uiElement_setPivot
-	add esp, 12
+	add esp, 8
+	
+	push word[UI_CENTER]
+	push word[UI_RIGHT]
+	push dword[TEST_TEXT]
+	call uiElement_setAnchor
+	add esp, 8
 	
 	push dword[ONE]
 	push dword[ONE]
@@ -860,7 +865,6 @@ gameLoop_physics:
 	mov dword[ebp-8], eax
 	
 	gameLoop_physics_loop_start:
-		
 		;check if enough time has elapsed since the last update
 		call [GetTickCount]
 		sub eax, dword[ebp-8]

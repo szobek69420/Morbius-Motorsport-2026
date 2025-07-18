@@ -92,10 +92,9 @@ my_strcpy:
 	strcpy_loop_start:
 		mov dl, byte[ecx]
 		mov byte[eax], dl
-		mov edx, ecx
 		inc eax
 		inc ecx
-		cmp byte[edx], 0
+		cmp byte[ecx-1], 0
 		jne strcpy_loop_start
 	
 	mov esp, ebp
