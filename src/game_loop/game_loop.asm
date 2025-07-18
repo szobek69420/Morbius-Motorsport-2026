@@ -321,6 +321,7 @@ section .text use32
 	extern uiElement_createProjection
 	extern uiText_setText
 	extern uiText_setColour
+	extern uiText_setTextAlignment
 	extern UI_CANVAS
 	extern UI_IMAGE
 	extern UI_TEXT
@@ -329,6 +330,8 @@ section .text use32
 	extern UI_CENTER
 	extern UI_RIGHT
 	extern UI_TOP
+	extern UI_TEXT_ALIGN_RIGHT
+	extern UI_TEXT_ALIGN_TOP
 	
 game_loop:
 	push ebp
@@ -421,10 +424,11 @@ game_loop:
 	call uiElement_setAnchor
 	add esp, 12
 	
-	push 200
-	push 600
+	push 100
+	push 100
 	push dword[TEST_IMAGE]
 	call uiElement_setSize
+	call uiElement_setPosition
 	add esp, 12
 	
 	push dword[UI_TEXT]
@@ -446,11 +450,6 @@ game_loop:
 	push word[UI_CENTER]
 	push dword[TEST_TEXT]
 	call uiElement_setPivot
-	add esp, 8
-	
-	push word[UI_CENTER]
-	push word[UI_RIGHT]
-	push dword[TEST_TEXT]
 	call uiElement_setAnchor
 	add esp, 8
 	
@@ -461,6 +460,12 @@ game_loop:
 	push dword[TEST_TEXT]
 	call uiText_setColour
 	add esp, 20
+	
+	push word[UI_TEXT_ALIGN_TOP]
+	push word[UI_TEXT_ALIGN_RIGHT]
+	push dword[TEST_TEXT]
+	call uiText_setTextAlignment
+	add esp, 8
 	
 	;create framebuffers
 	call gameLoop_createFramebuffers

@@ -7,9 +7,22 @@
 ;	float colourR, colourG, colourB, colourA;	132
 ;	int spacing;								148
 ;	int fontWidth, fontHeight;					152
-;}	160 bytes
+;	int16 textAlignX, textAlignY;				160
+;}	164 bytes
 
 section .rodata use32
+	UI_TEXT_ALIGN_LEFT		dw 0b001
+	UI_TEXT_ALIGN_BOTTOM	dw 0b001
+	UI_TEXT_ALIGN_CENTER	dw 0b010
+	UI_TEXT_ALIGN_RIGHT		dw 0b100
+	UI_TEXT_ALIGN_TOP		dw 0b100
+	
+	global UI_TEXT_ALIGN_LEFT
+	global UI_TEXT_ALIGN_BOTTOM
+	global UI_TEXT_ALIGN_CENTER
+	global UI_TEXT_ALIGN_RIGHT
+	global UI_TEXT_ALIGN_TOP
+
 	debug_text_destroy db "ui_text destroyed",10,0
 	
 	print_int_nl db "%d",10,0
@@ -34,6 +47,7 @@ section .text use32
 	global uiText_setColour				;void uiText_setColour(UIText* text, float r, float g, float b, float a)
 	global uiText_setSpacing			;void uiText_setSpacing(UIText* text, int spacing)
 	global uiText_setFontSize			;void uiText_setFontSize(UIText* text, int fontWidth, int fontHeight)
+	global uiText_setTextAlignment		;void uiText_setTextAlignment(UIText* text, int16 xAlign, int16 yAlign) //expects arguments like word[UI_TEXT_ALIGN_LEFT]
 	
 	extern my_printf
 	extern my_malloc
@@ -51,7 +65,15 @@ section .text use32
 	extern textRenderer_setSpacing
 	extern textRenderer_setColour
 	extern TEXT_ORIGIN_BOTTOM_LEFT
+	extern TEXT_PIVOT_BOTTOM_LEFT
+	extern TEXT_PIVOT_BOTTOM_CENTER
+	extern TEXT_PIVOT_BOTTOM_RIGHT
+	extern TEXT_PIVOT_CENTER_LEFT
 	extern TEXT_PIVOT_CENTER_CENTER
+	extern TEXT_PIVOT_CENTER_RIGHT
+	extern TEXT_PIVOT_TOP_LEFT
+	extern TEXT_PIVOT_TOP_CENTER
+	extern TEXT_PIVOT_TOP_RIGHT
 	
 	extern uiElement_initGeneralPart
 	extern uiElement_getScreenSize
@@ -86,7 +108,7 @@ uiText_create:
 	sub esp, 4		;element		4
 	
 	;alloc space
-	push 160
+	push 164
 	call my_malloc
 	mov dword[ebp-4], eax
 	
@@ -111,6 +133,9 @@ uiText_create:
 	mov dword[eax+152], ecx
 	mov ecx, dword[default_font_height]
 	mov dword[eax+156], ecx
+	mov cx, word[UI_TEXT_ALIGN_CENTER]
+	mov word[eax+160], cx
+	mov word[eax+162], cx
 	
 	lea ecx, [eax+132]
 	push 16
@@ -196,6 +221,12 @@ uiText_setFontSize:
 	mov dword[eax+156], edx
 	ret
 	
+uiText_setTextAlignment:
+	mov eax, dword[esp+8]
+	mov ecx, dword[esp+12]
+	mov dword[eax+160], ecx
+	ret
+	
 ;internal functions ---------------------------------------------
 
 ;void uiText_destroy(UIText* text)
@@ -224,11 +255,15 @@ uiText_render:
 	sub esp, 4		;text pos y		8
 	sub esp, 4		;screen width	12
 	sub esp, 4		;screen height	16
+	sub esp, 4		;alignment		20
 	
 	;check if the text is NULL
 	mov eax, dword[ebp+8]
 	cmp dword[eax+128], 0
 	je uiText_render_end
+	
+	mov eax, dword[TEXT_PIVOT_CENTER_CENTER]
+	mov dword[ebp-20], eax
 	
 	;set the text renderer state
 	lea eax, [ebp-12]
@@ -256,22 +291,92 @@ uiText_render:
 	push dword[eax+132]
 	call textRenderer_setColour
 	
-	;at the moment only centered text
+	;calculate the text position
+	;horizontal part
 	mov eax, dword[ebp+8]
+	mov cx, word[eax+160]
+	cmp cx, word[UI_TEXT_ALIGN_CENTER]
+	je uiText_render_hpos_center
+	cmp cx, word[UI_TEXT_ALIGN_RIGHT]
+	je uiText_render_hpos_right
+		;left
+		mov ecx, dword[eax+44]
+		mov dword[ebp-4], ecx
+		jmp uiText_render_hpos_done
+		
+	uiText_render_hpos_center:
+		;center
+		mov ecx, dword[eax+8]
+		shr ecx, 1
+		add ecx, dword[eax+44]
+		mov dword[ebp-4], ecx
+		jmp uiText_render_hpos_done
 	
-	mov ecx, dword[eax+8]
-	shr ecx, 1
-	add ecx, dword[eax+44]
-	mov dword[ebp-4], ecx
+	uiText_render_hpos_right:
+		;right
+		mov ecx, dword[eax+8]
+		add ecx, dword[eax+44]
+		mov dword[ebp-4], ecx
+		jmp uiText_render_hpos_done
 	
-	mov ecx, dword[eax+12]
-	shr ecx, 1
-	add ecx, dword[eax+48]
-	mov dword[ebp-8], ecx
+	uiText_render_hpos_done:
 	
+	;vertical part
+	mov eax, dword[ebp+8]
+	mov cx, word[eax+162]
+	cmp cx, word[UI_TEXT_ALIGN_CENTER]
+	je uiText_render_vpos_center
+	cmp cx, word[UI_TEXT_ALIGN_TOP]
+	je uiText_render_vpos_top
+		;bottom
+		mov ecx, dword[eax+48]
+		mov dword[ebp-8], ecx
+		jmp uiText_render_vpos_done
+		
+	uiText_render_vpos_center:
+		;center
+		mov ecx, dword[eax+12]
+		shr ecx, 1
+		add ecx, dword[eax+48]
+		mov dword[ebp-8], ecx
+		jmp uiText_render_vpos_done
+	
+	uiText_render_vpos_top:
+		;top
+		mov ecx, dword[eax+12]
+		add ecx, dword[eax+48]
+		mov dword[ebp-8], ecx
+		jmp uiText_render_vpos_done
+	
+	uiText_render_vpos_done:
+	
+	;get the current alignment
+	mov eax, dword[ebp+8]
+	mov cx, word[eax+162]
+	shl ecx, 16
+	mov cx, word[eax+160]
+	mov edx, 9
+	uiText_render_alignment_loop_start:
+		mov eax, ALIGNMENT_TO_PIVOT_LOOKUP
+		cmp dword[eax+8*edx-8], ecx
+		jne uiText_render_alignment_loop_continue
+			;alignment found
+			mov eax, dword[eax+8*edx-4]
+			mov eax, dword[eax]
+			mov dword[ebp-20], eax
+			jmp uiText_render_alignment_loop_end
+		
+		uiText_render_alignment_loop_continue:
+		dec edx
+		test edx, edx
+		jnz uiText_render_alignment_loop_start
+	uiText_render_alignment_loop_end:
+	
+	;render the text
+	mov eax, dword[ebp+8]
 	push dword[ebp-8]
 	push dword[ebp-4]
-	push dword[TEXT_PIVOT_CENTER_CENTER]
+	push dword[ebp-20]
 	push dword[TEXT_ORIGIN_BOTTOM_LEFT]
 	push dword[eax+128]
 	call textRenderer_drawText
@@ -280,3 +385,15 @@ uiText_render:
 	mov esp, ebp
 	pop ebp
 	ret
+	
+	;helper
+	ALIGNMENT_TO_PIVOT_LOOKUP:
+	dd 0x00010001, TEXT_PIVOT_BOTTOM_LEFT
+	dd 0x00010002, TEXT_PIVOT_BOTTOM_CENTER
+	dd 0x00010004, TEXT_PIVOT_BOTTOM_RIGHT
+	dd 0x00020001, TEXT_PIVOT_CENTER_LEFT
+	dd 0x00020002, TEXT_PIVOT_CENTER_CENTER
+	dd 0x00020004, TEXT_PIVOT_CENTER_RIGHT
+	dd 0x00040001, TEXT_PIVOT_TOP_LEFT
+	dd 0x00040002, TEXT_PIVOT_TOP_CENTER
+	dd 0x00040004, TEXT_PIVOT_TOP_RIGHT
