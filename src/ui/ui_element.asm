@@ -14,7 +14,7 @@
 ;	padding of 12 bytes
 ;	int32 isInteractable;								64
 ;	void (*render)(UIElement*, const mat4* projection);	68
-;	void (*destroy)(UIElement*);						72
+;	void (*destroy)(UIElement*);						72	//clears up the element-specific parts (everything from byte 128 on), doesn't deallocate the element
 ;	void (*onWindowResize)(UIElement*, int w, int h)	76
 ;	void (*onClick)(UIElement*, void* param)			80
 ;	void* onClickParam;									84
@@ -67,6 +67,7 @@ section .text use32
 	global uiElement_processInput	;void uiElement_processInput()
 	
 	global uiElement_createProjection	;void uiElement_createProjection(mat4* buffer, int screenWidth, int screenHeight)
+	global uiElement_getScreenSize		;void uiElement_getScreenSize(int* width, int* height)
 	
 	;type can be for example dword[UI_IMAGE]
 	;UIElement* uiElement_create(int type)
@@ -253,6 +254,19 @@ uiElement_createProjection:
 	mov esp, ebp
 	pop ebp
 	ret
+	
+	
+uiElement_getScreenSize:
+	mov eax, dword[esp+4]
+	mov ecx, dword[window_size_x]
+	mov dword[eax], ecx
+	
+	mov eax, dword[esp+8]
+	mov ecx, dword[window_size_y]
+	mov dword[eax], ecx
+	
+	ret
+	
 	
 uiElement_create:
 	push ebp
@@ -558,6 +572,14 @@ uiElement_setParent:
 		
 	uiElement_setParent_no_new_parent:
 	
+	;refresh the element
+	mov eax, dword[ebp+8]
+	push dword[eax+40]
+	push eax
+	call uiElement_calculateCurrentPosition
+	add esp, 8
+	
+	
 	uiElement_setParent_end:
 	mov esp, ebp
 	pop ebp
@@ -694,7 +716,7 @@ uiElement_calculateCurrentPosition:
 		mov ecx, dword[ebp+12]		;parent in ecx
 		mov edx, dword[ecx+12]
 		sub edx, dword[eax+4]
-		mov dword[ebp-4], edx
+		mov dword[ebp-8], edx
 		jmp uiElement_calculateCurrentPosition_anchor_y_done
 	
 	uiElement_calculateCurrentPosition_anchor_y_done:

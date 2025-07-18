@@ -259,12 +259,16 @@ my_free:
 	push ebp
 	mov ebp, esp
 	
-	;doesn't check for an initialized heap handle because who cares tbh
-	push dword[ebp+8]
-	push 0
-	push dword[heap_handle]
-	call [HeapFree]
+	;check if the the input is NULL
+	cmp dword[ebp+8], 0
+	je my_free_end
+		;doesn't check for an initialized heap handle because who cares tbh
+		push dword[ebp+8]
+		push 0
+		push dword[heap_handle]
+		call [HeapFree]
 	
+	my_free_end:
 	mov esp, ebp
 	pop ebp
 	ret

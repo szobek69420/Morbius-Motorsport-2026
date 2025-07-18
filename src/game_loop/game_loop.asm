@@ -312,10 +312,17 @@ section .text use32
 	extern uiElement_render
 	extern uiElement_create
 	extern uiElement_destroy
+	extern uiElement_setPosition
 	extern uiElement_setParent
+	extern uiElement_setAnchor
 	extern uiElement_createProjection
 	extern UI_CANVAS
 	extern UI_IMAGE
+	extern UI_LEFT
+	extern UI_BOTTOM
+	extern UI_CENTER
+	extern UI_RIGHT
+	extern UI_TOP
 	
 game_loop:
 	push ebp
@@ -401,6 +408,18 @@ game_loop:
 	push dword[TEST_IMAGE]
 	call uiElement_setParent
 	add esp, 8
+	
+	push word[UI_TOP]
+	push word[UI_RIGHT]
+	push dword[TEST_IMAGE]
+	call uiElement_setAnchor
+	add esp, 12
+	
+	push 100
+	push 100
+	push dword[TEST_IMAGE]
+	call uiElement_setPosition
+	add esp, 12
 	
 	
 	;create framebuffers

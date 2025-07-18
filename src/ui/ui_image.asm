@@ -48,6 +48,7 @@ section .rodata use32
 	ONE dd 1.0
 	
 	print_int_nl db "%d",10,0
+	print_two_ints_nl db "%d %d",10,0
 	print_four_ints_nl db "%d %d %d %d",10,0
 	
 section .data use32

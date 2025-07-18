@@ -68,6 +68,8 @@ section .rodata use32
 	
 
 section .bss use32
+	current_screen_width resb 4		;int
+	current_screen_height resb 4	;int
 	screen_matrix resb 64
 	character_textures resb 512		;128 * GLuint
 	
@@ -182,6 +184,9 @@ textRenderer_init:
 	sub esp, 4			;texture data size per pixel
 	
 	;set screen size
+	mov dword[current_screen_width], -1
+	mov dword[current_screen_height], -1
+	
 	push dword[WINDOW_SIZE_Y]
 	push dword[WINDOW_SIZE_X]
 	call textRenderer_setScreenSize
@@ -630,21 +635,37 @@ textRenderer_setScreenSize:
 	sub esp, 4			;width float
 	sub esp, 4			;height float
 	
-	fild dword[ebp+8]
-	fstp dword[ebp-4]
+	;check if the screen size changed
+	mov eax, dword[ebp+8]
+	sub eax, dword[current_screen_width]
+	mov ecx, dword[ebp+12]
+	sub ecx, dword[current_screen_height]
+	or eax, ecx
+	test eax, eax
+	jz textRenderer_setScreenSize_end
 	
-	fild dword[ebp+12]
-	fstp dword[ebp-8]
+		;calculate new screen matrix
+		fild dword[ebp+8]
+		fstp dword[ebp-4]
+		
+		fild dword[ebp+12]
+		fstp dword[ebp-8]
+		
+		push dword[ONE]
+		push 0
+		push 0
+		push dword[ebp-8]
+		push dword[ebp-4]
+		push 0
+		push screen_matrix
+		call mat4_ortho
+		
+		mov eax, dword[ebp+8]
+		mov ecx, dword[ebp+12]
+		mov dword[current_screen_width], eax
+		mov dword[current_screen_height], ecx
 	
-	push dword[ONE]
-	push 0
-	push 0
-	push dword[ebp-8]
-	push dword[ebp-4]
-	push 0
-	push screen_matrix
-	call mat4_ortho
-	
+	textRenderer_setScreenSize_end:
 	mov esp, ebp
 	pop ebp
 	ret
