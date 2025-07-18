@@ -9,5 +9,4 @@ layout (binding=2) uniform sampler2D tex;
 void main()
 {
 	fragmentColour=colour*texture(tex, uv);
-	fragmentColour=vec4(1,1,1,1);
 }

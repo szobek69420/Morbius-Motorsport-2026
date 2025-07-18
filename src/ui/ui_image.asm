@@ -47,6 +47,7 @@ section .rodata use32
 	
 	ONE dd 1.0
 	
+	print_int_nl db "%d",10,0
 	print_four_ints_nl db "%d %d %d %d",10,0
 	
 section .data use32
@@ -73,6 +74,8 @@ section .text use32
 	extern my_malloc
 	extern my_free
 	
+	extern mat4_print
+	
 	extern renderable_createCustom
 	extern renderable_renderCustom
 	extern renderable_destroy
@@ -88,12 +91,14 @@ section .text use32
 	extern textureHandler_load
 	extern textureHandler_unload
 	
-	extern GL_CLAMP
+	extern glGetError
+	extern GL_CLAMP_TO_EDGE
 	extern GL_LINEAR
 	
 uiImage_init:
 	push ebp
 	mov ebp, esp
+	
 	
 	;check if we are already morbin
 	cmp dword[is_initialized], 0
@@ -126,9 +131,9 @@ uiImage_init:
 	add esp, 20
 	
 	;load the default texture
-	push 69
+	push 0
 	push dword[GL_LINEAR]
-	push dword[GL_CLAMP]
+	push dword[GL_CLAMP_TO_EDGE]
 	push default_texture_path
 	call textureHandler_load
 	mov dword[default_texture], eax
@@ -245,9 +250,9 @@ uiImage_setTexture:
 	;load current texture
 	test dword[ebp+12], 0xffffffff
 	jz uiImage_setTexture_end
-		push 69
+		push 0
 		push dword[GL_LINEAR]
-		push dword[GL_CLAMP]
+		push dword[GL_CLAMP_TO_EDGE]
 		push dword[ebp+12]
 		call textureHandler_load
 		mov dword[ebp-4], eax
