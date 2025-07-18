@@ -122,6 +122,7 @@ section .data use32
 	
 	TEST_CANVAS dd 0
 	TEST_IMAGE dd 0
+	TEST_TEXT dd 0
 
 section .text use32
 
@@ -313,11 +314,16 @@ section .text use32
 	extern uiElement_create
 	extern uiElement_destroy
 	extern uiElement_setPosition
+	extern uiElement_setSize
 	extern uiElement_setParent
 	extern uiElement_setAnchor
+	extern uiElement_setPivot
 	extern uiElement_createProjection
+	extern uiText_setText
+	extern uiText_setColour
 	extern UI_CANVAS
 	extern UI_IMAGE
+	extern UI_TEXT
 	extern UI_LEFT
 	extern UI_BOTTOM
 	extern UI_CENTER
@@ -409,18 +415,47 @@ game_loop:
 	call uiElement_setParent
 	add esp, 8
 	
-	push word[UI_TOP]
-	push word[UI_RIGHT]
+	push word[UI_BOTTOM]
+	push word[UI_LEFT]
 	push dword[TEST_IMAGE]
 	call uiElement_setAnchor
 	add esp, 12
 	
-	push 100
-	push 100
+	push 200
+	push 600
 	push dword[TEST_IMAGE]
-	call uiElement_setPosition
+	call uiElement_setSize
 	add esp, 12
 	
+	push dword[UI_TEXT]
+	call uiElement_create
+	mov dword[TEST_TEXT], eax
+	add esp, 4
+	
+	push dword[TEST_IMAGE]
+	push dword[TEST_TEXT]
+	call uiElement_setParent
+	add esp, 8
+	
+	push test_text
+	push dword[TEST_TEXT]
+	call uiText_setText
+	add esp, 8
+	
+	push word[UI_CENTER]
+	push word[UI_CENTER]
+	push dword[TEST_TEXT]
+	call uiElement_setAnchor
+	call uiElement_setPivot
+	add esp, 12
+	
+	push dword[ONE]
+	push dword[ONE]
+	push dword[ONE]
+	push 0
+	push dword[TEST_TEXT]
+	call uiText_setColour
+	add esp, 20
 	
 	;create framebuffers
 	call gameLoop_createFramebuffers

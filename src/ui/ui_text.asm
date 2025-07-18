@@ -10,6 +10,8 @@
 ;}	160 bytes
 
 section .rodata use32
+	debug_text_destroy db "ui_text destroyed",10,0
+
 	ONE dd 1.0
 	
 section .bss use32
@@ -25,7 +27,10 @@ section .text use32
 	
 	global uiText_create				;UIText* uiText_create()
 	
-	global uiText_setText				;UIText* uiText_setText(UIText* element, const char* nullableText)
+	global uiText_setText				;void uiText_setText(UIText* element, const char* nullableText)
+	global uiText_setColour				;void uiText_setColour(UIText* text, float r, float g, float b, float a)
+	global uiText_setSpacing			;void uiText_setSpacing(UIText* text, int spacing)
+	global uiText_setFontSize			;void uiText_setFontSize(UIText* text, int fontWidth, int fontHeight)
 	
 	extern my_printf
 	extern my_malloc
@@ -157,6 +162,37 @@ uiText_setText:
 	pop ebp
 	ret
 	
+	
+uiText_setColour:
+	mov eax, dword[esp+4]
+	
+	mov ecx, dword[esp+8]
+	mov dword[eax+132], ecx
+	mov edx, dword[esp+12]
+	mov dword[eax+136], edx
+	mov ecx, dword[esp+16]
+	mov dword[eax+140], ecx
+	mov edx, dword[esp+20]
+	mov dword[eax+144], edx
+	
+	ret
+	
+	
+uiText_setSpacing:
+	mov eax, dword[esp+4]
+	mov ecx, dword[esp+8]
+	mov dword[eax+148], ecx
+	ret
+	
+	
+uiText_setFontSize:
+	mov eax, dword[esp+4]
+	mov ecx, dword[esp+8]
+	mov edx, dword[esp+12]
+	mov dword[eax+152], ecx
+	mov dword[eax+156], edx
+	ret
+	
 ;internal functions ---------------------------------------------
 
 ;void uiText_destroy(UIText* text)
@@ -168,6 +204,9 @@ uiText_destroy:
 	mov eax, dword[ebp+8]
 	push dword[eax+128]
 	call my_free
+	
+	push debug_text_destroy
+	call my_printf
 	
 	mov esp, ebp
 	pop ebp

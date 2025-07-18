@@ -22,6 +22,8 @@ global TEXT_PIVOT_BOTTOM_RIGHT
 
 
 section .rodata use32
+	test_text db "szigmakos guba",10,0
+
 	print_int_nl db "%d",10,0
 	print_two_floats db "%f %f",10,0
 
@@ -643,7 +645,6 @@ textRenderer_setScreenSize:
 	or eax, ecx
 	test eax, eax
 	jz textRenderer_setScreenSize_end
-	
 		;calculate new screen matrix
 		fild dword[ebp+8]
 		fstp dword[ebp-4]

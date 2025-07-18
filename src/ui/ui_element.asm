@@ -41,10 +41,12 @@ section .rodata use32
 	UI_FIRST:
 	UI_CANVAS	dd 0
 	UI_IMAGE	dd 1
+	UI_TEXT		dd 2
 	UI_LAST:
 	
 	global UI_CANVAS
 	global UI_IMAGE
+	global UI_TEXT
 	
 	error_create_invalid_type db "uiElement_create: %d is not a valid element type",10,0
 	
@@ -117,6 +119,10 @@ section .text use32
 	extern uiImage_deinit
 	extern uiImage_create
 	
+	extern uiText_init
+	extern uiText_deinit
+	extern uiText_create
+	
 	
 uiElement_init:
 	push ebp
@@ -129,14 +135,13 @@ uiElement_init:
 	add esp, 8
 	
 	;set window size
-	mov eax, dword[WINDOW_SIZE_X]
-	mov dword[window_size_x], eax
-	mov ecx, dword[WINDOW_SIZE_Y]
-	mov dword[window_size_y], ecx
+	mov dword[window_size_x], -1
+	mov dword[window_size_y], -1
 	
 	;init subsystems
 	call uiCanvas_init
 	call uiImage_init
+	call uiText_init
 	
 	mov esp, ebp
 	pop ebp
@@ -170,6 +175,7 @@ uiElement_deinit:
 	;deinit subsystems
 	call uiCanvas_deinit
 	call uiImage_deinit
+	call uiText_deinit
 	
 	mov esp, ebp
 	pop ebp
@@ -305,6 +311,7 @@ uiElement_create:
 	uiElement_create_functions:
 	dd uiCanvas_create
 	dd uiImage_create
+	dd uiText_create
 	uiElement_create_done:
 	
 	;was the element actually created?
