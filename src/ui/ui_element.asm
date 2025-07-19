@@ -11,8 +11,9 @@
 ;	//internal
 ;	int32 currentScreenPosX, currentScreenPosY;			44	//the position of the bottom left corner of the element in screen coordinates, where the bottom left corner of the screen is (0;0)
 ;
-;	padding of 12 bytes
-;	int32 isInteractable;								64
+;	padding of 8 bytes
+;	int32 isVisible;									60	//kaskades to children
+;	int32 isInteractable;								64	//cascades to children
 ;	void (*render)(UIElement*, const mat4* projection);	68
 ;	void (*destroy)(UIElement*);						72	//clears up the element-specific parts (everything from byte 128 on), doesn't deallocate the element
 ;	void (*onWindowResize)(UIElement*, int w, int h)	76
@@ -86,6 +87,12 @@ section .text use32
 	global uiElement_setSize					;void uiElement_setSize(UIElement* element, int width, int height)
 	global uiElement_setAnchor					;void uiElement_setAnchor(UIElement* element, int16 anchorX, int16 anchorY)
 	global uiElement_setPivot					;void uiElement_setPivot(UIElement* element, int16 pivotX, int16 pivotY)
+	
+	;void uiElement_setOnClick(
+	;	UIElement* element,
+	;	void (*onClick)(UIElement*, void* param),
+	;	void* onClickParam)
+	global uiElement_setOnClick
 	
 	;NULL means no parent
 	;removes the element from the children of the former parent (no alimony then)
@@ -404,8 +411,12 @@ uiElement_render:
 	push edi
 	mov ebp, esp
 	
-	;render itself if there is a function
+	;check if the element is visible and head out if nah
 	mov eax, dword[ebp+16]
+	test dword[eax+60], 0xffffffff
+	jz uiElement_render_end
+	
+	;render itself if there is a function
 	test dword[eax+68], 0xffffffff
 	jz uiElement_render_no_bitches
 		push dword[ebp+20]
@@ -435,6 +446,7 @@ uiElement_render:
 	
 	uiElement_render_loop_end:
 	
+	uiElement_render_end:
 	mov esp, ebp
 	pop edi
 	pop esi
@@ -536,6 +548,15 @@ uiElement_setPivot:
 	pop ebp
 	ret
 	
+	
+uiElement_setOnClick:
+	mov eax, dword[esp+4]
+	mov ecx, dword[esp+8]
+	mov edx, dword[esp+12]
+	mov dword[eax+80], ecx
+	mov dword[eax+84], edx
+	ret
+	
 
 uiElement_setParent:
 	push ebp
@@ -619,6 +640,10 @@ uiElement_initGeneralPart:
 	push dword[ebp+8]
 	call uiElement_setEverything
 	add esp, 28
+	
+	;set isVisible
+	mov eax, dword[ebp+8]
+	mov dword[eax+60], 69
 	
 	;create children vector
 	mov eax, dword[ebp+8]
