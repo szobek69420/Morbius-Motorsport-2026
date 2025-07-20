@@ -50,11 +50,16 @@ section .rodata use32
 	global UI_TEXT
 	
 	error_create_invalid_type db "uiElement_create: %d is not a valid element type",10,0
+	error_render_not_initialized db "uiElement_render: call uiElement_init first fucko",10,0
 	
 	print_two_ints_nl db "%d %d",10,0
 	
 	ONE dd 1.0
 	MINUS_ONE dd -1.0
+	
+section .data use32
+
+	initialized dd 0
 	
 section .bss use32
 
@@ -81,7 +86,9 @@ section .text use32
 	;void uiElement_destroy(UIElement* element)
 	global uiElement_destroy
 	
-	global uiElement_render						;void uiElement_render(UIElement* element, const mat4* projection)
+	;renders the fatherless ui elements and their children
+	;void uiElement_render(const mat4* projection)
+	global uiElement_render
 
 	global uiElement_setPosition				;void uiElement_setPosition(UIElement* element, int xPos, int yPos)
 	global uiElement_setSize					;void uiElement_setSize(UIElement* element, int width, int height)
@@ -150,6 +157,9 @@ uiElement_init:
 	call uiImage_init
 	call uiText_init
 	
+	;set initialized flag
+	mov dword[initialized], 69
+	
 	mov esp, ebp
 	pop ebp
 	ret
@@ -157,6 +167,9 @@ uiElement_init:
 uiElement_deinit:
 	push ebp
 	mov ebp, esp
+	
+	;unset initialized flag
+	mov dword[initialized], 0
 	
 	;destroy remaining elements
 	uiElement_deinit_loop_start:
@@ -411,34 +424,34 @@ uiElement_render:
 	push edi
 	mov ebp, esp
 	
-	;check if the element is visible and head out if nah
-	mov eax, dword[ebp+16]
-	test dword[eax+60], 0xffffffff
-	jz uiElement_render_end
+	;check if the system is initialized
+	test dword[initialized], 0xffffffff
+	jnz uiElement_render_initialized
+		push error_render_not_initialized
+		call my_printf
+		jmp uiElement_render_end
 	
-	;render itself if there is a function
-	test dword[eax+68], 0xffffffff
-	jz uiElement_render_no_bitches
-		push dword[ebp+20]
-		push eax
-		call dword[eax+68]
-		add esp, 8
-		
-	uiElement_render_no_bitches:
-	
-	;render children
-	mov eax, dword[ebp+16]
-	mov esi, dword[eax+36]				;current child in esi
-	mov edi, dword[eax+24]				;index in edi
+	uiElement_render_initialized:
+
+	;render fatherless elements
+	mov eax, instantiated_vector
+	mov esi, dword[eax+12]			;current element in esi
+	mov edi, dword[eax]				;index in edi
 	cmp edi, 0
 	jle uiElement_render_loop_end
 	uiElement_render_loop_start:
-		;render child
-		push dword[ebp+20]
-		push dword[esi]
-		call uiElement_render
-		add esp, 8
+		;check if the element is fatherless
+		mov eax, dword[esi]
+		test dword[eax+40], 0xffffffff
+		jnz uiElement_render_loop_continue
+	
+			;render child
+			push dword[ebp+16]
+			push dword[esi]
+			call uiElement_render_internal
+			add esp, 8
 		
+		uiElement_render_loop_continue:
 		add esi, 4
 		dec edi
 		test edi, edi
@@ -898,5 +911,54 @@ uiElement_setEverything:
 	add esp, 8
 	
 	mov esp, ebp
+	pop ebp
+	ret
+	
+;void uiElement_render_internal(UIElement* element, const mat4* projection)
+uiElement_render_internal:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	;check if the element is visible and head out if nah
+	mov eax, dword[ebp+16]
+	test dword[eax+60], 0xffffffff
+	jz uiElement_render_internal_end
+	
+	;render itself if there is a function
+	test dword[eax+68], 0xffffffff
+	jz uiElement_render_internal_no_bitches
+		push dword[ebp+20]
+		push eax
+		call dword[eax+68]
+		add esp, 8
+		
+	uiElement_render_internal_no_bitches:
+	
+	;render children
+	mov eax, dword[ebp+16]
+	mov esi, dword[eax+36]				;current child in esi
+	mov edi, dword[eax+24]				;index in edi
+	cmp edi, 0
+	jle uiElement_render_internal_loop_end
+	uiElement_render_internal_loop_start:
+		;render child
+		push dword[ebp+20]
+		push dword[esi]
+		call uiElement_render_internal
+		add esp, 8
+		
+		add esi, 4
+		dec edi
+		test edi, edi
+		jnz uiElement_render_internal_loop_start
+	
+	uiElement_render_internal_loop_end:
+	
+	uiElement_render_internal_end:
+	mov esp, ebp
+	pop edi
+	pop esi
 	pop ebp
 	ret

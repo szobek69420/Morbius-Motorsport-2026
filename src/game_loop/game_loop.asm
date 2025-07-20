@@ -740,9 +740,8 @@ game_loop:
 		add esp, 12
 		
 		push projection_matrix_ui
-		push dword[TEST_CANVAS]
 		call uiElement_render
-		add esp, 8
+		add esp, 4
 		
 		;draw infos
 		call gameLoop_drawData
