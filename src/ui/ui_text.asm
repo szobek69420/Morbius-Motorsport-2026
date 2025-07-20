@@ -22,6 +22,8 @@ section .rodata use32
 	global UI_TEXT_ALIGN_CENTER
 	global UI_TEXT_ALIGN_RIGHT
 	global UI_TEXT_ALIGN_TOP
+	
+	test_text db "Mikhail Morbachev",10,0
 
 	debug_text_destroy db "ui_text destroyed",10,0
 	
@@ -59,7 +61,7 @@ section .text use32
 	extern FONT_CHAR_WIDTH
 	extern FONT_CHAR_HEIGHT
 	
-	extern textRenderer_drawText		;void textRenderer_drawText(const char* text, int origin, int pivot, int xPos, int yPos)
+	extern textRenderer_drawText
 	extern textRenderer_setScreenSize
 	extern textRenderer_setFontSize
 	extern textRenderer_setSpacing
@@ -222,8 +224,8 @@ uiText_setFontSize:
 	ret
 	
 uiText_setTextAlignment:
-	mov eax, dword[esp+8]
-	mov ecx, dword[esp+12]
+	mov eax, dword[esp+4]
+	mov ecx, dword[esp+8]
 	mov dword[eax+160], ecx
 	ret
 	
