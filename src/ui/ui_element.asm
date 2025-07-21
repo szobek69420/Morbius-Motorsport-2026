@@ -26,6 +26,8 @@
 
 section .rodata use32
 
+	CLICK_THRESHOLD equ 200				;ms
+
 	UI_LEFT		dw	0b001
 	UI_BOTTOM	dw	0b001
 	UI_CENTER	dw	0b010
@@ -49,6 +51,8 @@ section .rodata use32
 	global UI_IMAGE
 	global UI_TEXT
 	
+	test_text db "kim dong un",10,0
+	
 	error_create_invalid_type db "uiElement_create: %d is not a valid element type",10,0
 	error_render_not_initialized db "uiElement_render: call uiElement_init first fucko",10,0
 	
@@ -66,6 +70,8 @@ section .bss use32
 	instantiated_vector resb 16			;vector<UIElement*>
 	window_size_x resb 4				;int
 	window_size_y resb 4				;int
+	
+	click_started resb 4				;int
 	
 section .text use32
 	
@@ -125,6 +131,13 @@ section .text use32
 	extern WINDOW_SIZE_X
 	extern WINDOW_SIZE_Y
 	
+	extern input_mouseButtonPressed
+	extern input_mouseButtonReleased
+	extern GLFW_MOUSE_BUTTON_LEFT
+	
+	import GetTickCount kernel32.dll
+	extern GetTickCount
+	
 	extern uiCanvas_init
 	extern uiCanvas_deinit
 	extern uiCanvas_create
@@ -151,6 +164,9 @@ uiElement_init:
 	;set window size
 	mov dword[window_size_x], -1
 	mov dword[window_size_y], -1
+	
+	;set everything else
+	mov dword[click_started], -1
 	
 	;init subsystems
 	call uiCanvas_init
@@ -251,6 +267,30 @@ uiElement_processInput:
 		uiElement_processInput_window_resize_loop_end:
 	
 	uiElement_processInput_window_resize_skip:
+	
+	;mouse click
+	push dword[GLFW_MOUSE_BUTTON_LEFT]
+	call input_mouseButtonPressed
+	test eax, 0xffffffff
+	jz uiElement_processInput_no_press
+		call [GetTickCount]
+		mov dword[click_started], eax
+		
+	uiElement_processInput_no_press:
+	
+	push dword[GLFW_MOUSE_BUTTON_LEFT]
+	call input_mouseButtonReleased
+	test eax, 0xffffffff
+	jz uiElement_processInput_no_release
+		call [GetTickCount]
+		sub eax, dword[click_started]
+		cmp eax, CLICK_THRESHOLD
+		jg uiElement_processInput_no_release	;no click
+			;click
+			push test_text
+			call my_printf
+	
+	uiElement_processInput_no_release:
 	
 	mov esp, ebp
 	pop ebx

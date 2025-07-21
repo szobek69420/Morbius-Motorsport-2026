@@ -85,20 +85,18 @@ uiText_init:
 	mov eax, dword[FONT_CHAR_WIDTH]
 	shl eax, 1
 	mov dword[default_font_width], eax
-	
 	mov eax, dword[FONT_CHAR_HEIGHT]
 	shl eax, 1
 	mov dword[default_font_height], eax
 	
-	
 	mov dword[default_spacing], 3
-	
 	
 	movss xmm0, dword[ONE]
 	shufps xmm0, xmm0, 0b00000000
 	movups [default_colour_rgba], xmm0
 
 	ret
+	
 	
 uiText_deinit:
 	ret
