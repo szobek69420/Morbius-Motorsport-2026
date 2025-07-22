@@ -57,7 +57,10 @@ section .rodata use32
 	error_render_not_initialized db "uiElement_render: call uiElement_init first fucko",10,0
 	
 	print_two_ints_nl db "%d %d",10,0
+	print_two_floats_nl db "%f %f",10,0
+	print_six_floats_nl db "%f %f %f %f %f %f",10,0
 	
+	ZERO dd 0.0
 	ONE dd 1.0
 	MINUS_ONE dd -1.0
 	
@@ -96,6 +99,7 @@ section .text use32
 	;void uiElement_render(const mat4* projection)
 	global uiElement_render
 
+	global uiElement_setStatus					;void uiElement_setStatus(UIElement* element, int visible, int interactable)
 	global uiElement_setPosition				;void uiElement_setPosition(UIElement* element, int xPos, int yPos)
 	global uiElement_setSize					;void uiElement_setSize(UIElement* element, int width, int height)
 	global uiElement_setAnchor					;void uiElement_setAnchor(UIElement* element, int16 anchorX, int16 anchorY)
@@ -131,6 +135,7 @@ section .text use32
 	extern WINDOW_SIZE_X
 	extern WINDOW_SIZE_Y
 	
+	extern input_mousePosition
 	extern input_mouseButtonPressed
 	extern input_mouseButtonReleased
 	extern GLFW_MOUSE_BUTTON_LEFT
@@ -269,28 +274,7 @@ uiElement_processInput:
 	uiElement_processInput_window_resize_skip:
 	
 	;mouse click
-	push dword[GLFW_MOUSE_BUTTON_LEFT]
-	call input_mouseButtonPressed
-	test eax, 0xffffffff
-	jz uiElement_processInput_no_press
-		call [GetTickCount]
-		mov dword[click_started], eax
-		
-	uiElement_processInput_no_press:
-	
-	push dword[GLFW_MOUSE_BUTTON_LEFT]
-	call input_mouseButtonReleased
-	test eax, 0xffffffff
-	jz uiElement_processInput_no_release
-		call [GetTickCount]
-		sub eax, dword[click_started]
-		cmp eax, CLICK_THRESHOLD
-		jg uiElement_processInput_no_release	;no click
-			;click
-			push test_text
-			call my_printf
-	
-	uiElement_processInput_no_release:
+	call uiElement_processClick_internal
 	
 	mov esp, ebp
 	pop ebx
@@ -298,6 +282,56 @@ uiElement_processInput:
 	pop esi
 	pop ebp
 	ret
+	
+	
+uiElement_render:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	;check if the system is initialized
+	test dword[initialized], 0xffffffff
+	jnz uiElement_render_initialized
+		push error_render_not_initialized
+		call my_printf
+		jmp uiElement_render_end
+	
+	uiElement_render_initialized:
+
+	;render fatherless elements
+	mov eax, instantiated_vector
+	mov esi, dword[eax+12]			;current element in esi
+	mov edi, dword[eax]				;index in edi
+	cmp edi, 0
+	jle uiElement_render_loop_end
+	uiElement_render_loop_start:
+		;check if the element is fatherless
+		mov eax, dword[esi]
+		test dword[eax+40], 0xffffffff
+		jnz uiElement_render_loop_continue
+	
+			;render child
+			push dword[ebp+16]
+			push dword[esi]
+			call uiElement_render_internal
+			add esp, 8
+		
+		uiElement_render_loop_continue:
+		add esi, 4
+		dec edi
+		test edi, edi
+		jnz uiElement_render_loop_start
+	
+	uiElement_render_loop_end:
+	
+	uiElement_render_end:
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
 	
 	
 uiElement_createProjection:
@@ -458,52 +492,14 @@ uiElement_destroy:
 	ret
 	
 	
-uiElement_render:
-	push ebp
-	push esi
-	push edi
-	mov ebp, esp
+uiElement_setStatus:
+	mov eax, dword[esp+4]
 	
-	;check if the system is initialized
-	test dword[initialized], 0xffffffff
-	jnz uiElement_render_initialized
-		push error_render_not_initialized
-		call my_printf
-		jmp uiElement_render_end
+	mov ecx, dword[esp+8]
+	mov edx, dword[esp+12]
+	mov dword[eax+60], ecx
+	mov dword[eax+64], edx
 	
-	uiElement_render_initialized:
-
-	;render fatherless elements
-	mov eax, instantiated_vector
-	mov esi, dword[eax+12]			;current element in esi
-	mov edi, dword[eax]				;index in edi
-	cmp edi, 0
-	jle uiElement_render_loop_end
-	uiElement_render_loop_start:
-		;check if the element is fatherless
-		mov eax, dword[esi]
-		test dword[eax+40], 0xffffffff
-		jnz uiElement_render_loop_continue
-	
-			;render child
-			push dword[ebp+16]
-			push dword[esi]
-			call uiElement_render_internal
-			add esp, 8
-		
-		uiElement_render_loop_continue:
-		add esi, 4
-		dec edi
-		test edi, edi
-		jnz uiElement_render_loop_start
-	
-	uiElement_render_loop_end:
-	
-	uiElement_render_end:
-	mov esp, ebp
-	pop edi
-	pop esi
-	pop ebp
 	ret
 	
 	
@@ -997,6 +993,175 @@ uiElement_render_internal:
 	uiElement_render_internal_loop_end:
 	
 	uiElement_render_internal_end:
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+;calls uiElement_processClick_internal_helper on the elements that are fatherless
+;void uiElement_processClick_internal()
+uiElement_processClick_internal:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	sub esp, 4			;cursor x		4
+	sub esp, 4			;cursor y		8
+	
+	;check if a potential click is starting
+	push dword[GLFW_MOUSE_BUTTON_LEFT]
+	call input_mouseButtonPressed
+	test eax, 0xffffffff
+	jz uiElement_processClick_internal_no_press
+		call [GetTickCount]
+		mov dword[click_started], eax
+		
+	uiElement_processClick_internal_no_press:
+	
+	;check if a potential click is ending
+	push dword[GLFW_MOUSE_BUTTON_LEFT]
+	call input_mouseButtonReleased
+	test eax, 0xffffffff
+	jz uiElement_processClick_internal_end
+	
+	call [GetTickCount]
+	sub eax, dword[click_started]
+	cmp eax, CLICK_THRESHOLD
+	jg uiElement_processClick_internal_end	;no click
+	
+	;get the cursor position
+	lea eax, [ebp-4]
+	lea ecx, [ebp-8]
+	push ecx
+	push eax
+	call input_mousePosition
+	add esp, 8
+	
+	mov eax, dword[window_size_y]
+	sub eax, dword[ebp-8]
+	mov dword[ebp-8], eax
+	
+	
+	;call the onClick callback of the first suitable element
+	mov eax, instantiated_vector
+	mov esi, dword[eax+12]			;elements in esi
+	mov edi, dword[eax]				;index in edi
+	cmp edi, 0
+	jle uiElement_processClick_internal_end
+	uiElement_processClick_internal_loop_start:
+		;check if the element is fatherless
+		mov eax, dword[esi]
+		test dword[eax+40], 0xffffffff
+		jnz uiElement_processClick_internal_loop_continue		
+			;call the helper if fatherless
+			push dword[ebp-8]
+			push dword[ebp-4]
+			push eax
+			call uiElement_processClick_internal_helper
+			add esp, 12
+		
+		uiElement_processClick_internal_loop_continue:
+		add esi, 4
+		dec edi
+		test edi, edi
+		jnz uiElement_processClick_internal_loop_start
+	
+	uiElement_processClick_internal_end:
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+	
+;calls itself on the children of the element
+;if no children ate the click event, the element is tested as a click target
+;returns non-zero if the click landed on a suitable target (cursor position is appropriate, interactable and has an onClick callback defined)
+;returns if the element is non-interactable
+;int uiElement_processClick_internal_helper(UIElement* element, int cursorX, int cursorY)
+uiElement_processClick_internal_helper:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	sub esp, 4			;click landed		4
+	sub esp, 4			;helper				8
+	
+	mov dword[ebp-4], 0
+	
+	;check if the current element is interactable
+	mov eax, dword[ebp+16]
+	test dword[eax+64], 0xffffffff
+	jz uiElement_processClick_internal_helper_end
+	
+	;check if children are clickable
+	mov eax, dword[ebp+16]
+	mov esi, dword[eax+36]		;children in esi
+	mov edi, dword[eax+24]		;index in edi
+	cmp edi, 0
+	jle uiElement_processClick_internal_helper_children_loop_end
+	uiElement_processClick_internal_helper_children_loop_start:
+		push dword[ebp+24]
+		push dword[ebp+20]
+		push dword[esi]
+		call uiElement_processClick_internal_helper
+		or dword[ebp-4], eax
+		add esp, 12
+		
+		;has the click landed?
+		test eax, eax
+		jnz uiElement_processClick_internal_helper_children_loop_end
+		
+		add esi, 4
+		dec edi
+		test edi, edi
+		jnz uiElement_processClick_internal_helper_children_loop_start
+		
+	uiElement_processClick_internal_helper_children_loop_end:
+	
+	;return if the click has landed
+	test dword[ebp-4], 0xffffffff
+	jnz uiElement_processClick_internal_helper_end
+	
+	
+	;check if the current element has an onClick callback
+	mov eax, dword[ebp+16]
+	test dword[eax+80], 0xffffffff
+	jz uiElement_processClick_internal_helper_end
+	
+	
+	;check if the click is inside the element
+	;cursorX-posX is in [0; width]
+	;cursorY-posY is in [0; height]
+	mov ecx, dword[ebp+20]
+	mov edx, dword[ebp+24]
+	sub ecx, dword[eax+44]
+	sub edx, dword[eax+48]
+	
+	test ecx, 0x80000000
+	jnz uiElement_processClick_internal_helper_end
+	test edx, 0x80000000
+	jnz uiElement_processClick_internal_helper_end
+	cmp ecx, dword[eax+8]
+	jg uiElement_processClick_internal_helper_end
+	cmp edx, dword[eax+12]
+	jg uiElement_processClick_internal_helper_end
+	
+	;call the onClick callback and set the return value
+	push dword[eax+84]
+	push eax
+	call dword[eax+80]
+	
+	mov dword[ebp-4], 69
+	
+	
+	uiElement_processClick_internal_helper_end:
+	mov eax, dword[ebp-4]		;set return value
+	
 	mov esp, ebp
 	pop edi
 	pop esi

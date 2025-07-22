@@ -313,6 +313,8 @@ section .text use32
 	extern uiElement_render
 	extern uiElement_create
 	extern uiElement_destroy
+	extern uiElement_setStatus
+	extern uiElement_setOnClick
 	extern uiElement_setPosition
 	extern uiElement_setSize
 	extern uiElement_setParent
@@ -332,6 +334,17 @@ section .text use32
 	extern UI_TOP
 	extern UI_TEXT_ALIGN_RIGHT
 	extern UI_TEXT_ALIGN_TOP
+	
+;void onclicktest(UIElement* element, const char* text)
+onclicktest:
+	push ebp
+	mov ebp, esp
+	push dword[ebp+12]
+	call my_printf
+	mov esp, ebp
+	pop ebp
+	ret
+	
 	
 game_loop:
 	push ebp
@@ -366,7 +379,7 @@ game_loop:
 	push dword[GLFW_CURSOR_DISABLED]
 	push dword[GLFW_CURSOR]
 	push dword[current_window]
-	call [glfwSetInputMode]
+	;call [glfwSetInputMode]
 	add esp, 12
 	
 	;init perlin noises
@@ -408,10 +421,22 @@ game_loop:
 	mov dword[TEST_CANVAS], eax
 	add esp, 4
 	
+	push 69
+	push 69
+	push dword[TEST_CANVAS]
+	call uiElement_setStatus
+	add esp, 12
+	
 	push dword[UI_IMAGE]
 	call uiElement_create
 	mov dword[TEST_IMAGE], eax
 	add esp, 4
+	
+	push 69
+	push 69
+	push dword[TEST_IMAGE]
+	call uiElement_setStatus
+	add esp, 12
 	
 	push dword[TEST_CANVAS]
 	push dword[TEST_IMAGE]
@@ -422,6 +447,12 @@ game_loop:
 	push word[UI_LEFT]
 	push dword[TEST_IMAGE]
 	call uiElement_setAnchor
+	add esp, 12
+	
+	push test_text
+	push onclicktest
+	push dword[TEST_IMAGE]
+	call uiElement_setOnClick
 	add esp, 12
 	
 	push 100
