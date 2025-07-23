@@ -119,10 +119,6 @@ section .data use32
 	TIME_OF_DAY dd 0.0	;values are in [0;1], 0 and 1 are dawn
 	
 	SUN_DIRECTION_BUFFER dd 0.0, 1.0, 0.0, 0.0
-	
-	TEST_CANVAS dd 0
-	TEST_IMAGE dd 0
-	TEST_TEXT dd 0
 
 section .text use32
 
@@ -379,7 +375,7 @@ game_loop:
 	push dword[GLFW_CURSOR_DISABLED]
 	push dword[GLFW_CURSOR]
 	push dword[current_window]
-	;call [glfwSetInputMode]
+	call [glfwSetInputMode]
 	add esp, 12
 	
 	;init perlin noises
@@ -414,89 +410,6 @@ game_loop:
 	
 	;init ui
 	call uiElement_init
-	
-	;create test ui elements
-	push dword[UI_CANVAS]
-	call uiElement_create
-	mov dword[TEST_CANVAS], eax
-	add esp, 4
-	
-	push 69
-	push 69
-	push dword[TEST_CANVAS]
-	call uiElement_setStatus
-	add esp, 12
-	
-	push dword[UI_IMAGE]
-	call uiElement_create
-	mov dword[TEST_IMAGE], eax
-	add esp, 4
-	
-	push 69
-	push 69
-	push dword[TEST_IMAGE]
-	call uiElement_setStatus
-	add esp, 12
-	
-	push dword[TEST_CANVAS]
-	push dword[TEST_IMAGE]
-	call uiElement_setParent
-	add esp, 8
-	
-	push word[UI_BOTTOM]
-	push word[UI_LEFT]
-	push dword[TEST_IMAGE]
-	call uiElement_setAnchor
-	add esp, 12
-	
-	push test_text
-	push onclicktest
-	push dword[TEST_IMAGE]
-	call uiElement_setOnClick
-	add esp, 12
-	
-	push 100
-	push 100
-	push dword[TEST_IMAGE]
-	call uiElement_setSize
-	call uiElement_setPosition
-	add esp, 12
-	
-	push dword[UI_TEXT]
-	call uiElement_create
-	mov dword[TEST_TEXT], eax
-	add esp, 4
-	
-	push dword[TEST_IMAGE]
-	push dword[TEST_TEXT]
-	call uiElement_setParent
-	add esp, 8
-	
-	push test_text
-	push dword[TEST_TEXT]
-	call uiText_setText
-	add esp, 8
-	
-	push word[UI_CENTER]
-	push word[UI_CENTER]
-	push dword[TEST_TEXT]
-	call uiElement_setPivot
-	call uiElement_setAnchor
-	add esp, 8
-	
-	push dword[ONE]
-	push dword[ONE]
-	push dword[ONE]
-	push 0
-	push dword[TEST_TEXT]
-	call uiText_setColour
-	add esp, 20
-	
-	push word[UI_TEXT_ALIGN_TOP]
-	push word[UI_TEXT_ALIGN_RIGHT]
-	push dword[TEST_TEXT]
-	call uiText_setTextAlignment
-	add esp, 8
 	
 	;create framebuffers
 	call gameLoop_createFramebuffers
@@ -837,11 +750,6 @@ game_loop:
 	
 	;destroy the framebuffers
 	call gameLoop_yeetFramebuffers
-	
-	;destroy test ui elements
-	push dword[TEST_CANVAS]
-	call uiElement_destroy
-	add esp, 4
 	
 	;deinit ui
 	call uiElement_deinit
