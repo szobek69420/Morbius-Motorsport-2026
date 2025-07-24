@@ -75,7 +75,7 @@ section .rodata use32
 	print_raycast_hit_info db "Raycast hit: (%f; %f; %f; %f)",0
 	print_raycast_no_hit_info db "Raycast hit: nothing bozo",0
 	
-	print_cursor db "+",0
+	cursor_image_path db "./sprites/ui/ingame/cursor.bmp",0
 	
 section .bss use32
 	should_close resb 4					;tsValue*
@@ -122,6 +122,9 @@ section .data use32
 	
 	;info canvas
 	CANVAS_INFO dd 0
+	
+	IMAGE_CURSOR dd 0
+	
 	TEXT_HYPERPLANE_POINT_LABEL dd 0
 	TEXT_HYPERPLANE_POINT dd 0
 	TEXT_HYPERPLANE_VECTOR_LABEL dd 0
@@ -135,6 +138,14 @@ section .data use32
 	TEXT_VIEW_DIRECTION_3D_LABEL dd 0
 	TEXT_VIEW_DIRECTION_3D dd 0
 	TEXT_RAYCAST_HIT dd 0
+	
+	TEXT_FPS dd 0
+	TEXT_PHYSICS_DELTA dd 0
+	TEXT_CHUNK_LOADER_DELTA dd 0
+	
+	TEXT_RENDER_DISTANCE dd 0
+	TEXT_LOADED_CHUNKS dd 0
+	TEXT_PENDING_GRAPHICS_UPDATES dd 0
 
 section .text use32
 
@@ -672,9 +683,6 @@ game_loop:
 		call renderable_enableBlending
 		add esp, 8
 		
-		;draw infos
-		call gameLoop_drawData
-		
 		;render ui
 		push dword[WINDOW_SIZE_Y]
 		push dword[WINDOW_SIZE_X]
@@ -1173,282 +1181,12 @@ gameLoop_handleWindowResize:
 	push 0
 	call [glViewport]
 	
-
-	
 	gameLoop_handleWindowResize_end:
 	mov esp, ebp
 	pop ebp
 	ret
 	
 	
-;void gameLoop_drawData()
-gameLoop_drawData:
-	push ebp
-	mov ebp, esp
-	
-	sub esp, 100				;char buffer[100]
-	
-	;set font size to 1.5x
-	mov eax, dword[FONT_CHAR_HEIGHT]
-	imul eax, 3
-	shr eax, 1
-	push eax
-	mov eax, dword[FONT_CHAR_WIDTH]
-	imul eax, 3
-	shr eax, 1
-	push eax
-	call textRenderer_setFontSize
-	add esp, 8
-	
-	;set font colour to yellow
-	mov eax, PRETTY_YELLOW
-	push dword[eax+12]
-	push dword[eax+8]
-	push dword[eax+4]
-	push dword[eax]
-	call textRenderer_setColour
-	add esp, 16
-	
-	;draw point
-	mov eax, dword[chunk_manager_4d]
-	add eax, 32
-	push dword[eax+12]
-	push dword[eax+8]
-	push dword[eax+4]
-	push dword[eax]
-	push print_vec4
-	lea eax, [ebp-100]
-	push eax
-	call my_sprintf
-	add esp, 24
-	
-	render_text text_point, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 30
-	lea eax, [ebp-100]
-	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 45
-	
-	;draw based vectors
-	render_text text_based_vectors, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 70
-	
-	mov eax, dword[chunk_manager_4d]
-	add eax, 48
-	sub esp, 48
-	mov ecx, esp
-	push 48
-	push eax
-	push ecx
-	call my_memcpy
-	add esp, 12
-	
-	push print_vec4
-	lea eax, [ebp-100]
-	push eax
-	call my_sprintf
-	add esp, 24
-	lea eax, [ebp-100]
-	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 85
-	
-	push print_vec4
-	lea eax, [ebp-100]
-	push eax
-	call my_sprintf
-	add esp, 24
-	lea eax, [ebp-100]
-	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 100
-	
-	push print_vec4
-	lea eax, [ebp-100]
-	push eax
-	call my_sprintf
-	add esp, 24
-	lea eax, [ebp-100]
-	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 115
-	
-	;draw player position 4d and 3d
-	render_text text_player_pos_4d, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 135
-	
-	mov eax, dword[pplayer]
-	push dword[eax+24]
-	call aabb4d_getPosition
-	add esp, 4
-	push dword[eax+12]
-	push dword[eax+8]
-	push dword[eax+4]
-	push dword[eax]
-	push print_vec4
-	lea eax, [ebp-100]
-	push eax
-	call my_sprintf
-	add esp, 24
-	lea eax, [ebp-100]
-	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 150
-	
-	
-	render_text text_player_pos, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 170
-	
-	mov eax, camera
-	push dword[eax+8]
-	push dword[eax+4]
-	push dword[eax]
-	push print_vec3
-	lea eax, [ebp-100]
-	push eax
-	call my_sprintf
-	add esp, 20
-	lea eax, [ebp-100]
-	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 185
-	
-	
-	render_text text_player_view_dir, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 205
-	
-	sub esp, 12
-	mov eax, esp
-	push eax
-	push camera
-	call camera_forward
-	add esp, 8
-	push print_vec3
-	lea eax, [ebp-100]
-	push eax
-	call my_sprintf
-	add esp, 20
-	lea eax, [ebp-100]
-	render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 220
-	
-	
-	;draw raycast hit
-	mov eax, dword[pplayer]
-	cmp dword[eax+56], 0
-	jne gameLoop_drawData_raycast_hit
-		;no hit
-		render_text print_raycast_no_hit_info, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 240
-		jmp gameLoop_drawData_raycast_done
-		
-	gameLoop_drawData_raycast_hit:
-		mov eax, dword[eax+56]
-		push dword[eax+12]
-		push dword[eax+8]
-		push dword[eax+4]
-		push dword[eax]
-		push print_raycast_hit_info
-		lea eax, [ebp-100]
-		push eax
-		call my_sprintf
-		add esp, 24
-		
-		lea eax, [ebp-100]
-		render_text eax, dword[TEXT_ORIGIN_TOP_LEFT], dword[TEXT_PIVOT_TOP_LEFT], 30, 240
-	
-	gameLoop_drawData_raycast_done:
-	
-	;draw render distance
-	push dword[render_distance]
-	push print_render_distance
-	lea eax, [ebp-100]
-	push eax
-	call my_sprintf
-	add esp, 12
-	
-	lea eax, [ebp-100]
-	render_text eax, dword[TEXT_ORIGIN_BOTTOM_RIGHT], dword[TEXT_PIVOT_BOTTOM_RIGHT], 30, 80
-	
-	;draw loaded chunk count
-	mov eax, dword[chunk_manager_4d]
-	push dword[eax]
-	push print_loaded_chunk_count
-	lea eax, [ebp-100]
-	push eax
-	call my_sprintf
-	add esp, 12
-	
-	lea eax, [ebp-100]
-	render_text eax, dword[TEXT_ORIGIN_BOTTOM_RIGHT], dword[TEXT_PIVOT_BOTTOM_RIGHT], 30, 55
-	
-	;draw pending graphics update count
-	mov eax, dword[chunk_manager_4d]
-	mov eax, dword[eax+24]
-	push dword[eax+4]
-	push print_pending_graphics_update_count
-	lea eax, [ebp-100]
-	push eax
-	call my_sprintf
-	add esp, 12
-	
-	lea eax, [ebp-100]
-	render_text eax, dword[TEXT_ORIGIN_BOTTOM_RIGHT], dword[TEXT_PIVOT_BOTTOM_RIGHT], 30, 30
-	
-	
-	;set font size to 2x
-	mov eax, dword[FONT_CHAR_HEIGHT]
-	shl eax, 1
-	push eax
-	mov eax, dword[FONT_CHAR_WIDTH]
-	shl eax, 1
-	push eax
-	call textRenderer_setFontSize
-	add esp, 8
-	
-	
-	;draw frame counter
-	push dword[frames_in_last_second]
-	push print_fps
-	lea eax, [ebp-100]
-	push eax
-	call my_sprintf
-	add esp, 12
-	
-	lea eax, [ebp-100]
-	render_text eax, dword[TEXT_ORIGIN_TOP_RIGHT], dword[TEXT_PIVOT_TOP_RIGHT], 30, 30
-	
-	
-	;print physics delta time
-	push dword[delta_time_milliseconds_physics]
-	push print_physics_delta_time
-	lea eax, [ebp-100]
-	push eax
-	call my_sprintf
-	add esp, 12
-	
-	lea eax, [ebp-100]
-	render_text eax, dword[TEXT_ORIGIN_TOP_RIGHT], dword[TEXT_PIVOT_TOP_RIGHT], 30, 55
-	
-	
-	;print chunk loader delta time
-	push dword[delta_time_milliseconds_chunk_loader]
-	push print_chunk_loader_delta_time
-	lea eax, [ebp-100]
-	push eax
-	call my_sprintf
-	add esp, 12
-	
-	lea eax, [ebp-100]
-	render_text eax, dword[TEXT_ORIGIN_TOP_RIGHT], dword[TEXT_PIVOT_TOP_RIGHT], 30, 80
-	
-	;set font size to 4x
-	mov eax, dword[FONT_CHAR_HEIGHT]
-	shl eax, 2
-	push eax
-	mov eax, dword[FONT_CHAR_WIDTH]
-	shl eax, 2
-	push eax
-	call textRenderer_setFontSize
-	add esp, 8
-	
-	;set font colour to black
-	mov eax, BLACK
-	push dword[eax+12]
-	push dword[eax+8]
-	push dword[eax+4]
-	push dword[eax]
-	call textRenderer_setColour
-	add esp, 16
-	
-	;print cursor
-	render_text print_cursor, dword[TEXT_ORIGIN_CENTER_CENTER], dword[TEXT_PIVOT_CENTER_CENTER], 0, 0
-	
-	
-	mov esp, ebp
-	pop ebp
-	ret
 	
 	extern uiElement_create
 	extern uiElement_destroy
@@ -1460,6 +1198,7 @@ gameLoop_drawData:
 	extern uiElement_setAnchor
 	extern uiElement_setPivot
 	extern uiElement_createProjection
+	extern uiImage_setTexture
 	extern uiText_setText
 	extern uiText_setColour
 	extern uiText_setFontSize
@@ -1475,6 +1214,7 @@ gameLoop_drawData:
 	extern UI_TEXT_ALIGN_LEFT
 	extern UI_TEXT_ALIGN_RIGHT
 	extern UI_TEXT_ALIGN_TOP
+	extern UI_TEXT_ALIGN_BOTTOM
 	
 %macro INIT_TEXT 6 ;text, parent, posx, posy, anchorx, anchory, textalignx, textaligny
 	push dword[UI_TEXT]
@@ -1532,6 +1272,48 @@ gameLoop_drawData:
 	call uiText_setColour
 	add esp, 20
 %endmacro
+
+%macro INIT_IMAGE 11	;image, parent, imagePath, posx, posy, scalex, scaley, anchorx, anchory, pivotx, pivoty
+	push dword[UI_IMAGE]
+	call uiElement_create
+	mov dword[%1], eax
+	add esp, 4
+	
+	push dword[%2]
+	push dword[%1]
+	call uiElement_setParent
+	add esp, 8
+	
+	push %5
+	push %4
+	push dword[%1]
+	call uiElement_setPosition
+	add esp, 12
+	
+	push %7
+	push %6
+	push dword[%1]
+	call uiElement_setSize
+	add esp, 12
+	
+	push word[%9]
+	push word[%8]
+	push dword[%1]
+	call uiElement_setAnchor
+	add esp, 8
+	
+	push word[%11]
+	push word[%10]
+	push dword[%1]
+	call uiElement_setPivot
+	add esp, 8
+	
+	push %3
+	push dword[%1]
+	call uiImage_setTexture
+	add esp, 8
+%endmacro
+
 	
 ;void gameLoop_initInfoCanvas()
 gameLoop_initInfoCanvas:
@@ -1544,6 +1326,9 @@ gameLoop_initInfoCanvas:
 	mov dword[CANVAS_INFO], eax
 	add esp, 4
 	
+	;create cursor
+	INIT_IMAGE IMAGE_CURSOR, CANVAS_INFO, cursor_image_path, 0, 0, 80, 100, UI_CENTER, UI_CENTER, UI_LEFT, UI_CENTER
+	
 	;create texts
 	INIT_TEXT 		TEXT_HYPERPLANE_POINT_LABEL, CANVAS_INFO, 30, 30, UI_LEFT, UI_TOP
 	FINE_TUNE_TEXT	TEXT_HYPERPLANE_POINT_LABEL, text_point, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
@@ -1551,10 +1336,84 @@ gameLoop_initInfoCanvas:
 	INIT_TEXT		TEXT_HYPERPLANE_POINT, CANVAS_INFO, 30, 45, UI_LEFT, UI_TOP
 	FINE_TUNE_TEXT	TEXT_HYPERPLANE_POINT, 0, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
 	
+	
+	INIT_TEXT 		TEXT_HYPERPLANE_VECTOR_LABEL, CANVAS_INFO, 30, 70, UI_LEFT, UI_TOP
+	FINE_TUNE_TEXT	TEXT_HYPERPLANE_VECTOR_LABEL, text_based_vectors, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	INIT_TEXT 		TEXT_HYPERPLANE_VECTOR_1, CANVAS_INFO, 30, 85, UI_LEFT, UI_TOP
+	FINE_TUNE_TEXT	TEXT_HYPERPLANE_VECTOR_1, 0, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	INIT_TEXT 		TEXT_HYPERPLANE_VECTOR_2, CANVAS_INFO, 30, 100, UI_LEFT, UI_TOP
+	FINE_TUNE_TEXT	TEXT_HYPERPLANE_VECTOR_2, 0, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	INIT_TEXT 		TEXT_HYPERPLANE_VECTOR_3, CANVAS_INFO, 30, 115, UI_LEFT, UI_TOP
+	FINE_TUNE_TEXT	TEXT_HYPERPLANE_VECTOR_3, 0, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	
+	
+	INIT_TEXT		TEXT_PLAYER_POSITION_LABEL, CANVAS_INFO, 30, 135, UI_LEFT, UI_TOP
+	FINE_TUNE_TEXT	TEXT_PLAYER_POSITION_LABEL, text_player_pos_4d, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	INIT_TEXT		TEXT_PLAYER_POSITION, CANVAS_INFO, 30, 150, UI_LEFT, UI_TOP
+	FINE_TUNE_TEXT	TEXT_PLAYER_POSITION, 0, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	INIT_TEXT		TEXT_PLAYER_POSITION_3D_LABEL, CANVAS_INFO, 30, 170, UI_LEFT, UI_TOP
+	FINE_TUNE_TEXT	TEXT_PLAYER_POSITION_3D_LABEL, text_player_pos, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	INIT_TEXT		TEXT_PLAYER_POSITION_3D, CANVAS_INFO, 30, 185, UI_LEFT, UI_TOP
+	FINE_TUNE_TEXT	TEXT_PLAYER_POSITION_3D, 0, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	
+	
+	INIT_TEXT		TEXT_VIEW_DIRECTION_3D_LABEL, CANVAS_INFO, 30, 205, UI_LEFT, UI_TOP
+	FINE_TUNE_TEXT	TEXT_VIEW_DIRECTION_3D_LABEL, text_player_view_dir, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	INIT_TEXT		TEXT_VIEW_DIRECTION_3D, CANVAS_INFO, 30, 220, UI_LEFT, UI_TOP
+	FINE_TUNE_TEXT	TEXT_VIEW_DIRECTION_3D, 0, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	
+	
+	INIT_TEXT		TEXT_RAYCAST_HIT, CANVAS_INFO, 30, 240, UI_LEFT, UI_TOP
+	FINE_TUNE_TEXT	TEXT_RAYCAST_HIT, 0, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	
+	
+	
+	
+	INIT_TEXT		TEXT_FPS, CANVAS_INFO, 30, 30, UI_RIGHT, UI_TOP
+	FINE_TUNE_TEXT	TEXT_FPS, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_TOP, 12, 16, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	INIT_TEXT		TEXT_PHYSICS_DELTA, CANVAS_INFO, 30, 55, UI_RIGHT, UI_TOP
+	FINE_TUNE_TEXT	TEXT_PHYSICS_DELTA, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_TOP, 12, 16, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	INIT_TEXT		TEXT_CHUNK_LOADER_DELTA, CANVAS_INFO, 30, 80, UI_RIGHT, UI_TOP
+	FINE_TUNE_TEXT	TEXT_CHUNK_LOADER_DELTA, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_TOP, 12, 16, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	
+	
+	
+	
+	INIT_TEXT		TEXT_RENDER_DISTANCE, CANVAS_INFO, 30, 80, UI_RIGHT, UI_BOTTOM
+	FINE_TUNE_TEXT	TEXT_RENDER_DISTANCE, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	INIT_TEXT		TEXT_LOADED_CHUNKS, CANVAS_INFO, 30, 55, UI_RIGHT, UI_BOTTOM
+	FINE_TUNE_TEXT	TEXT_LOADED_CHUNKS, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	INIT_TEXT		TEXT_PENDING_GRAPHICS_UPDATES, CANVAS_INFO, 30, 30, UI_RIGHT, UI_BOTTOM
+	FINE_TUNE_TEXT	TEXT_PENDING_GRAPHICS_UPDATES, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
 	mov esp, ebp
 	pop ebp
 	ret
 	
+	
+%macro SET_TEXT 1		;textElement
+	lea eax, [ebp-100]
+	push eax
+	push dword[%1]
+	call uiText_setText
+	add esp, 8
+%endmacro
 	
 gameLoop_updateInfoCanvas:
 	push ebp
@@ -1575,10 +1434,169 @@ gameLoop_updateInfoCanvas:
 	call my_sprintf
 	add esp, 24
 	
+	SET_TEXT TEXT_HYPERPLANE_POINT
+	
+	
+	;hyperplane vectors
+	mov eax, dword[chunk_manager_4d]
+	add eax, 48
+	sub esp, 48
+	mov ecx, esp
+	push 48
+	push eax
+	push ecx
+	call my_memcpy
+	add esp, 12
+	
+	push print_vec4
 	lea eax, [ebp-100]
 	push eax
-	push dword[TEXT_HYPERPLANE_POINT]
-	call uiText_setText
+	call my_sprintf
+	add esp, 24
+	SET_TEXT TEXT_HYPERPLANE_VECTOR_1
+	
+	push print_vec4
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 24
+	SET_TEXT TEXT_HYPERPLANE_VECTOR_2
+	
+	push print_vec4
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 24
+	SET_TEXT TEXT_HYPERPLANE_VECTOR_3
+	
+	
+	;player positions
+	mov eax, dword[pplayer]
+	push dword[eax+24]
+	call aabb4d_getPosition
+	add esp, 4
+	push dword[eax+12]
+	push dword[eax+8]
+	push dword[eax+4]
+	push dword[eax]
+	push print_vec4
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 24
+	SET_TEXT TEXT_PLAYER_POSITION
+	
+	mov eax, camera
+	push dword[eax+8]
+	push dword[eax+4]
+	push dword[eax]
+	push print_vec3
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 20
+	SET_TEXT TEXT_PLAYER_POSITION_3D
+	
+	;view direction
+	sub esp, 12
+	mov eax, esp
+	push eax
+	push camera
+	call camera_forward
+	add esp, 8
+	push print_vec3
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 20
+	SET_TEXT TEXT_VIEW_DIRECTION_3D
+	
+	;raycast hit
+	mov eax, dword[pplayer]
+	cmp dword[eax+56], 0
+	jne gameLoop_updateInfoCanvas_raycast_hit
+		;no hit
+		push print_raycast_no_hit_info
+		push dword[TEXT_RAYCAST_HIT]
+		call uiText_setText
+		add esp, 8
+		jmp gameLoop_updateInfoCanvas_raycast_done
+		
+	gameLoop_updateInfoCanvas_raycast_hit:
+		mov eax, dword[eax+56]
+		push dword[eax+12]
+		push dword[eax+8]
+		push dword[eax+4]
+		push dword[eax]
+		push print_raycast_hit_info
+		lea eax, [ebp-100]
+		push eax
+		call my_sprintf
+		add esp, 24
+		
+		SET_TEXT TEXT_RAYCAST_HIT
+	
+	gameLoop_updateInfoCanvas_raycast_done:
+	
+	
+	;fps
+	push dword[frames_in_last_second]
+	push print_fps
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 12
+	SET_TEXT TEXT_FPS
+	
+	;physics delta
+	push dword[delta_time_milliseconds_physics]
+	push print_physics_delta_time
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 12
+	SET_TEXT TEXT_PHYSICS_DELTA
+	
+	;chunk loader delta
+	push dword[delta_time_milliseconds_chunk_loader]
+	push print_chunk_loader_delta_time
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 12
+	SET_TEXT TEXT_CHUNK_LOADER_DELTA
+	
+	
+	
+	;render distance
+	push dword[render_distance]
+	push print_render_distance
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 12
+	SET_TEXT TEXT_RENDER_DISTANCE
+	
+	;loaded chunks
+	mov eax, dword[chunk_manager_4d]
+	push dword[eax]
+	push print_loaded_chunk_count
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 12
+	SET_TEXT TEXT_LOADED_CHUNKS
+	
+	;pending graphics updates
+	mov eax, dword[chunk_manager_4d]
+	mov eax, dword[eax+24]
+	push dword[eax+4]
+	push print_pending_graphics_update_count
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 12
+	SET_TEXT TEXT_PENDING_GRAPHICS_UPDATES
 	
 	mov esp, ebp
 	pop ebp
