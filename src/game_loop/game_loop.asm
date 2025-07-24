@@ -119,6 +119,22 @@ section .data use32
 	TIME_OF_DAY dd 0.0	;values are in [0;1], 0 and 1 are dawn
 	
 	SUN_DIRECTION_BUFFER dd 0.0, 1.0, 0.0, 0.0
+	
+	;info canvas
+	CANVAS_INFO dd 0
+	TEXT_HYPERPLANE_POINT_LABEL dd 0
+	TEXT_HYPERPLANE_POINT dd 0
+	TEXT_HYPERPLANE_VECTOR_LABEL dd 0
+	TEXT_HYPERPLANE_VECTOR_1 dd 0
+	TEXT_HYPERPLANE_VECTOR_2 dd 0
+	TEXT_HYPERPLANE_VECTOR_3 dd 0
+	TEXT_PLAYER_POSITION_LABEL dd 0
+	TEXT_PLAYER_POSITION dd 0
+	TEXT_PLAYER_POSITION_3D_LABEL dd 0
+	TEXT_PLAYER_POSITION_3D dd 0
+	TEXT_VIEW_DIRECTION_3D_LABEL dd 0
+	TEXT_VIEW_DIRECTION_3D dd 0
+	TEXT_RAYCAST_HIT dd 0
 
 section .text use32
 
@@ -307,29 +323,6 @@ section .text use32
 	extern uiElement_deinit
 	extern uiElement_processInput
 	extern uiElement_render
-	extern uiElement_create
-	extern uiElement_destroy
-	extern uiElement_setStatus
-	extern uiElement_setOnClick
-	extern uiElement_setPosition
-	extern uiElement_setSize
-	extern uiElement_setParent
-	extern uiElement_setAnchor
-	extern uiElement_setPivot
-	extern uiElement_createProjection
-	extern uiText_setText
-	extern uiText_setColour
-	extern uiText_setTextAlignment
-	extern UI_CANVAS
-	extern UI_IMAGE
-	extern UI_TEXT
-	extern UI_LEFT
-	extern UI_BOTTOM
-	extern UI_CENTER
-	extern UI_RIGHT
-	extern UI_TOP
-	extern UI_TEXT_ALIGN_RIGHT
-	extern UI_TEXT_ALIGN_TOP
 	
 ;void onclicktest(UIElement* element, const char* text)
 onclicktest:
@@ -410,6 +403,9 @@ game_loop:
 	
 	;init ui
 	call uiElement_init
+	
+	;create info canvas
+	call gameLoop_initInfoCanvas
 	
 	;create framebuffers
 	call gameLoop_createFramebuffers
@@ -676,6 +672,9 @@ game_loop:
 		call renderable_enableBlending
 		add esp, 8
 		
+		;draw infos
+		call gameLoop_drawData
+		
 		;render ui
 		push dword[WINDOW_SIZE_Y]
 		push dword[WINDOW_SIZE_X]
@@ -683,12 +682,12 @@ game_loop:
 		call uiElement_createProjection
 		add esp, 12
 		
+		call gameLoop_updateInfoCanvas
+		
 		push projection_matrix_ui
 		call uiElement_render
 		add esp, 4
 		
-		;draw infos
-		call gameLoop_drawData
 		
 		;enable depth test and disable blending
 		push 69
@@ -1446,6 +1445,140 @@ gameLoop_drawData:
 	;print cursor
 	render_text print_cursor, dword[TEXT_ORIGIN_CENTER_CENTER], dword[TEXT_PIVOT_CENTER_CENTER], 0, 0
 	
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	extern uiElement_create
+	extern uiElement_destroy
+	extern uiElement_setStatus
+	extern uiElement_setOnClick
+	extern uiElement_setPosition
+	extern uiElement_setSize
+	extern uiElement_setParent
+	extern uiElement_setAnchor
+	extern uiElement_setPivot
+	extern uiElement_createProjection
+	extern uiText_setText
+	extern uiText_setColour
+	extern uiText_setFontSize
+	extern uiText_setTextAlignment
+	extern UI_CANVAS
+	extern UI_IMAGE
+	extern UI_TEXT
+	extern UI_LEFT
+	extern UI_BOTTOM
+	extern UI_CENTER
+	extern UI_RIGHT
+	extern UI_TOP
+	extern UI_TEXT_ALIGN_LEFT
+	extern UI_TEXT_ALIGN_RIGHT
+	extern UI_TEXT_ALIGN_TOP
+	
+%macro INIT_TEXT 6 ;text, parent, posx, posy, anchorx, anchory, textalignx, textaligny
+	push dword[UI_TEXT]
+	call uiElement_create
+	mov dword[%1], eax
+	add esp, 4
+	
+	push dword[%2]
+	push dword[%1]
+	call uiElement_setParent
+	add esp, 8
+	
+	push 0
+	push 0
+	push dword[%1]
+	call uiElement_setSize
+	add esp, 12
+	
+	push %4
+	push %3
+	push dword[%1]
+	call uiElement_setPosition
+	add esp, 12
+	
+	push word[%6]
+	push word[%5]
+	push dword[%1]
+	call uiElement_setAnchor
+	add esp, 8
+%endmacro
+
+%macro FINE_TUNE_TEXT 10	;textElement, text, textalignx, textaligny, fontsizex, fontsizey, colourr, colourg, colourb, coloura
+	push %2
+	push dword[%1]
+	call uiText_setText
+	add esp, 8
+	
+	push word[%4]
+	push word[%3]
+	push dword[%1]
+	call uiText_setTextAlignment
+	add esp, 8
+	
+	push %6
+	push %5
+	push dword[%1]
+	call uiText_setFontSize
+	add esp, 12
+	
+	push %10
+	push %9
+	push %8
+	push %7
+	push dword[%1]
+	call uiText_setColour
+	add esp, 20
+%endmacro
+	
+;void gameLoop_initInfoCanvas()
+gameLoop_initInfoCanvas:
+	push ebp
+	mov ebp, esp
+	
+	;create canvas
+	push dword[UI_CANVAS]
+	call uiElement_create
+	mov dword[CANVAS_INFO], eax
+	add esp, 4
+	
+	;create texts
+	INIT_TEXT 		TEXT_HYPERPLANE_POINT_LABEL, CANVAS_INFO, 30, 30, UI_LEFT, UI_TOP
+	FINE_TUNE_TEXT	TEXT_HYPERPLANE_POINT_LABEL, text_point, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	INIT_TEXT		TEXT_HYPERPLANE_POINT, CANVAS_INFO, 30, 45, UI_LEFT, UI_TOP
+	FINE_TUNE_TEXT	TEXT_HYPERPLANE_POINT, 0, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+gameLoop_updateInfoCanvas:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 100				;char buffer[100]
+	
+	;hyperplane point
+	mov eax, dword[chunk_manager_4d]
+	add eax, 32
+	push dword[eax+12]
+	push dword[eax+8]
+	push dword[eax+4]
+	push dword[eax]
+	push print_vec4
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 24
+	
+	lea eax, [ebp-100]
+	push eax
+	push dword[TEXT_HYPERPLANE_POINT]
+	call uiText_setText
 	
 	mov esp, ebp
 	pop ebp
