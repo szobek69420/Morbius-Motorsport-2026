@@ -75,6 +75,9 @@ section .rodata use32
 	print_raycast_hit_info db "Raycast hit: (%f; %f; %f; %f)",0
 	print_raycast_no_hit_info db "Raycast hit: nothing bozo",0
 	
+	print_opengl_version db "OpenGL %s",0
+	print_gpu_type db "%s, %s",0
+	
 	cursor_image_path db "./sprites/ui/ingame/cursor.bmp",0
 	
 section .bss use32
@@ -146,6 +149,9 @@ section .data use32
 	TEXT_RENDER_DISTANCE dd 0
 	TEXT_LOADED_CHUNKS dd 0
 	TEXT_PENDING_GRAPHICS_UPDATES dd 0
+	
+	TEXT_VERSION dd 0
+	TEXT_GPU dd 0
 
 section .text use32
 
@@ -161,6 +167,7 @@ section .text use32
 	extern glFrontFace
 	extern glViewport
 	extern glGetError
+	extern glGetString
 	
 	extern GL_DEPTH_TEST
 	extern GL_COLOR_BUFFER_BIT
@@ -168,6 +175,9 @@ section .text use32
 	extern GL_CULL_FACE
 	extern GL_CCW
 	extern GL_POINTS
+	extern GL_VENDOR
+	extern GL_RENDERER
+	extern GL_VERSION
 
 	
 	extern camera_init
@@ -178,6 +188,7 @@ section .text use32
 	
 	extern my_printf
 	extern my_sprintf
+	extern my_strcpy
 	
 	extern my_memcpy
 	
@@ -1216,6 +1227,47 @@ gameLoop_handleWindowResize:
 	extern UI_TEXT_ALIGN_TOP
 	extern UI_TEXT_ALIGN_BOTTOM
 	
+%macro INIT_IMAGE 11	;image, parent, imagePath, posx, posy, scalex, scaley, anchorx, anchory, pivotx, pivoty
+	push dword[UI_IMAGE]
+	call uiElement_create
+	mov dword[%1], eax
+	add esp, 4
+	
+	push dword[%2]
+	push dword[%1]
+	call uiElement_setParent
+	add esp, 8
+	
+	push %5
+	push %4
+	push dword[%1]
+	call uiElement_setPosition
+	add esp, 12
+	
+	push %7
+	push %6
+	push dword[%1]
+	call uiElement_setSize
+	add esp, 12
+	
+	push word[%9]
+	push word[%8]
+	push dword[%1]
+	call uiElement_setAnchor
+	add esp, 8
+	
+	push word[%11]
+	push word[%10]
+	push dword[%1]
+	call uiElement_setPivot
+	add esp, 8
+	
+	push %3
+	push dword[%1]
+	call uiImage_setTexture
+	add esp, 8
+%endmacro
+	
 %macro INIT_TEXT 6 ;text, parent, posx, posy, anchorx, anchory, textalignx, textaligny
 	push dword[UI_TEXT]
 	call uiElement_create
@@ -1273,44 +1325,11 @@ gameLoop_handleWindowResize:
 	add esp, 20
 %endmacro
 
-%macro INIT_IMAGE 11	;image, parent, imagePath, posx, posy, scalex, scaley, anchorx, anchory, pivotx, pivoty
-	push dword[UI_IMAGE]
-	call uiElement_create
-	mov dword[%1], eax
-	add esp, 4
-	
-	push dword[%2]
+%macro SET_TEXT 1		;textElement
+	lea eax, [ebp-100]
+	push eax
 	push dword[%1]
-	call uiElement_setParent
-	add esp, 8
-	
-	push %5
-	push %4
-	push dword[%1]
-	call uiElement_setPosition
-	add esp, 12
-	
-	push %7
-	push %6
-	push dword[%1]
-	call uiElement_setSize
-	add esp, 12
-	
-	push word[%9]
-	push word[%8]
-	push dword[%1]
-	call uiElement_setAnchor
-	add esp, 8
-	
-	push word[%11]
-	push word[%10]
-	push dword[%1]
-	call uiElement_setPivot
-	add esp, 8
-	
-	push %3
-	push dword[%1]
-	call uiImage_setTexture
+	call uiText_setText
 	add esp, 8
 %endmacro
 
@@ -1319,6 +1338,8 @@ gameLoop_handleWindowResize:
 gameLoop_initInfoCanvas:
 	push ebp
 	mov ebp, esp
+	
+	sub esp, 100			;buffer		100
 	
 	;create canvas
 	push dword[UI_CANVAS]
@@ -1402,18 +1423,49 @@ gameLoop_initInfoCanvas:
 	INIT_TEXT		TEXT_PENDING_GRAPHICS_UPDATES, CANVAS_INFO, 30, 30, UI_RIGHT, UI_BOTTOM
 	FINE_TUNE_TEXT	TEXT_PENDING_GRAPHICS_UPDATES, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
 	
+	
+	
+	INIT_TEXT		TEXT_GPU, CANVAS_INFO, 30, 30, UI_LEFT, UI_BOTTOM
+	FINE_TUNE_TEXT	TEXT_GPU, 0, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	push dword[GL_RENDERER]
+	call [glGetString]
+	test eax, eax
+	jz gameLoop_initInfoCanvas_no_gpu_type
+	push eax
+	push dword[GL_VENDOR]
+	call [glGetString]
+	test eax, eax
+	jz gameLoop_initInfoCanvas_no_gpu_type
+		push eax
+		push print_gpu_type
+		lea ecx, [ebp-100]
+		push ecx
+		call my_sprintf
+		add esp, 16
+		SET_TEXT TEXT_GPU
+	gameLoop_initInfoCanvas_no_gpu_type:
+	
+	INIT_TEXT		TEXT_VERSION, CANVAS_INFO, 30, 55, UI_LEFT, UI_BOTTOM
+	FINE_TUNE_TEXT	TEXT_VERSION, 0, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	mov byte[ebp-100], 0
+	push dword[GL_VERSION]
+	call [glGetString]
+	test eax, eax
+	jz gameLoop_initInfoCanvas_no_version
+		push eax
+		push print_opengl_version
+		lea ecx, [ebp-100]
+		push ecx
+		call my_sprintf
+		add esp, 12
+		SET_TEXT TEXT_VERSION
+	gameLoop_initInfoCanvas_no_version:
+	
+	
 	mov esp, ebp
 	pop ebp
 	ret
 	
-	
-%macro SET_TEXT 1		;textElement
-	lea eax, [ebp-100]
-	push eax
-	push dword[%1]
-	call uiText_setText
-	add esp, 8
-%endmacro
 	
 gameLoop_updateInfoCanvas:
 	push ebp
