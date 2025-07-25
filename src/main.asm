@@ -16,7 +16,8 @@ section .text use32
 	extern window_create
 	extern window_destroy
 	
-	extern game_loop
+	extern gameLoop_main
+	extern menuLoop_main
 
 	
 	..start:
@@ -36,9 +37,19 @@ section .text use32
 			jmp start_end
 		window_creation_successful:
 		
+		;initialize the input system
+		push dword[pwindow]
+		call main_initializeInput
+		add esp, 4
+		
+		;menu loop
+		push dword[pwindow]
+		call menuLoop_main
+		add esp, 4
+		
 		;game loop
 		push dword[pwindow]
-		call game_loop
+		call gameLoop_main
 		add esp, 4
 		
 		;destroy window and opengl context
@@ -53,3 +64,43 @@ section .text use32
 		
 		push 0
 		call [ExitProcess]
+		
+		
+		
+extern input_init
+extern input_keyCallback
+extern input_mouseButtonCallback
+extern input_mouseMoveCallback
+extern input_mouseScrollCallback
+extern glfwSetKeyCallback
+extern glfwSetMouseButtonCallback
+extern glfwSetCursorPosCallback
+extern glfwSetScrollCallback
+		
+;void main_initializeInput(GLFWwindow* pwindow)
+main_initializeInput:
+	push ebp
+	mov ebp, esp
+	
+	call input_init
+	
+	
+	push input_keyCallback
+	push dword[ebp+8]
+	call [glfwSetKeyCallback]
+	
+	push input_mouseButtonCallback
+	push dword[ebp+8]
+	call [glfwSetMouseButtonCallback]
+	
+	push input_mouseMoveCallback
+	push dword[ebp+8]
+	call [glfwSetCursorPosCallback]
+	
+	push input_mouseScrollCallback
+	push dword[ebp+8]
+	call [glfwSetScrollCallback]
+	
+	mov esp, ebp
+	pop ebp
+	ret

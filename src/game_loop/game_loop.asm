@@ -158,7 +158,7 @@ section .text use32
 	dll_import kernel32.dll, GetTickCount
 	
 	
-	global game_loop		;void game_loop(GLFWwindow* pwindow)
+	global gameLoop_main		;void gameLoop_main(GLFWwindow* pwindow)
 	
 	extern glClear
 	extern glClearColor
@@ -357,7 +357,7 @@ onclicktest:
 	ret
 	
 	
-game_loop:
+gameLoop_main:
 	push ebp
 	mov ebp, esp
 	
@@ -377,14 +377,13 @@ game_loop:
 	add esp, 8
 	
 	
-	;init input and set callbacks
-	call gameLoop_initWindow
-	
 	;set window resize callback
 	push gameLoop_windowResizeCallback
 	push dword[current_window]
 	call [glfwSetFramebufferSizeCallback]
 	add esp, 8
+	
+	mov dword[should_resize], 69
 	
 	;hide cursor
 	push dword[GLFW_CURSOR_DISABLED]
@@ -487,7 +486,7 @@ game_loop:
 	add esp, 12
 	
 	;the actual game loop
-	gameLoop_loop_start:
+	gameLoop_main_loop_start:
 		
 		;calculate delta time
 		call [GetTickCount]
@@ -508,20 +507,20 @@ game_loop:
 		mov eax, dword[delta_time_milliseconds]
 		add dword[milliseconds_since_last_fps_update], eax
 		cmp dword[milliseconds_since_last_fps_update], 1000
-		jl gameLoop_loop_no_fps_update
+		jl gameLoop_main_loop_no_fps_update
 			mov eax, dword[frames_in_this_second]
 			mov dword[frames_in_last_second], eax
 			
 			mov dword[frames_in_this_second], 0
 			sub dword[milliseconds_since_last_fps_update], 1000
-		gameLoop_loop_no_fps_update:
+		gameLoop_main_loop_no_fps_update:
 		
 		;check if the window should be resized
 		cmp dword[should_resize], 0
-		je gameLoop_loop_no_resize
+		je gameLoop_main_loop_no_resize
 			mov dword[should_resize], 0
 			call gameLoop_handleWindowResize
-		gameLoop_loop_no_resize:
+		gameLoop_main_loop_no_resize:
 		
 		;process inputs for ui
 		call uiElement_processInput
@@ -538,10 +537,10 @@ game_loop:
 		movss xmm1, dword[TIME_OF_DAY]
 		addss xmm0, xmm1
 		ucomiss xmm0, dword[ONE]
-		jbe gameLoop_loop_time_no_overflow
+		jbe gameLoop_main_loop_time_no_overflow
 			movss xmm1, dword[ONE]
 			subss xmm0, xmm1
-		gameLoop_loop_time_no_overflow:
+		gameLoop_main_loop_time_no_overflow:
 		movss dword[TIME_OF_DAY], xmm0
 
 		;update player
@@ -730,12 +729,12 @@ game_loop:
 		call input_keyReleased
 		add esp, 4
 		test eax, eax
-		jz gameLoop_loop_no_escape
+		jz gameLoop_main_loop_no_escape
 			push 69
 			push dword[should_close]
 			call tsValue_set
 			add esp, 8
-		gameLoop_loop_no_escape:
+		gameLoop_main_loop_no_escape:
 		
 		;check if the window is closed or not
 		push 0
@@ -743,7 +742,7 @@ game_loop:
 		call tsValue_isEqual
 		add esp, 8
 		test eax, eax
-		jnz gameLoop_loop_start
+		jnz gameLoop_main_loop_start
 
 
 	
@@ -790,6 +789,12 @@ game_loop:
 	;deinit perlin noise
 	call perlin_deinit3d
 	call perlin_deinit2d
+	
+	;unset window resize callback
+	push 0
+	push dword[current_window]
+	call [glfwSetFramebufferSizeCallback]
+	add esp, 8
 	
 	;destroy should_close
 	push dword[should_close]
@@ -936,32 +941,6 @@ gameLoop_chunkLoader:
 	ret
 	
 
-gameLoop_initWindow:
-	push ebp
-	mov ebp, esp
-	
-	call input_init
-	
-	
-	push input_keyCallback
-	push dword[current_window]
-	call [glfwSetKeyCallback]
-	
-	push input_mouseButtonCallback
-	push dword[current_window]
-	call [glfwSetMouseButtonCallback]
-	
-	push input_mouseMoveCallback
-	push dword[current_window]
-	call [glfwSetCursorPosCallback]
-	
-	push input_mouseScrollCallback
-	push dword[current_window]
-	call [glfwSetScrollCallback]
-	
-	mov esp, ebp
-	pop ebp
-	ret
 	
 ;only sets the window size and the should_resize flag
 ;therefore only triggering handleWindowResize once per frame at most
