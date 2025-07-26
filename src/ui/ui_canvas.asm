@@ -60,10 +60,6 @@ uiCanvas_create:
 	
 ;void uiCanvas_destroy(UICanvas* canvas)
 uiCanvas_destroy:
-	push debug_text_destroy
-	call my_printf
-	add esp, 4
-	
 	ret
 	
 

@@ -292,10 +292,6 @@ uiImage_destroy:
 	push ebp
 	mov ebp, esp
 	
-	push debug_text_destroy
-	call my_printf
-	add esp, 4
-	
 	;delete the texture if necessary
 	mov eax, dword[ebp+8]
 	test dword[eax+128], 0xffffffff

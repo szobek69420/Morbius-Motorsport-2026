@@ -81,7 +81,7 @@ section .rodata use32
 	cursor_image_path db "./sprites/ui/ingame/cursor.bmp",0
 	
 section .bss use32
-	should_close resb 4					;tsValue*
+	return_value resb 4					;tsValue<int>*, default value is dword[GAME_STATE_INGAME], anything else breaks out of the game loop
 	physics_thread resb 4				;thread*
 	chunkLoader_thread resb 4			;thread*
 
@@ -157,8 +157,13 @@ section .text use32
 
 	dll_import kernel32.dll, GetTickCount
 	
+	;returns the next game state
+	;int gameLoop_main(GLFWwindow* pwindow)
+	global gameLoop_main
 	
-	global gameLoop_main		;void gameLoop_main(GLFWwindow* pwindow)
+	extern GAME_STATE_INGAME
+	extern GAME_STATE_MENU
+	extern GAME_STATE_DEINIT
 	
 	extern glClear
 	extern glClearColor
@@ -200,11 +205,8 @@ section .text use32
 	extern glfwSetMouseButtonCallback
 	extern glfwSetCursorPosCallback
 	extern glfwSetScrollCallback
-	extern glfwSetInputMode
 	extern glfwSetFramebufferSizeCallback
 	extern glfwGetTime
-	extern GLFW_CURSOR
-	extern GLFW_CURSOR_DISABLED
 	extern GLFW_KEY_ESCAPE
 	
 	extern input_init
@@ -215,6 +217,7 @@ section .text use32
 	extern input_mouseButtonCallback
 	extern input_mouseMoveCallback
 	extern input_mouseScrollCallback
+	extern input_hideCursor
 	
 	extern player_init
 	extern player_destroy
@@ -277,6 +280,7 @@ section .text use32
 	extern thread_resume
 	extern tsValue_create
 	extern tsValue_destroy
+	extern tsValue_get
 	extern tsValue_set
 	extern tsValue_isEqual
 	extern tsQueue_size
@@ -346,33 +350,25 @@ section .text use32
 	extern uiElement_processInput
 	extern uiElement_render
 	
-;void onclicktest(UIElement* element, const char* text)
-onclicktest:
-	push ebp
-	mov ebp, esp
-	push dword[ebp+12]
-	call my_printf
-	mov esp, ebp
-	pop ebp
-	ret
-	
 	
 gameLoop_main:
 	push ebp
 	mov ebp, esp
 	
+	sub esp, 4		;return value helper		4
+	
 	;save pwindow
 	mov eax, dword[ebp+8]
 	mov dword[current_window], eax
 	
-	;init should_close
+	;init return_value
 	push 4
 	call tsValue_create
-	mov dword[should_close], eax
+	mov dword[return_value], eax
 	add esp, 4
 	
-	push 0
-	push dword[should_close]
+	push dword[GAME_STATE_INGAME]
+	push dword[return_value]
 	call tsValue_set
 	add esp, 8
 	
@@ -386,11 +382,10 @@ gameLoop_main:
 	mov dword[should_resize], 69
 	
 	;hide cursor
-	push dword[GLFW_CURSOR_DISABLED]
-	push dword[GLFW_CURSOR]
+	push 69
 	push dword[current_window]
-	call [glfwSetInputMode]
-	add esp, 12
+	call input_hideCursor
+	add esp, 8
 	
 	;init perlin noises
 	push 100
@@ -730,15 +725,15 @@ gameLoop_main:
 		add esp, 4
 		test eax, eax
 		jz gameLoop_main_loop_no_escape
-			push 69
-			push dword[should_close]
+			push dword[GAME_STATE_MENU]
+			push dword[return_value]
 			call tsValue_set
 			add esp, 8
 		gameLoop_main_loop_no_escape:
 		
 		;check if the window is closed or not
-		push 0
-		push dword[should_close]
+		push dword[GAME_STATE_INGAME]
+		push dword[return_value]
 		call tsValue_isEqual
 		add esp, 8
 		test eax, eax
@@ -796,8 +791,21 @@ gameLoop_main:
 	call [glfwSetFramebufferSizeCallback]
 	add esp, 8
 	
-	;destroy should_close
-	push dword[should_close]
+	;let go of cursor
+	push 0
+	push dword[current_window]
+	call input_hideCursor
+	add esp, 8
+	
+	;save return value
+	lea eax, [ebp-4]
+	push eax
+	push dword[return_value]
+	call tsValue_get
+	add esp, 8
+	
+	;destroy ts values
+	push dword[return_value]
 	call tsValue_destroy
 	add esp, 4
 	
@@ -808,6 +816,9 @@ gameLoop_main:
 	push message_deinit_successful
 	call my_printf
 	add esp, 4
+	
+	;set return value
+	mov eax, dword[ebp-4]
 	
 	mov esp, ebp
 	pop ebp
@@ -873,8 +884,8 @@ gameLoop_physics:
 		mov dword[delta_time_milliseconds_physics], eax
 		
 		;check if an exit is necessary
-		push 0
-		push dword[should_close]
+		push dword[GAME_STATE_INGAME]
+		push dword[return_value]
 		call tsValue_isEqual
 		add esp, 8
 		test eax, eax
@@ -929,8 +940,8 @@ gameLoop_chunkLoader:
 		gameLoop_chunk_loader_loop_no_load:
 		
 		;check if an exit is necessary
-		push 0
-		push dword[should_close]
+		push dword[GAME_STATE_INGAME]
+		push dword[return_value]
 		call tsValue_isEqual
 		add esp, 8
 		test eax, eax

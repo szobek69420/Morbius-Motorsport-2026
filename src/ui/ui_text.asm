@@ -239,9 +239,6 @@ uiText_destroy:
 	push dword[eax+128]
 	call my_free
 	
-	push debug_text_destroy
-	call my_printf
-	
 	mov esp, ebp
 	pop ebp
 	ret

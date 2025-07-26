@@ -7,7 +7,7 @@ section .data use32
 
 	window dd 0					;GLFWwindow*
 	should_resize dd 0			;tsValue<int>*
-	should_close dd 0			;tsValue<int>*
+	return_value dd 0			;tsValue<int>*	;the default value is dword[GAME_STATE_MENU], some other state in order to break out of the loop
 	
 	;ui
 	CANVAS_MENU dd 0
@@ -19,7 +19,9 @@ section .bss use32
 
 section .text use32
 
-	global menuLoop_main		;void menuLoop_main(GLFWwindow* pwindow)
+	;returns the next game state
+	;int menuLoop_main(GLFWwindow* pwindow)
+	global menuLoop_main
 	
 	
 	extern my_printf
@@ -72,12 +74,18 @@ section .text use32
 	extern UI_IMAGE
 	extern UI_CENTER
 	
+	extern GAME_STATE_MENU
+	extern GAME_STATE_INGAME
+	extern GAME_STATE_DEINIT
+	
 menuLoop_main:
 	push ebp
 	push esi
 	push edi
 	push ebx
 	mov ebp, esp
+	
+	sub esp, 4		;return value helper		4
 	
 	;save window
 	mov eax, dword[ebp+20]
@@ -94,14 +102,14 @@ menuLoop_main:
 	call tsValue_create
 	mov dword[should_resize], eax
 	call tsValue_create
-	mov dword[should_close], eax
+	mov dword[return_value], eax
 	add esp, 4
 	
 	push 69
 	push dword[should_resize]
 	call tsValue_set
-	push 0
-	push dword[should_close]
+	push dword[GAME_STATE_MENU]
+	push dword[return_value]
 	call tsValue_set
 	add esp, 16
 	
@@ -173,15 +181,15 @@ menuLoop_main:
 		add esp, 4
 		test eax, eax
 		jz menuLoop_main_loop_no_escape
-			push 69
-			push dword[should_close]
+			push dword[GAME_STATE_DEINIT]
+			push dword[return_value]
 			call tsValue_set
 			add esp, 8
 		menuLoop_main_loop_no_escape:
 		
 		;check if the window is closed or not
-		push 0
-		push dword[should_close]
+		push dword[GAME_STATE_MENU]
+		push dword[return_value]
 		call tsValue_isEqual
 		add esp, 8
 		test eax, eax
@@ -193,15 +201,23 @@ menuLoop_main:
 	call [glfwSetFramebufferSizeCallback]
 	add esp, 8
 	
+	;save the return value
+	lea eax, [ebp-4]
+	push eax
+	push dword[return_value]
+	call tsValue_get
+	add esp, 8
+	
+	
 	;destroy thread safe values
 	push dword[should_resize]
 	call tsValue_destroy
 	mov dword[should_resize], 0
 	add esp, 4
 	
-	push dword[should_close]
+	push dword[return_value]
 	call tsValue_destroy
-	mov dword[should_close], 0
+	mov dword[return_value], 0
 	add esp, 4
 	
 	;deinit subsystems
@@ -209,6 +225,9 @@ menuLoop_main:
 	call textureHandler_deinit
 	call textRenderer_deinit
 	call renderable_deinit
+	
+	;set return value
+	mov eax, dword[ebp-4]
 	
 	mov esp, ebp
 	pop ebx
@@ -286,7 +305,7 @@ menuLoop_initCanvas:
 	call uiElement_setAnchor
 	call uiElement_setPivot
 	
-	push dword[should_close]
+	push dword[return_value]
 	push menuLoop_startButtonCallback
 	push dword[IMAGE_START_BUTTON]
 	call uiElement_setOnClick
@@ -301,12 +320,12 @@ menuLoop_initCanvas:
 	ret
 	
 
-;void menuLoop_startButtonCallback(UIElement* element, tsValue<int>* shouldClose)
+;void menuLoop_startButtonCallback(UIElement* element, tsValue<int>* returnValue)
 menuLoop_startButtonCallback:
 	push ebp
 	mov ebp, esp
 	
-	push 69
+	push dword[GAME_STATE_INGAME]
 	push dword[ebp+12]
 	call tsValue_set
 	

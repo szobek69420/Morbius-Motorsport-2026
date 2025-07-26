@@ -90,6 +90,7 @@ section .text use32
 	global input_mouseScrollDelta		;void input_mouseScrollDelta(int* x, int* y)
 	
 	global input_setMousePosition		;void input_setMousePosition(GLFWWindow* window, int x, int y)
+	global input_hideCursor				;void input_hideCursor(GLFWwindow* window, int hide)
 	
 	extern my_memset
 	extern my_memcpy
@@ -100,8 +101,12 @@ section .text use32
 	
 	extern GLFW_KEY_LAST
 	extern GLFW_MOUSE_BUTTON_LAST
+	extern GLFW_CURSOR
+	extern GLFW_CURSOR_DISABLED
+	extern GLFW_CURSOR_NORMAL
 	
 	extern glfwSetCursorPos
+	extern glfwSetInputMode
 	
 input_init:
 	push ebp
@@ -533,6 +538,28 @@ input_setMousePosition:
 	mov esp, ebp
 	pop ebp
 	ret
+	
+	
+input_hideCursor:
+	push ebp
+	mov ebp, esp
+	
+	push dword[GLFW_CURSOR_NORMAL]
+	cmp dword[ebp+12], 0
+	je input_hideCursor_show
+		mov eax, dword[GLFW_CURSOR_DISABLED]
+		mov dword[esp], eax
+	input_hideCursor_show:
+	push dword[GLFW_CURSOR]
+	push dword[ebp+8]
+	call [glfwSetInputMode]
+	add esp, 12
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+;internal functions ----------------------------------------------	
 	
 input_processEvent:
 	push ebp

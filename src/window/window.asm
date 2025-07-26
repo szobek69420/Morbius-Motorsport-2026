@@ -47,7 +47,7 @@ window_create:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 4		;created GLFWwindow*
+	sub esp, 4		;created GLFWwindow*	4
 	
 	call [glfwInit]
 	
