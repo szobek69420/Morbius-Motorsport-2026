@@ -11,7 +11,7 @@
 ;	padding of 12 bytes
 ;	tsQueue<ChangedBlockInfo> pendingChangedBlocks;				112
 ;	TextureArrayInfo* blockTextures;							120
-;	vector<ivec3> registeredChunks;								124 //chunks that have been loaded at least once
+;	vector<ivec3> veteranChunks;								124 //chunks that have been loaded at least once
 ;	vector<struct{ivec3;Renderable*}> fanthomChunks;			140 //fanthom chunks are remaining renderables of no longer existing chunks, they are kept during a reload to prevent flickering
 ;	Mutex* fanthomChunkMutex;									156
 ;}			160 bytes overall
@@ -153,6 +153,7 @@ section .text use32
 	extern renderable_renderCustom
 	extern renderable_setAlbedo
 	extern renderable_createShader
+	extern renderable_destroyShader
 	extern renderable_useShader
 	extern renderable_setUniform
 	extern renderable_setPrimitive
@@ -164,6 +165,7 @@ section .text use32
 	
 	extern textureHandler_bindArray
 	extern block_importTextures
+	extern block_deleteTextures
 	
 	extern GL_POINTS
 	extern glGetUniformLocation
@@ -316,6 +318,59 @@ chunkManager4d_destroy:
 		add esp, 4
 		cmp eax, 0
 		jne chunkManager4d_destroy_process_updates_second_loop_start
+		
+		
+	;destroy shader
+	mov eax, dword[ebp+20]
+	push dword[eax+28]
+	call renderable_destroyShader
+	
+	;destroy block textures
+	mov eax, dword[ebp+20]
+	push dword[eax+120]
+	call block_deleteTextures
+	
+	;destroy mutexes
+	mov eax, dword[ebp+20]
+	push dword[eax+16]
+	call mutex_destroy
+	
+	mov eax, dword[ebp+20]
+	push dword[eax+156]
+	call mutex_destroy
+	
+	;destroy collections
+	mov eax, dword[ebp+20]
+	push eax
+	call vector_destroy
+	
+	mov eax, dword[ebp+20]
+	lea eax, [eax+20]
+	push eax
+	call tsQueue_destroy
+	
+	mov eax, dword[ebp+20]
+	push dword[eax+96]
+	call hashMap_destroy
+	
+	mov eax, dword[ebp+20]
+	lea eax, [eax+112]
+	push eax
+	call tsQueue_destroy
+	
+	mov eax, dword[ebp+20]
+	lea eax, [eax+124]
+	push eax
+	call vector_destroy
+	
+	mov eax, dword[ebp+20]
+	lea eax, [eax+140]
+	push eax
+	call vector_destroy
+	
+	;deallocate space
+	push dword[ebp+20]
+	call my_free
 	
 	mov esp, ebp
 	pop ebx
