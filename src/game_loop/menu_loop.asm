@@ -48,6 +48,7 @@ section .text use32
 	extern textureHandler_init
 	extern textureHandler_deinit
 	
+	extern window_enableVsync
 	extern WINDOW_SIZE_X
 	extern WINDOW_SIZE_Y
 	
@@ -137,6 +138,12 @@ menuLoop_main:
 	call [glfwSetFramebufferSizeCallback]
 	add esp, 8
 	
+	;enable vsync
+	push 69
+	push dword[window]
+	call window_enableVsync
+	add esp, 8
+	
 	;create canvas
 	call menuLoop_initCanvas
 	
@@ -217,6 +224,12 @@ menuLoop_main:
 		add esp, 8
 		test eax, eax
 		jnz menuLoop_main_loop_start
+	
+	;disable vsync
+	push 0
+	push dword[window]
+	call window_enableVsync
+	add esp, 8
 	
 	;unset window resize callback
 	push 0

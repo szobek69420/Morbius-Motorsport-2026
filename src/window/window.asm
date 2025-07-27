@@ -20,6 +20,8 @@ section .text use32
 	global window_create			;GLFWwindow* window_create(const char* name)
 	global window_destroy			;void window_destroy(GLFWwindow* pwindow)
 	
+	global window_enableVsync		;void window_enableVsync(GLFWwindow* pwindow, int enable)
+	
 	extern glfwInit
 	extern glfwTerminate
 	extern glfwWindowHint
@@ -98,10 +100,11 @@ window_create:
 	call [glfwMakeContextCurrent]
 	add esp, 4
 	
-	;enable vsync
+	;disable vsync
 	push 0
-	call [glfwSwapInterval]
-	add esp, 4
+	push dword[ebp-4]
+	call window_enableVsync
+	add esp, 8
 	
 	;load the opengl functions
 	push dword[glfwGetProcAddress]
@@ -146,6 +149,28 @@ window_destroy:
 	
 	call [glfwTerminate]
 	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+window_enableVsync:
+	push ebp
+	mov ebp, esp
+	
+	test dword[ebp+12], 0xffffffff
+	jz window_enableVsync_no_vsync
+		;vsync
+		push 1
+		call [glfwSwapInterval]
+		jmp window_enableVsync_end
+		
+	window_enableVsync_no_vsync
+		;kein vsync
+		push 0
+		call [glfwSwapInterval]
+		
+	window_enableVsync_end:
 	mov esp, ebp
 	pop ebp
 	ret
