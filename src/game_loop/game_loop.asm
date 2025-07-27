@@ -307,15 +307,10 @@ section .text use32
 	extern postProcessing_drawToScreen
 	extern postProcessing_ssao
 	extern postProcessing_deferredLighting
-	
-	extern chunkManager_create
-	extern chunkManager_load
-	extern chunkManager_unload
-	extern chunkManager_processUpdate
-	extern chunkManager_processGraphicsUpdate
-	extern chunkManager_render
+
 	
 	extern chunkManager4d_create
+	extern chunkManager4d_destroy
 	extern chunkManager4d_load
 	extern chunkManager4d_unload
 	extern chunkManager4d_processUpdate
@@ -751,6 +746,11 @@ gameLoop_main:
 	push dword[chunkLoader_thread]
 	call thread_join
 	add esp, 8
+	
+	;destroy chunk manager
+	push dword[chunk_manager_4d]
+	call chunkManager4d_destroy
+	mov dword[chunk_manager_4d], 0
 	
 	;deinit sun
 	call sun_deinit

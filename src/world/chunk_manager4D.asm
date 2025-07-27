@@ -77,17 +77,14 @@ section .text use32
 
 	;should be called from the graphics thread
 	global chunkManager4d_create					;ChunkManager4D* chunkManager4d_create()
+	global chunkManager4d_destroy					;void chunkManager4d_destroy(ChunkManager4D*)
 	
 	global chunkManager4d_load					;void chunkManager4d_load(ChunkManager4D* manager, vec3* playerPos3D, int renderDistance)
 	global chunkManager4d_unload					;void chunkManager4d_unload(ChunkManager4D* manager, vec3* playerPos3D, int renderDistance)
 	
-	;immediately unloads all chunks
 	;should be called from the graphics thread
-	global chunkManager4d_unloadAll				;void chunkManager4d_unloadAll(ChunkManager4D* manager)
-	
-	global chunkManager4d_processUpdate			;void chunkManager4d_processUpdate(ChunkManager4D* manager)
-	;should be called from the graphics thread
-	global chunkManager4d_processGraphicsUpdate	;void chunkManager4d_processGraphicsUpdate(ChunkManager4D* manager)
+	;returns 0 if no graphics update has been processed
+	global chunkManager4d_processGraphicsUpdate	;int chunkManager4d_processGraphicsUpdate(ChunkManager4D* manager)
 	
 	global chunkManager4d_render					;void chunkManager4d_render(ChunkManager4D* manager, mat4* view, mat4* projection)
 	
@@ -273,6 +270,57 @@ chunkManager4d_create:
 	mov eax, dword[ebp-4]
 	
 	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+chunkManager4d_destroy:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	;unload all chunks -------------------------------
+	
+	;process the already pending graphics updates
+	chunkManager4d_destroy_process_updates_first_loop_start:
+		push dword[ebp+20]
+		call chunkManager4d_processGraphicsUpdate
+		add esp, 4
+		cmp eax, 0
+		jne chunkManager4d_destroy_process_updates_first_loop_start
+		
+	;unload the chunks
+	chunkManager4d_unload_chunks_loop_start:
+		mov eax, dword[ebp+20]
+		cmp dword[eax], 0
+		jle chunkManager4d_unload_chunks_loop_end		;no more chunks
+		
+		mov eax, dword[eax+12]
+		push 69
+		push 69
+		push dword[eax]
+		push dword[ebp+20]
+		call chunkManager4d_unloadChunk_internal
+		add esp, 16
+		
+		jmp chunkManager4d_unload_chunks_loop_start
+		
+	chunkManager4d_unload_chunks_loop_end:
+	
+	;process the newly generated pending graphics updates
+	chunkManager4d_destroy_process_updates_second_loop_start:
+		push dword[ebp+20]
+		call chunkManager4d_processGraphicsUpdate
+		add esp, 4
+		cmp eax, 0
+		jne chunkManager4d_destroy_process_updates_second_loop_start
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
 	pop ebp
 	ret
 	
@@ -907,6 +955,9 @@ chunkManager4d_processGraphicsUpdate:
 	sub esp, 4			;graphics update				4
 	sub esp, 16			;imitated vertex vector			20
 	sub esp, 4			;created renderable				24
+	sub esp, 4			;return value					28
+	
+	mov dword[ebp-28], 0
 	
 	;check if the pending updates queue is empty
 	mov eax, dword[ebp+8]
@@ -998,7 +1049,11 @@ chunkManager4d_processGraphicsUpdate:
 	push dword[ebp-4]
 	call my_free
 	
+	mov dword[ebp-28], 69
+	
 	chunkManager4d_processGraphicsUpdate_end:
+	mov eax, dword[ebp-28]		;set return value
+	
 	mov esp, ebp
 	pop ebp
 	ret
