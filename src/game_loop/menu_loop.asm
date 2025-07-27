@@ -3,6 +3,10 @@
 section .rodata use32
 	test_text db "sir, they ate the second respirator",10,0
 
+	text_welcome db "zaoshang hao",0
+	
+	background_path db "sprites/ui/menu/background.bmp",0
+
 section .data use32
 
 	window dd 0					;GLFWwindow*
@@ -11,7 +15,9 @@ section .data use32
 	
 	;ui
 	CANVAS_MENU dd 0
+	IMAGE_BACKGROUND dd 0
 	IMAGE_START_BUTTON dd 0
+	TEXT_WELCOME dd 0
 	
 section .bss use32
 	
@@ -57,6 +63,7 @@ section .text use32
 	extern glfwSetFramebufferSizeCallback
 	extern glfwSwapBuffers
 	extern glfwPollEvents
+	extern glfwWindowShouldClose
 	extern GLFW_KEY_ESCAPE
 	
 	extern uiElement_init
@@ -65,14 +72,24 @@ section .text use32
 	extern uiElement_render
 	extern uiElement_createProjection
 	extern uiElement_create
+	extern uiElement_setPosition
+	extern uiElement_setSize
 	extern uiElement_setParent
 	extern uiElement_setAnchor
 	extern uiElement_setPivot
 	extern uiElement_setOnClick
 	extern uiElement_setStatus
+	extern uiImage_setTexture
+	extern uiText_setText
+	extern uiText_setTextAlignment
+	extern uiText_setFontSize
+	extern uiText_setColour
 	extern UI_CANVAS
 	extern UI_IMAGE
+	extern UI_TEXT
 	extern UI_CENTER
+	extern UI_STRETCH
+	extern UI_TEXT_ALIGN_CENTER
 	
 	extern GAME_STATE_MENU
 	extern GAME_STATE_INGAME
@@ -86,6 +103,7 @@ menuLoop_main:
 	mov ebp, esp
 	
 	sub esp, 4		;return value helper		4
+	sub esp, 4		;loop exit helper			8
 	
 	;save window
 	mov eax, dword[ebp+20]
@@ -178,8 +196,13 @@ menuLoop_main:
 		;check if the user is trying to escape
 		push dword[GLFW_KEY_ESCAPE]
 		call input_keyReleased
-		add esp, 4
-		test eax, eax
+		mov dword[ebp-8], eax
+		push dword[window]
+		call [glfwWindowShouldClose]
+		or dword[ebp-8], eax
+		add esp, 8
+		
+		test dword[ebp-8], 0xffffffff
 		jz menuLoop_main_loop_no_escape
 			push dword[GAME_STATE_DEINIT]
 			push dword[return_value]
@@ -289,6 +312,30 @@ menuLoop_initCanvas:
 	push 69
 	push dword[CANVAS_MENU]
 	call uiElement_setStatus
+	
+	;create background image
+	push dword[UI_IMAGE]
+	call uiElement_create
+	mov dword[IMAGE_BACKGROUND], eax
+	
+	push dword[CANVAS_MENU]
+	push dword[IMAGE_BACKGROUND]
+	call uiElement_setParent
+	
+	push word[UI_STRETCH]
+	push word[UI_STRETCH]
+	push dword[IMAGE_BACKGROUND]
+	call uiElement_setAnchor
+	
+	push 0
+	push 0
+	push dword[IMAGE_BACKGROUND]
+	call uiElement_setPosition
+	call uiElement_setSize
+	
+	push background_path
+	push dword[IMAGE_BACKGROUND]
+	call uiImage_setTexture
 
 	;create image
 	push dword[UI_IMAGE]
@@ -314,6 +361,42 @@ menuLoop_initCanvas:
 	push 69
 	push dword[IMAGE_START_BUTTON]
 	call uiElement_setStatus
+	
+	;create text
+	push dword[UI_TEXT]
+	call uiElement_create
+	mov dword[TEXT_WELCOME], eax
+	
+	push dword[CANVAS_MENU]
+	push dword[TEXT_WELCOME]
+	call uiElement_setParent
+	
+	push word[UI_CENTER]
+	push word[UI_CENTER]
+	push dword[TEXT_WELCOME]
+	call uiElement_setAnchor
+	call uiElement_setPivot
+	
+	push 100
+	push 0
+	push dword[TEXT_WELCOME]
+	call uiElement_setPosition
+	
+	push text_welcome
+	push dword[TEXT_WELCOME]
+	call uiText_setText
+	
+	push 20
+	push 30
+	push dword[TEXT_WELCOME]
+	call uiText_setFontSize
+	
+	push 0x3f800000
+	push 0x3f800000
+	push 0x3f800000
+	push 0
+	push dword[TEXT_WELCOME]
+	call uiText_setColour
 	
 	mov esp, ebp
 	pop ebp

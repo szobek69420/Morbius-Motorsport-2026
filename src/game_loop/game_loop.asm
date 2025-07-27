@@ -206,6 +206,7 @@ section .text use32
 	extern glfwSetCursorPosCallback
 	extern glfwSetScrollCallback
 	extern glfwSetFramebufferSizeCallback
+	extern glfwWindowShouldClose
 	extern glfwGetTime
 	extern GLFW_KEY_ESCAPE
 	
@@ -725,6 +726,17 @@ gameLoop_main:
 			call tsValue_set
 			add esp, 8
 		gameLoop_main_loop_no_escape:
+		
+		push dword[current_window]
+		call [glfwWindowShouldClose]
+		add esp, 4
+		test eax, eax
+		jz gameLoop_main_loop_no_escape2
+			push dword[GAME_STATE_DEINIT]
+			push dword[return_value]
+			call tsValue_set
+			add esp, 8
+		gameLoop_main_loop_no_escape2:
 		
 		;check if the window is closed or not
 		push dword[GAME_STATE_INGAME]

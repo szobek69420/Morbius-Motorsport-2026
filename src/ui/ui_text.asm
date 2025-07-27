@@ -303,7 +303,7 @@ uiText_render:
 		
 	uiText_render_hpos_center:
 		;center
-		mov ecx, dword[eax+8]
+		mov ecx, dword[eax+52]
 		shr ecx, 1
 		add ecx, dword[eax+44]
 		mov dword[ebp-4], ecx
@@ -311,7 +311,7 @@ uiText_render:
 	
 	uiText_render_hpos_right:
 		;right
-		mov ecx, dword[eax+8]
+		mov ecx, dword[eax+52]
 		add ecx, dword[eax+44]
 		mov dword[ebp-4], ecx
 		jmp uiText_render_hpos_done
@@ -332,7 +332,7 @@ uiText_render:
 		
 	uiText_render_vpos_center:
 		;center
-		mov ecx, dword[eax+12]
+		mov ecx, dword[eax+56]
 		shr ecx, 1
 		add ecx, dword[eax+48]
 		mov dword[ebp-8], ecx
@@ -340,7 +340,7 @@ uiText_render:
 	
 	uiText_render_vpos_top:
 		;top
-		mov ecx, dword[eax+12]
+		mov ecx, dword[eax+56]
 		add ecx, dword[eax+48]
 		mov dword[ebp-8], ecx
 		jmp uiText_render_vpos_done

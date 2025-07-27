@@ -10,8 +10,7 @@
 ;	UIElement* parent;									40
 ;	//internal
 ;	int32 currentScreenPosX, currentScreenPosY;			44	//the position of the bottom left corner of the element in screen coordinates, where the bottom left corner of the screen is (0;0)
-;
-;	padding of 8 bytes
+;	int32 currentScreenWidth, currentScreenHeight;		52
 ;	int32 isVisible;									60	//kaskades to children
 ;	int32 isInteractable;								64	//cascades to children
 ;	void (*render)(UIElement*, const mat4* projection);	68
@@ -23,22 +22,26 @@
 ;	arbitrary long additional data
 ;}	//at least 128 bytes
 
+;if the anchor is set to UI_STRETCH, the xPos/yPos is considered the distance from the left/bottom side of the parent and the width/height is considered the distance from the right/top side of the parent
+;the pivot is ignored in this case
 
 section .rodata use32
 
 	CLICK_THRESHOLD equ 200				;ms
 
-	UI_LEFT		dw	0b001
-	UI_BOTTOM	dw	0b001
-	UI_CENTER	dw	0b010
-	UI_RIGHT	dw	0b100
-	UI_TOP		dw	0b100
+	UI_LEFT		dw	0b0001
+	UI_BOTTOM	dw	0b0001
+	UI_CENTER	dw	0b0010
+	UI_RIGHT	dw	0b0100
+	UI_TOP		dw	0b0100
+	UI_STRETCH	dw 	0b1000
 
 	global UI_LEFT
 	global UI_BOTTOM
 	global UI_CENTER
 	global UI_RIGHT
 	global UI_TOP
+	global UI_STRETCH
 	
 	;types should be sequential
 	UI_FIRST:
@@ -717,11 +720,19 @@ uiElement_calculateCurrentPosition:
 	
 	sub esp, 4			;x position		4
 	sub esp, 4			;y position		8
+	sub esp, 4			;width			12
+	sub esp, 4			;height			16
+	
+	;set current screen width and height
+	mov eax, dword[ebp+8]
+	
+	mov ecx, dword[eax+12]
+	mov dword[eax+56], ecx
 	
 	;check if there is a parent
 	test dword[ebp+12], 0xffffffff
 	jnz uiElement_calculateCurrentPosition_parent
-		;if no parent, current position is position
+		;if no parent, current position is position and current size is size
 		mov eax, dword[ebp+8]
 		
 		mov edx, dword[eax]
@@ -729,9 +740,20 @@ uiElement_calculateCurrentPosition:
 		mov edx, dword[eax+4]
 		mov dword[eax+48], edx
 		
+		mov edx, dword[eax+8]
+		mov dword[eax+52], edx
+		mov edx, dword[eax+12]
+		mov dword[eax+56], edx
+		
 		jmp uiElement_calculateCurrentPosition_calculate_children
 	
 	uiElement_calculateCurrentPosition_parent:
+	
+	;calculate x position	-----------------------------------------------
+	;set x width
+	mov eax, dword[ebp+8]
+	mov ecx, dword[eax+8]
+	mov dword[ebp-12], ecx
 	
 	;calculate x position based on the anchor
 	mov eax, dword[ebp+8]
@@ -743,6 +765,10 @@ uiElement_calculateCurrentPosition:
 	mov cx, word[UI_CENTER]
 	test word[eax+16], cx
 	jnz uiElement_calculateCurrentPosition_anchor_x_center
+	
+	mov cx, word[UI_STRETCH]
+	test word[eax+16], cx
+	jnz uiElement_calculateCurrentPosition_anchor_x_stretch
 		;left
 		mov edx, dword[eax]
 		mov dword[ebp-4], edx
@@ -751,7 +777,7 @@ uiElement_calculateCurrentPosition:
 	uiElement_calculateCurrentPosition_anchor_x_center:
 		;center
 		mov ecx, dword[ebp+12]		;parent in ecx
-		mov edx, dword[ecx+8]
+		mov edx, dword[ecx+52]
 		shr edx, 1
 		add edx, dword[eax]
 		mov dword[ebp-4], edx
@@ -760,47 +786,27 @@ uiElement_calculateCurrentPosition:
 	uiElement_calculateCurrentPosition_anchor_x_right:
 		;right
 		mov ecx, dword[ebp+12]		;parent in ecx
-		mov edx, dword[ecx+8]
+		mov edx, dword[ecx+52]
 		sub edx, dword[eax]
 		mov dword[ebp-4], edx
 		jmp uiElement_calculateCurrentPosition_anchor_x_done
+		
+	uiElement_calculateCurrentPosition_anchor_x_stretch:
+		;stretch
+		mov ecx, dword[ebp+12]		;parent in ecx
+		mov edx, dword[ecx+44]
+		add edx, dword[eax]
+		mov dword[ebp-4], edx
+		
+		mov edx, dword[ecx+44]
+		add edx, dword[ecx+52]
+		sub edx, dword[eax+8]		;in stretch mode width is the distance from the right side of the parent
+		sub edx, dword[ebp-4]
+		mov dword[ebp-12], edx		;new width as well
+		jmp uiElement_calculateCurrentPosition_x_done		;pivot is irrelevant
 	
 	uiElement_calculateCurrentPosition_anchor_x_done:
 	
-	
-	;calculate y position based on the anchor
-	mov eax, dword[ebp+8]
-	
-	mov cx, word[UI_TOP]
-	test word[eax+18], cx
-	jnz uiElement_calculateCurrentPosition_anchor_y_top
-	
-	mov cx, word[UI_CENTER]
-	test word[eax+18], cx
-	jnz uiElement_calculateCurrentPosition_anchor_y_center
-		;left
-		mov edx, dword[eax+4]
-		mov dword[ebp-8], edx
-		jmp uiElement_calculateCurrentPosition_anchor_y_done
-	
-	uiElement_calculateCurrentPosition_anchor_y_center:
-		;center
-		mov ecx, dword[ebp+12]		;parent in ecx
-		mov edx, dword[ecx+12]
-		shr edx, 1
-		add edx, dword[eax+4]
-		mov dword[ebp-8], edx
-		jmp uiElement_calculateCurrentPosition_anchor_y_done
-	
-	uiElement_calculateCurrentPosition_anchor_y_top:
-		;top
-		mov ecx, dword[ebp+12]		;parent in ecx
-		mov edx, dword[ecx+12]
-		sub edx, dword[eax+4]
-		mov dword[ebp-8], edx
-		jmp uiElement_calculateCurrentPosition_anchor_y_done
-	
-	uiElement_calculateCurrentPosition_anchor_y_done:
 	
 	;adjust x position based on the pivot
 	mov eax, dword[ebp+8]
@@ -831,6 +837,66 @@ uiElement_calculateCurrentPosition:
 	
 	uiElement_calculateCurrentPosition_pivot_x_done:
 	
+	uiElement_calculateCurrentPosition_x_done:
+	
+	;calculate x position	-----------------------------------------------
+	;set height
+	mov eax, dword[ebp+8]
+	mov ecx, dword[eax+12]
+	mov dword[ebp-16], ecx
+	
+	;calculate y position based on the anchor
+	mov eax, dword[ebp+8]
+	
+	mov cx, word[UI_TOP]
+	test word[eax+18], cx
+	jnz uiElement_calculateCurrentPosition_anchor_y_top
+	
+	mov cx, word[UI_CENTER]
+	test word[eax+18], cx
+	jnz uiElement_calculateCurrentPosition_anchor_y_center
+	
+	mov cx, word[UI_STRETCH]
+	test word[eax+18], cx
+	jnz uiElement_calculateCurrentPosition_anchor_y_stretch
+	
+		;left
+		mov edx, dword[eax+4]
+		mov dword[ebp-8], edx
+		jmp uiElement_calculateCurrentPosition_anchor_y_done
+	
+	uiElement_calculateCurrentPosition_anchor_y_center:
+		;center
+		mov ecx, dword[ebp+12]		;parent in ecx
+		mov edx, dword[ecx+56]
+		shr edx, 1
+		add edx, dword[eax+4]
+		mov dword[ebp-8], edx
+		jmp uiElement_calculateCurrentPosition_anchor_y_done
+	
+	uiElement_calculateCurrentPosition_anchor_y_top:
+		;top
+		mov ecx, dword[ebp+12]		;parent in ecx
+		mov edx, dword[ecx+56]
+		sub edx, dword[eax+4]
+		mov dword[ebp-8], edx
+		jmp uiElement_calculateCurrentPosition_anchor_y_done
+		
+	uiElement_calculateCurrentPosition_anchor_y_stretch:
+		;stretch
+		mov ecx, dword[ebp+12]		;parent in ecx
+		mov edx, dword[ecx+48]
+		add edx, dword[eax+4]
+		mov dword[ebp-8], edx
+		
+		mov edx, dword[ecx+48]
+		add edx, dword[ecx+56]
+		sub edx, dword[eax+12]		;in stretch mode height is the distance from the top side of the parent
+		sub edx, dword[ebp-8]
+		mov dword[ebp-16], edx		;new height as well
+		jmp uiElement_calculateCurrentPosition_y_done		;pivot is irrelevant
+	
+	uiElement_calculateCurrentPosition_anchor_y_done:
 	
 	;adjust y position based on the pivot
 	mov eax, dword[ebp+8]
@@ -861,6 +927,7 @@ uiElement_calculateCurrentPosition:
 	
 	uiElement_calculateCurrentPosition_pivot_y_done:
 	
+	uiElement_calculateCurrentPosition_y_done:
 	
 	;add the current position of the parent to the current position
 	mov eax, dword[ebp+12]
@@ -877,6 +944,10 @@ uiElement_calculateCurrentPosition:
 	mov dword[eax+44], ecx
 	mov ecx, dword[ebp-8]
 	mov dword[eax+48], ecx
+	mov ecx, dword[ebp-12]
+	mov dword[eax+52], ecx
+	mov ecx, dword[ebp-16]
+	mov dword[eax+56], ecx
 	
 	;calculate the results for the children as well
 	uiElement_calculateCurrentPosition_calculate_children:

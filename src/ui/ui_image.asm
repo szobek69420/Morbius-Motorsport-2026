@@ -329,9 +329,9 @@ uiImage_render:
 	
 	mov eax, dword[ebp+8]
 	sub esp, 8
-	fild dword[eax+12]
+	fild dword[eax+56]
 	fstp dword[esp+4]
-	fild dword[eax+8]
+	fild dword[eax+52]
 	fstp dword[esp]
 	push dword[RENDERABLE_UNIFORM_VEC2]
 	push uniform_name_scale
