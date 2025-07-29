@@ -325,6 +325,7 @@ section .text use32
 	dll_import glfw3.dll, glfwSetKeyCallback
 	dll_import glfw3.dll, glfwSetMouseButtonCallback
 	dll_import glfw3.dll, glfwSetScrollCallback
+	dll_import glfw3.dll, glfwSetWindowIcon
 	dll_import glfw3.dll, glfwSetWindowShouldClose
 	dll_import glfw3.dll, glfwSetWindowSizeCallback
 	dll_import glfw3.dll, glfwSwapBuffers

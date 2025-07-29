@@ -1,6 +1,7 @@
 [BITS 32]
 section .rodata use32
 	window_name db "Morbius Motorsport 2026",0
+	window_icon_path db "./sprites/window_icon.bmp",0
 	test_text db "bingus my beloved",10,0
 	
 	message_current_game_state_init db "main: current game state: init",10,0
@@ -22,6 +23,7 @@ section .text use32
 	
 	extern window_create
 	extern window_destroy
+	extern window_setIcon
 	
 	extern gameLoop_main
 	extern menuLoop_main
@@ -159,7 +161,13 @@ main_init:
 		mov eax, dword[GAME_STATE_EXIT]
 		mov dword[ebp-4], eax
 	main_init_windowCreationSuccessful:
-		
+	
+	;set window icon
+	push window_icon_path
+	push dword[pwindow]
+	call window_setIcon
+	add esp, 8
+	
 	;initialize the input system
 	push dword[pwindow]
 	call main_initializeInput
