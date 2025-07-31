@@ -292,15 +292,11 @@ uiImage_destroy:
 	push ebp
 	mov ebp, esp
 	
-	;delete the texture if necessary
-	mov eax, dword[ebp+8]
-	test dword[eax+128], 0xffffffff
-	jz uiImage_destroy_end
-		;unload the texture
-		push dword[eax+128]
-		call textureHandler_unload
+	;delete the texture
+	push 0
+	push dword[ebp+8]
+	call uiImage_setTexture
 	
-	uiImage_destroy_end:
 	mov esp, ebp
 	pop ebp
 	ret

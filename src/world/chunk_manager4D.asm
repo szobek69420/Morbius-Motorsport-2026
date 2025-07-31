@@ -20,7 +20,8 @@
 ;struct ChunkGraphicsUpdate4D{
 ;	void* data					0, it is Chunk4D* if load update, otherwise a renderable*
 ;	int isLoadUpdate;			4
-;}		8 bytes overall
+;	int chunkManager;			8, only relevant if the update is an unload update and the renderable belongs to a fanthom chunk
+;}		12 bytes overall
 
 ;layout:
 ;struct ChangedBlockInfo{
@@ -1090,6 +1091,15 @@ chunkManager4d_processGraphicsUpdate:
 	chunkManager4d_processGraphicsUpdate_unload:
 		;it is an unload update
 		
+		;remove the renderable from the fanthom chunks if necessary
+		mov eax, dword[ebp-4]
+		test dword[eax+8], 0xffffffff
+		jz chunkManager4d_processGraphicsUpdate_unload_not_fanthom
+			push dword[eax]
+			push dword[eax+8]
+			call chunkManager4d_unregisterFanthomChunk_internal
+		chunkManager4d_processGraphicsUpdate_unload_not_fanthom:
+		
 		;destroy the renderable
 		mov eax, dword[ebp-4]
 		push dword[eax]
@@ -1809,10 +1819,11 @@ chunkManager4d_unloadChunk_internal:
 	je chunkManager4d_unloadChunk_internal_no_renderable		;renderable should not be yeeted
 		mov dword[eax+60], 0			;unmark chunk as processed
 	
+		push 0
 		push dword[eax+12]
 		push dword[ebp+8]
 		call chunkManager4d_registerGraphicsUnloadUpdate_internal
-		add esp, 8
+		add esp, 12
 		
 	chunkManager4d_unloadChunk_internal_no_renderable:
 	
@@ -1959,8 +1970,11 @@ chunkManager4d_reloadChunkByPosition_internal:
 	call chunkManager4d_loadChunk_internal
 	test dword[ebp-4], 0xffffffff
 	jz chunkManager4d_reloadChunkByPosition_internal_no_renderable2
-		;yeet fanthom chunk
-		call chunkManager4d_unregisterFanthomChunk_internal
+		;register unload update for the fanthom chunk
+		push 69			;isFanthom
+		push dword[ebp-4]
+		push dword[ebp+16]
+		call chunkManager4d_registerGraphicsUnloadUpdate_internal
 	chunkManager4d_reloadChunkByPosition_internal_no_renderable2:
 	add esp, 16
 
@@ -1980,7 +1994,7 @@ chunkManager4d_registerGraphicsLoadUpdate_internal:
 	sub esp, 4			;graphics update			4
 	
 	;alloc graphics update
-	push 8
+	push 12
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 8
@@ -2004,7 +2018,7 @@ chunkManager4d_registerGraphicsLoadUpdate_internal:
 	ret
 	
 	
-;void chunkManager4d_registerGraphicsUnloadUpdate_internal(ChunkManager4D* cm, Renderable* renderable)
+;void chunkManager4d_registerGraphicsUnloadUpdate_internal(ChunkManager4D* cm, Renderable* renderable, int isFanthom)
 chunkManager4d_registerGraphicsUnloadUpdate_internal:
 	push ebp
 	mov ebp, esp
@@ -2012,7 +2026,7 @@ chunkManager4d_registerGraphicsUnloadUpdate_internal:
 	sub esp, 4			;graphics update			4
 	
 	;alloc graphics update
-	push 8
+	push 12
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 8
@@ -2020,7 +2034,13 @@ chunkManager4d_registerGraphicsUnloadUpdate_internal:
 	;init graphics update
 	mov ecx, dword[ebp+12]
 	mov dword[eax], ecx		;renderable
-	mov dword[eax+4], 0	;unload update
+	mov dword[eax+4], 0		;unload update
+	mov dword[eax+8], 0		;not fanthom
+	test dword[ebp+16], 0xffffffff
+	jz chunkManager4d_registerGraphicsUnloadUpdate_internal_not_fanthom
+		mov ecx, dword[ebp+8]
+		mov dword[eax+8], ecx
+	chunkManager4d_registerGraphicsUnloadUpdate_internal_not_fanthom:
 	
 	;push it onto the queue
 	push eax
@@ -2069,18 +2089,17 @@ chunkManager4d_registerFanthomChunk_internal:
 	ret
 	
 	
-;removes the fanthom chunk from the vector and pushes the renderable into the graphics update queue
-;void chunkManager4d_unregisterFanthomChunk_internal(ChunkManager4D* cm, int chunkX, int chunkZ, int chunkW)
+;removes the fanthom chunk from the vector, but doesn't push the renderable into the graphics update queue
+;void chunkManager4d_unregisterFanthomChunk_internal(ChunkManager4D* cm, Renderable* renderable)
 chunkManager4d_unregisterFanthomChunk_internal:
 	push ebp
 	push esi
 	push edi
 	mov ebp, esp
 	
-	sub esp, 4			;renderable			4
+	sub esp, 4			;unused				4
 	sub esp, 4			;fanthom index		8
 	
-	mov dword[ebp-4], 0
 	mov dword[ebp-8], 0
 	
 	
@@ -2097,20 +2116,11 @@ chunkManager4d_unregisterFanthomChunk_internal:
 	mov edi, dword[eax+152]		;current fanthom chunk in edi
 	cmp esi, 0
 	jle chunkManager4d_unregisterFanthomChunk_internal_loop_end
-		mov eax, dword[ebp+20]		;chunk x
-		mov ecx, dword[ebp+24]		;chunk z
-		mov edx, dword[ebp+28]		;chunk w
 	chunkManager4d_unregisterFanthomChunk_internal_loop_start:
-		cmp dword[edi], eax
+		mov eax, dword[ebp+20]
+		cmp dword[edi+12], eax
 		jne chunkManager4d_unregisterFanthomChunk_internal_loop_continue
-		cmp dword[edi+4], ecx
-		jne chunkManager4d_unregisterFanthomChunk_internal_loop_continue
-		cmp dword[edi+8], edx
-		jne chunkManager4d_unregisterFanthomChunk_internal_loop_continue
-			;chunk found
-			mov eax, dword[edi+12]
-			mov dword[ebp-4], eax
-			
+			;chunk found			
 			push dword[ebp-8]
 			mov eax, dword[ebp+16]
 			add eax, 140
@@ -2135,15 +2145,6 @@ chunkManager4d_unregisterFanthomChunk_internal:
 	call mutex_unlock
 	add esp, 4
 	
-	;did we find the chunk?
-	cmp dword[ebp-4], 0
-	je chunkManager4d_unregisterFanthomChunk_internal_end
-	
-		;push the graphics update
-		push dword[ebp-4]
-		push dword[ebp+16]
-		call chunkManager4d_registerGraphicsUnloadUpdate_internal
-		add esp, 8
 	
 	chunkManager4d_unregisterFanthomChunk_internal_end:
 	mov esp, ebp

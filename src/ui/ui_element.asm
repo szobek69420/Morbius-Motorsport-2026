@@ -25,6 +25,8 @@
 ;if the anchor is set to UI_STRETCH, the xPos/yPos is considered the distance from the left/bottom side of the parent and the width/height is considered the distance from the right/top side of the parent
 ;the pivot is ignored in this case
 
+;NOTE: negative sizes may not be handled correctly (easy fix, but it's faster without it due to using shr instead of idiv)
+
 section .rodata use32
 
 	CLICK_THRESHOLD equ 200				;ms
@@ -244,9 +246,7 @@ uiElement_processInput:
 	or eax, ecx
 	test eax, eax
 	jz uiElement_processInput_window_resize_skip
-		
 		call uiElement_processInput_windowResize_internal_helper
-	
 	uiElement_processInput_window_resize_skip:
 	
 	;mouse click
