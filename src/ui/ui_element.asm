@@ -244,35 +244,8 @@ uiElement_processInput:
 	or eax, ecx
 	test eax, eax
 	jz uiElement_processInput_window_resize_skip
-		;set the window size values
-		mov eax, dword[WINDOW_SIZE_X]
-		mov dword[window_size_x], eax
-		mov ecx, dword[WINDOW_SIZE_Y]
-		mov dword[window_size_y], ecx
-	
-		;call the window resize callbacks if necessary
-		;from last element to first
-		mov eax, instantiated_vector
-		mov esi, dword[eax]			;index in esi
-		mov edi, dword[eax+12]		;data in edi
-		cmp esi, 0
-		jle uiElement_processInput_window_resize_loop_end
-		uiElement_processInput_window_resize_loop_start:
-			mov ebx, dword[edi+4*esi-4]		;current ui element in ebx
-			test dword[ebx+76], 0xffffffff
-			jz uiElement_processInput_window_resize_loop_continue
-				push dword[window_size_y]
-				push dword[window_size_x]
-				push ebx
-				call dword[ebx+76]
-				add esp, 12
 		
-			uiElement_processInput_window_resize_loop_continue:
-			dec esi
-			test esi, esi
-			jnz uiElement_processInput_window_resize_loop_start
-			
-		uiElement_processInput_window_resize_loop_end:
+		call uiElement_processInput_windowResize_internal_helper
 	
 	uiElement_processInput_window_resize_skip:
 	
@@ -718,36 +691,42 @@ uiElement_calculateCurrentPosition:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 4			;x position		4
-	sub esp, 4			;y position		8
-	sub esp, 4			;width			12
-	sub esp, 4			;height			16
+	sub esp, 4			;x position			4
+	sub esp, 4			;y position			8
+	sub esp, 4			;width				12
+	sub esp, 4			;height				16
 	
-	;set current screen width and height
-	mov eax, dword[ebp+8]
+	sub esp, 4			;parent x position	20
+	sub esp, 4			;parent y position	24
+	sub esp, 4			;parent width		28
+	sub esp, 4			;parent height		32
 	
-	mov ecx, dword[eax+12]
-	mov dword[eax+56], ecx
 	
 	;check if there is a parent
 	test dword[ebp+12], 0xffffffff
 	jnz uiElement_calculateCurrentPosition_parent
-		;if no parent, current position is position and current size is size
-		mov eax, dword[ebp+8]
+		;if no parent, parent position is 0 and parent size is screen size
+		mov dword[ebp-20], 0
+		mov dword[ebp-24], 0
+		mov eax, dword[window_size_x]
+		mov dword[ebp-28], eax
+		mov ecx, dword[window_size_y]
+		mov dword[ebp-32], ecx
+		jmp uiElement_calculateCurrentPosition_parent_done
 		
-		mov edx, dword[eax]
-		mov dword[eax+44], edx
-		mov edx, dword[eax+4]
-		mov dword[eax+48], edx
+		uiElement_calculateCurrentPosition_parent:
+		mov eax, dword[ebp+12]
 		
-		mov edx, dword[eax+8]
-		mov dword[eax+52], edx
-		mov edx, dword[eax+12]
-		mov dword[eax+56], edx
-		
-		jmp uiElement_calculateCurrentPosition_calculate_children
+		mov ecx, dword[eax+44]
+		mov dword[ebp-20], ecx
+		mov edx, dword[eax+48]
+		mov dword[ebp-24], edx
+		mov ecx, dword[eax+52]
+		mov dword[ebp-28], ecx
+		mov edx, dword[eax+56]
+		mov dword[ebp-32], edx
 	
-	uiElement_calculateCurrentPosition_parent:
+	uiElement_calculateCurrentPosition_parent_done:
 	
 	;calculate x position	-----------------------------------------------
 	;set x width
@@ -776,8 +755,7 @@ uiElement_calculateCurrentPosition:
 	
 	uiElement_calculateCurrentPosition_anchor_x_center:
 		;center
-		mov ecx, dword[ebp+12]		;parent in ecx
-		mov edx, dword[ecx+52]
+		mov edx, dword[ebp-28]
 		shr edx, 1
 		add edx, dword[eax]
 		mov dword[ebp-4], edx
@@ -785,21 +763,19 @@ uiElement_calculateCurrentPosition:
 	
 	uiElement_calculateCurrentPosition_anchor_x_right:
 		;right
-		mov ecx, dword[ebp+12]		;parent in ecx
-		mov edx, dword[ecx+52]
+		mov edx, dword[ebp-28]
 		sub edx, dword[eax]
 		mov dword[ebp-4], edx
 		jmp uiElement_calculateCurrentPosition_anchor_x_done
 		
 	uiElement_calculateCurrentPosition_anchor_x_stretch:
 		;stretch
-		mov ecx, dword[ebp+12]		;parent in ecx
-		mov edx, dword[ecx+44]
+		mov edx, dword[ebp-20]
 		add edx, dword[eax]
 		mov dword[ebp-4], edx
 		
-		mov edx, dword[ecx+44]
-		add edx, dword[ecx+52]
+		mov edx, dword[ebp-20]
+		add edx, dword[ebp-28]
 		sub edx, dword[eax+8]		;in stretch mode width is the distance from the right side of the parent
 		sub edx, dword[ebp-4]
 		mov dword[ebp-12], edx		;new width as well
@@ -839,7 +815,7 @@ uiElement_calculateCurrentPosition:
 	
 	uiElement_calculateCurrentPosition_x_done:
 	
-	;calculate x position	-----------------------------------------------
+	;calculate y position	-----------------------------------------------
 	;set height
 	mov eax, dword[ebp+8]
 	mov ecx, dword[eax+12]
@@ -867,8 +843,7 @@ uiElement_calculateCurrentPosition:
 	
 	uiElement_calculateCurrentPosition_anchor_y_center:
 		;center
-		mov ecx, dword[ebp+12]		;parent in ecx
-		mov edx, dword[ecx+56]
+		mov edx, dword[ebp-32]
 		shr edx, 1
 		add edx, dword[eax+4]
 		mov dword[ebp-8], edx
@@ -876,21 +851,19 @@ uiElement_calculateCurrentPosition:
 	
 	uiElement_calculateCurrentPosition_anchor_y_top:
 		;top
-		mov ecx, dword[ebp+12]		;parent in ecx
-		mov edx, dword[ecx+56]
+		mov edx, dword[ebp-32]
 		sub edx, dword[eax+4]
 		mov dword[ebp-8], edx
 		jmp uiElement_calculateCurrentPosition_anchor_y_done
 		
 	uiElement_calculateCurrentPosition_anchor_y_stretch:
 		;stretch
-		mov ecx, dword[ebp+12]		;parent in ecx
-		mov edx, dword[ecx+48]
+		mov edx, dword[ebp-24]
 		add edx, dword[eax+4]
 		mov dword[ebp-8], edx
 		
-		mov edx, dword[ecx+48]
-		add edx, dword[ecx+56]
+		mov edx, dword[ebp-24]
+		add edx, dword[ebp-32]
 		sub edx, dword[eax+12]		;in stretch mode height is the distance from the top side of the parent
 		sub edx, dword[ebp-8]
 		mov dword[ebp-16], edx		;new height as well
@@ -930,11 +903,9 @@ uiElement_calculateCurrentPosition:
 	uiElement_calculateCurrentPosition_y_done:
 	
 	;add the current position of the parent to the current position
-	mov eax, dword[ebp+12]
-	
-	mov ecx, dword[eax+44]
+	mov ecx, dword[ebp-20]
 	add dword[ebp-4], ecx
-	mov ecx, dword[eax+48]
+	mov ecx, dword[ebp-24]
 	add dword[ebp-8], ecx
 	
 	;copy the results
@@ -1234,6 +1205,88 @@ uiElement_processClick_internal_helper:
 	mov eax, dword[ebp-4]		;set return value
 	
 	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+
+;recalculates the position of every fatherless stretchy element
+;calls onWindowResize callbacks if necessary
+;void uiElement_processInput_windowResizeHelper_internal()
+uiElement_processInput_windowResize_internal_helper:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	;update the window size 
+	mov eax, dword[WINDOW_SIZE_X]
+	mov dword[window_size_x], eax
+	mov ecx, dword[WINDOW_SIZE_Y]
+	mov dword[window_size_y], ecx
+	
+	;recalcuate the position of the stretchy fatherless elements
+	mov eax, instantiated_vector
+	mov esi, dword[eax+12]			;elements in esi
+	mov edi, dword[eax]				;index in edi
+	cmp edi, 0
+	jle uiElement_processInput_windowResize_internal_helper_fatherless_loop_end
+	uiElement_processInput_windowResize_internal_helper_fatherless_loop_start:
+		mov ebx, dword[esi]
+		;fatherless?
+		test dword[ebx+40], 0xffffffff
+		jnz uiElement_processInput_windowResize_internal_helper_fatherless_loop_continue
+		;stretchy?
+		mov ax, word[UI_STRETCH]
+		cmp word[ebx+16], ax
+		je uiElement_processInput_windowResize_internal_helper_fatherless_loop_must_recalculate
+		cmp word[ebx+18], ax
+		je uiElement_processInput_windowResize_internal_helper_fatherless_loop_must_recalculate
+		jmp uiElement_processInput_windowResize_internal_helper_fatherless_loop_continue
+		
+		uiElement_processInput_windowResize_internal_helper_fatherless_loop_must_recalculate:
+			;call recalculate
+			push 0
+			push ebx
+			call uiElement_calculateCurrentPosition
+			add esp, 8
+		
+		uiElement_processInput_windowResize_internal_helper_fatherless_loop_continue:
+		add esi, 4
+		dec edi
+		test edi, edi
+		jnz uiElement_processInput_windowResize_internal_helper_fatherless_loop_start
+	uiElement_processInput_windowResize_internal_helper_fatherless_loop_end:
+	
+
+	;call the window resize callbacks if necessary
+	;from last element to first
+	mov eax, instantiated_vector
+	mov esi, dword[eax]			;index in esi
+	mov edi, dword[eax+12]		;data in edi
+	cmp esi, 0
+	jle uiElement_processInput_windowResize_internal_helper_window_resize_loop_end
+	uiElement_processInput_windowResize_internal_helper_window_resize_loop_start:
+		mov ebx, dword[edi+4*esi-4]		;current ui element in ebx
+		test dword[ebx+76], 0xffffffff
+		jz uiElement_processInput_windowResize_internal_helper_window_resize_loop_continue
+			push dword[window_size_y]
+			push dword[window_size_x]
+			push ebx
+			call dword[ebx+76]
+			add esp, 12
+	
+		uiElement_processInput_windowResize_internal_helper_window_resize_loop_continue:
+		dec esi
+		test esi, esi
+		jnz uiElement_processInput_windowResize_internal_helper_window_resize_loop_start
+		
+	uiElement_processInput_windowResize_internal_helper_window_resize_loop_end:
+	
+	mov esp, ebp
+	pop ebx
 	pop edi
 	pop esi
 	pop ebp

@@ -7,6 +7,7 @@
 section .rodata use32
 
 	debug_text_destroy db "ui_canvas destroyed",10,0
+	print_four_ints_nl db "%d %d %d %d",10,0
 
 section .text use32
 	
@@ -18,8 +19,11 @@ section .text use32
 	extern my_printf
 	extern my_malloc
 	
+	extern uiElement_setPosition
 	extern uiElement_setSize
+	extern uiElement_setAnchor
 	extern uiElement_initGeneralPart
+	extern UI_STRETCH
 	
 uiCanvas_init:
 	ret
@@ -46,9 +50,19 @@ uiCanvas_create:
 	mov eax, dword[ebp-4]
 	mov dword[eax+72], uiCanvas_destroy
 	
-	;set onWindowResize
-	mov eax, dword[ebp-4]
-	mov dword[eax+76], uiCanvas_onWindowResize
+	;set the canvas to be stretchy
+	push 0
+	push 0
+	push dword[ebp-4]
+	call uiElement_setPosition
+	call uiElement_setSize
+	add esp, 12
+	
+	push word[UI_STRETCH]
+	push word[UI_STRETCH]
+	push dword[ebp-4]
+	call uiElement_setAnchor
+	add esp, 8
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -56,7 +70,6 @@ uiCanvas_create:
 	mov esp, ebp
 	pop ebp
 	ret
-	
 	
 ;void uiCanvas_destroy(UICanvas* canvas)
 uiCanvas_destroy:
