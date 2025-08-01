@@ -207,7 +207,7 @@ queue_pushBuffer:
 	call my_memcpy
 	
 	mov eax, dword[ebp+8]
-	inc dword[eax+4]
+	inc dword[eax+4]			;increment size
 	
 	xor eax, eax
 	
@@ -354,6 +354,7 @@ queue_pushBufferFront:
 	
 	sub esp, 4				;element index			4
 	
+	
 	;check if the queue is not full
 	mov eax, dword[ebp+8]
 	mov ecx, dword[eax+4]
@@ -362,6 +363,7 @@ queue_pushBufferFront:
 		push error_queue_is_full_4
 		call my_printf
 		mov eax, 69
+
 		jmp queue_pushBufferFront_end
 	queue_pushBufferFront_not_full:
 	

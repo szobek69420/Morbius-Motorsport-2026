@@ -129,7 +129,9 @@ section .text use32
 	extern tsQueue_init
 	extern tsQueue_destroy
 	extern tsQueue_push
+	extern tsQueue_pushArray
 	extern tsQueue_pushFront
+	extern tsQueue_pushArrayFront
 	extern tsQueue_pop
 	extern tsQueue_search
 	extern tsQueue_isEmpty
@@ -854,12 +856,13 @@ chunkManager4d_load:
 	je chunkManager4d_load_end
 	
 		;generate chunk
+		push 0
 		push dword[ebp-24]			;chunkw
 		push dword[ebp-20]			;chunkz
 		push dword[ebp-16]			;chunkx
 		push dword[ebp+20]
 		call chunkManager4d_loadChunk_internal
-		add esp, 16
+		add esp, 20
 	
 	chunkManager4d_load_end:
 	mov esp, ebp
@@ -1634,8 +1637,9 @@ chunkManager4d_processChangedBlocks:
 	
 	
 ;loads a selected chunk
+;if outUpdate is NULL, the graphics update is created and registered, otherwise only created (then *outUpdate will be set to the graphics update or NULL if there is no graphics update)
 ;shouldn't be called under vector mutex lock
-;void chunkManager4d_loadChunk_internal(ChunkManager4D* cm, int chunkX, int chunkZ, int chunkW)
+;void chunkManager4d_loadChunk_internal(ChunkManager4D* cm, int chunkX, int chunkZ, int chunkW, ChunkGraphicsUpdate4D** outUpdate)
 chunkManager4d_loadChunk_internal:
 	push ebp
 	mov ebp, esp
@@ -1755,16 +1759,38 @@ chunkManager4d_loadChunk_internal:
 	call mutex_unlock
 	add esp, 4
 	
+	;init the outBuffer if necessary
+	test dword[ebp+24], 0xffffffff
+	jz chunkManager4d_loadChunk_internal_no_outBuffer
+		mov eax, dword[ebp+24]
+		mov dword[eax], 0
+	chunkManager4d_loadChunk_internal_no_outBuffer:
+	
+	
 	;do we need a graphics update? (is the alreadyProcessed flag on?)
 	mov eax, dword[ebp-4]
 	cmp dword[eax+60], 0
-	jne chunkManager4d_loadChunk_internal_no_graphics_update
-		push dword[ebp-4]
-		push dword[ebp+8]
-		call chunkManager4d_createAndRegisterGraphicsLoadUpdate_internal
-		add esp, 8
+	jne chunkManager4d_loadChunk_internal_graphics_update_done
+		test dword[ebp+24], 0xffffffff
+		jz chunkManager4d_loadChunk_internal_create_and_register
+			;update should only be created
+			push dword[ebp-4]
+			push dword[ebp+8]
+			call chunkManager4d_createGraphicsLoadUpdate_internal
+			add esp, 8
+			
+			mov ecx, dword[ebp+24]
+			mov dword[ecx], eax			;set the outBuffer
+			jmp chunkManager4d_loadChunk_internal_graphics_update_done
+			
+		chunkManager4d_loadChunk_internal_create_and_register:
+			;update should be created and registered
+			push dword[ebp-4]
+			push dword[ebp+8]
+			call chunkManager4d_createAndRegisterGraphicsLoadUpdate_internal
+			add esp, 8
 	
-	chunkManager4d_loadChunk_internal_no_graphics_update:
+	chunkManager4d_loadChunk_internal_graphics_update_done:
 	
 	mov esp, ebp
 	pop ebp
@@ -1947,8 +1973,12 @@ chunkManager4d_reloadChunkByPosition_internal:
 	mov ebp, esp
 	
 	sub esp, 4		;renderable				4
+	sub esp, 4		;unload update			8
+	sub esp, 4		;load update			12
 	
 	mov dword[ebp-4], 0
+	mov dword[ebp-8], 0
+	mov dword[ebp-12], 0
 	
 	;unload the chunk
 	lea eax, [ebp-4]
@@ -1964,25 +1994,46 @@ chunkManager4d_reloadChunkByPosition_internal:
 		mov eax, dword[ebp-4]
 		mov dword[esp+16], eax
 		call chunkManager4d_registerFanthomChunk_internal
+		
+		;create the unload update
+		push 69					;isFanthom
+		push dword[ebp-4]
+		push dword[ebp+16]
+		call chunkManager4d_createGraphicsUnloadUpdate_internal
+		mov dword[ebp-8], eax
+		add esp, 12
+		
 	chunkManager4d_reloadChunkByPosition_internal_no_renderable:
 	add esp, 20
 	
 	;load the new chunk
+	lea eax, [ebp-12]
+	push eax					;extract the load update
 	push dword[ebp+28]
 	push dword[ebp+24]
 	push dword[ebp+20]
 	push dword[ebp+16]
 	call chunkManager4d_loadChunk_internal
-	test dword[ebp-4], 0xffffffff
-	jz chunkManager4d_reloadChunkByPosition_internal_no_renderable2
-		;register unload update for the fanthom chunk
-		push 69			;isFanthom
-		push dword[ebp-4]
-		push dword[ebp+16]
-		call chunkManager4d_createAndRegisterGraphicsUnloadUpdate_internal
-	chunkManager4d_reloadChunkByPosition_internal_no_renderable2:
-	add esp, 16
+	add esp, 20
 
+	;register the updates
+	test dword[ebp-12], 0xffffffff
+	jz chunkManager4d_reloadChunkByPosition_internal_no_load_update
+		push 0
+		push dword[ebp-12]
+		push dword[ebp+16]
+		call chunkManager4d_registerGraphicsUpdate_internal
+		add esp, 8
+	chunkManager4d_reloadChunkByPosition_internal_no_load_update:
+	
+	test dword[ebp-8], 0xffffffff
+	jz chunkManager4d_reloadChunkByPosition_internal_no_unload_update
+		push 0
+		push dword[ebp-8]
+		push dword[ebp+16]
+		call chunkManager4d_registerGraphicsUpdate_internal
+		add esp, 8
+	chunkManager4d_reloadChunkByPosition_internal_no_unload_update:
 	
 	mov esp, ebp
 	pop edi
