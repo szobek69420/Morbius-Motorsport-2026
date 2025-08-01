@@ -1126,6 +1126,7 @@ player_breakBlock:
 	add esp, 12
 	
 	;register the changed block
+	push 69					;has priority
 	lea eax, [ebp-16]
 	push eax
 	lea eax, [ebp-28]
@@ -1136,7 +1137,7 @@ player_breakBlock:
 	mov eax, dword[ebp+8]
 	push dword[eax+28]
 	call chunkManager4d_registerChangedBlock
-	add esp, 16
+	add esp, 20
 	
 	
 	player_breakBlock_end:
@@ -1256,6 +1257,7 @@ player_placeBlock:
 	add esp, 12
 	
 	;register the changed block
+	push 69							;has priority
 	lea eax, [ebp-32]
 	push eax
 	lea eax, [ebp-44]
@@ -1266,7 +1268,7 @@ player_placeBlock:
 	mov eax, dword[ebp+8]
 	push dword[eax+28]
 	call chunkManager4d_registerChangedBlock
-	add esp, 16
+	add esp, 20
 	
 	
 	player_placeBlock_end:

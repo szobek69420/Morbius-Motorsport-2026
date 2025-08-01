@@ -280,6 +280,11 @@ queue_pushArray:
 		cmp ebx, dword[ebp+28]
 		jl queue_pushArray_copy_loop_start
 		
+	;update the size
+	mov eax, dword[ebp+20]
+	mov ecx, dword[ebp+28]
+	add dword[eax+4], ecx
+		
 	queue_pushArray_end:
 	mov eax, dword[ebp-4]		;set return value
 	
@@ -328,9 +333,14 @@ queue_pushFront:
 	push ecx
 	call my_memcpy
 	
-	;increment size
+	;adjust index and increment size
 	mov eax, dword[ebp+8]
+	
+	mov ecx, dword[ebp-4]
+	mov dword[eax], ecx
+	
 	inc dword[eax+4]
+	
 	
 	queue_pushFront_end:
 	mov esp, ebp
@@ -374,9 +384,14 @@ queue_pushBufferFront:
 	push ecx
 	call my_memcpy
 	
-	;increment size
+	;adjust index and increment size
 	mov eax, dword[ebp+8]
+	
+	mov ecx, dword[ebp-4]
+	mov dword[eax], ecx
+	
 	inc dword[eax+4]
+	
 	
 	queue_pushBufferFront_end:
 	mov esp, ebp
@@ -451,6 +466,11 @@ queue_pushArrayFront:
 		inc ebx
 		cmp ebx, dword[ebp+28]
 		jl queue_pushArrayFront_copy_loop_start
+		
+	;update the size
+	mov eax, dword[ebp+20]
+	mov ecx, dword[ebp+28]
+	add dword[eax+4], ecx
 		
 	queue_pushArrayFront_end:
 	mov eax, dword[ebp-4]		;set return value

@@ -95,7 +95,7 @@ section .text use32
 	global chunkManager4d_getPlayerChunk4D			;void chunkManager4d_getPlayerChunk4D(ChunkManager4D* cm, vec3* playerPos3D, int* chunkX, int* chunkZ, int* chunkW)
 	
 	;adds a block that needs to be changed to the pending changed blocks queue
-	global chunkManager4d_registerChangedBlock	;void chunkManager4d_registerChangedBlock(ChunkManager4D* cm, int blockType, ivec3* chunkPos, ivec4* chunkLocalBlockPos)
+	global chunkManager4d_registerChangedBlock	;void chunkManager4d_registerChangedBlock(ChunkManager4D* cm, int blockType, ivec3* chunkPos, ivec4* chunkLocalBlockPos, int hasPriority)
 	
 	global chunkManager4d_processChangedBlocks	;void chunkManager4d_processChangedBlock(ChunkManager4D* cm)
 	
@@ -1251,7 +1251,12 @@ chunkManager4d_registerChangedBlock:
 	mov eax, dword[ebp+8]
 	lea eax, [eax+112]
 	push eax
-	call tsQueue_push
+	mov ecx, tsQueue_push
+	test dword[ebp+24], 0xffffffff			;does the block have priority?
+	jz chunkManager4d_registerChangedBlock_no_priority
+		mov ecx, tsQueue_pushFront
+	chunkManager4d_registerChangedBlock_no_priority:
+	call ecx
 	
 	mov esp, ebp
 	pop ebp
