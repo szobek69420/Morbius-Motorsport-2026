@@ -32,7 +32,6 @@ section .text use32
 	extern GAME_STATE_MENU
 	extern GAME_STATE_INIT
 	extern GAME_STATE_DEINIT
-
 	
 	..start:
 		push ebp
@@ -42,8 +41,7 @@ section .text use32
 	
 		mov eax, dword[GAME_STATE_INIT]
 		mov dword[ebp-4], eax
-		
-		
+	
 		finit
 		
 		start_loop_start:

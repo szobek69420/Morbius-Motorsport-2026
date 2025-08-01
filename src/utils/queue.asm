@@ -17,6 +17,8 @@ section .rodata use32
 	error_queue_is_full_2 db "queue_pushBuffer: queue is full",10,0
 	error_queue_is_full_3 db "queue_pushFront: queue is full",10,0
 	error_queue_is_full_4 db "queue_pushBufferFront: queue is full",10,0
+	error_queue_is_full_5 db "queue_pushArray: there is not enough space bozo",10,0
+	error_queue_is_full_6 db "queue_pushArrayFront: there is not enough space bozo",10,0
 	error_queue_is_empty db "queue_pop: queue is empty",10,0
 	error_invalid_index db "queue_at: % is invalid index, queue size is %d",10,0
 	
@@ -36,6 +38,10 @@ section .text use32
 	;the element will be added to the queue, not the pointer of the element
 	global queue_pushBuffer		;int queue_pushBuffer(queue* pqueue, element* bufferToPush)
 	
+	;eturns 0 if there were no problems
+	;the elements in the buffer will be added to the queue
+	global queue_pushArray		;int queue_pushArray(queue* pqueue, element* arrayOfElement, int elementCount)
+	
 	;returns 0 if there were no problems
 	global queue_pushFront		;int queue_pushFront(queue* pqueue, element elementToPush)
 	
@@ -43,6 +49,10 @@ section .text use32
 	;the element doesn't need to be copied onto the stack
 	;the element will be added to the queue, not the pointer of the element
 	global queue_pushBufferFront;int queue_pushBufferFront(queue* pqueue, element* bufferToPush)
+	
+	;eturns 0 if there were no problems
+	;the elements in the buffer will be added to the queue
+	global queue_pushArrayFront		;int queue_pushArrayFront(queue* pqueue, element* arrayOfElements, int elementCount)
 	
 	;returns 0 if there were no problems
 	global queue_pop			;int queue_pop(queue* pqueue, element* nullableBuffer)
@@ -207,6 +217,80 @@ queue_pushBuffer:
 	ret
 	
 	
+queue_pushArray:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 4			;return value		4
+	
+	mov dword[ebp-4], 0
+	
+	;check if the array length is valid
+	cmp dword[ebp+28], 0
+	jle queue_pushArray_end
+	
+	;check if there is enough space
+	mov eax, dword[ebp+20]
+	
+	mov ecx, dword[eax+8]
+	sub ecx, dword[eax+4]
+	cmp ecx, dword[ebp+28]
+	jge queue_pushArray_enough_space
+		mov dword[ebp-4], 69
+	
+		push error_queue_is_full_5
+		call my_printf
+		jmp queue_pushArray_end
+	queue_pushArray_enough_space:
+	
+	;add the elements to the queue
+	mov eax, dword[ebp+20]
+	mov esi, dword[ebp+24]			;buffer in esi
+	mov edi, dword[eax]
+	add edi, dword[eax+4]
+	cmp edi, dword[eax+8]
+	jl queue_pushArray_no_overflow
+		sub edi, dword[eax+8]		;target index in edi
+	queue_pushArray_no_overflow:
+	xor ebx, ebx					;index in ebx
+	queue_pushArray_copy_loop_start:
+		push eax				;save eax
+		
+		push dword[eax+12]
+		push esi
+		mov edx, dword[eax+12]
+		imul edx, edi
+		add edx, dword[eax+16]
+		push edx
+		call my_memcpy
+		add esp, 12
+		
+		pop eax					;restore eax
+		
+		inc edi
+		cmp edi, dword[eax+8]
+		jl queue_pushArray_copy_loop_no_overflow
+			xor edi, edi
+		queue_pushArray_copy_loop_no_overflow:
+		add esi, dword[eax+12]
+		inc ebx
+		cmp ebx, dword[ebp+28]
+		jl queue_pushArray_copy_loop_start
+		
+	queue_pushArray_end:
+	mov eax, dword[ebp-4]		;set return value
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
 queue_pushFront:
 	push ebp
 	mov ebp, esp
@@ -296,6 +380,85 @@ queue_pushBufferFront:
 	
 	queue_pushBufferFront_end:
 	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+queue_pushArrayFront:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 4			;return value		4
+	
+	mov dword[ebp-4], 0
+	
+	;check if the array length is valid
+	cmp dword[ebp+28], 0
+	jle queue_pushArrayFront_end
+	
+	;check if there is enough space
+	mov eax, dword[ebp+20]
+	
+	mov ecx, dword[eax+8]
+	sub ecx, dword[eax+4]
+	cmp ecx, dword[ebp+28]
+	jge queue_pushArrayFront_enough_space
+		mov dword[ebp-4], 69
+	
+		push error_queue_is_full_6
+		call my_printf
+		jmp queue_pushArrayFront_end
+	queue_pushArrayFront_enough_space:
+	
+	;adjust the start index
+	mov eax, dword[ebp+20]
+	mov ecx, dword[ebp+28]
+	sub dword[eax], ecx
+	test dword[eax], 0x80000000
+	jz queue_pushArrayFront_no_underflow
+		mov ecx, dword[eax+8]
+		add dword[eax], ecx
+	queue_pushArrayFront_no_underflow:
+	
+	;add the elements to the queue
+	mov eax, dword[ebp+20]
+	mov esi, dword[ebp+24]			;buffer in esi
+	mov edi, dword[eax]				;target index in edi
+	xor ebx, ebx					;index in ebx
+	queue_pushArrayFront_copy_loop_start:
+		push eax				;save eax
+		
+		push dword[eax+12]
+		push esi
+		mov edx, dword[eax+12]
+		imul edx, edi
+		add edx, dword[eax+16]
+		push edx
+		call my_memcpy
+		add esp, 12
+		
+		pop eax					;restore eax
+		
+		inc edi
+		cmp edi, dword[eax+8]
+		jl queue_pushArrayFront_copy_loop_no_overflow
+			xor edi, edi
+		queue_pushArrayFront_copy_loop_no_overflow:
+		add esi, dword[eax+12]
+		inc ebx
+		cmp ebx, dword[ebp+28]
+		jl queue_pushArrayFront_copy_loop_start
+		
+	queue_pushArrayFront_end:
+	mov eax, dword[ebp-4]		;set return value
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
 	pop ebp
 	ret
 	
