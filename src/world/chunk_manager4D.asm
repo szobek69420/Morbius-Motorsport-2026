@@ -1756,7 +1756,7 @@ chunkManager4d_loadChunk_internal:
 	jne chunkManager4d_loadChunk_internal_no_graphics_update
 		push dword[ebp-4]
 		push dword[ebp+8]
-		call chunkManager4d_registerGraphicsLoadUpdate_internal
+		call chunkManager4d_createAndRegisterGraphicsLoadUpdate_internal
 		add esp, 8
 	
 	chunkManager4d_loadChunk_internal_no_graphics_update:
@@ -1822,7 +1822,7 @@ chunkManager4d_unloadChunk_internal:
 		push 0
 		push dword[eax+12]
 		push dword[ebp+8]
-		call chunkManager4d_registerGraphicsUnloadUpdate_internal
+		call chunkManager4d_createAndRegisterGraphicsUnloadUpdate_internal
 		add esp, 12
 		
 	chunkManager4d_unloadChunk_internal_no_renderable:
@@ -1974,7 +1974,7 @@ chunkManager4d_reloadChunkByPosition_internal:
 		push 69			;isFanthom
 		push dword[ebp-4]
 		push dword[ebp+16]
-		call chunkManager4d_registerGraphicsUnloadUpdate_internal
+		call chunkManager4d_createAndRegisterGraphicsUnloadUpdate_internal
 	chunkManager4d_reloadChunkByPosition_internal_no_renderable2:
 	add esp, 16
 
@@ -1985,9 +1985,32 @@ chunkManager4d_reloadChunkByPosition_internal:
 	pop ebp
 	ret
 	
+;void chunkManager4d_registerGraphicsLoadUpdate_internal(ChunkManager4D* cm, ChunkGraphicsUpdate4D* update, int pushToFront)
+chunkManager4d_registerGraphicsUpdate_internal:
+	push ebp
+	mov ebp, esp
 	
-;void chunkManager4d_registerGraphicsLoadUpdate_internal(ChunkManager4D* cm, Chunk4D* chomk)
-chunkManager4d_registerGraphicsLoadUpdate_internal:
+	mov edx, tsQueue_push
+	test dword[ebp+16], 0xffffffff
+	jz chunkManager4d_registerGraphicsUpdate_internal_internal_push_back
+		mov edx, tsQueue_pushFront
+	chunkManager4d_registerGraphicsUpdate_internal_internal_push_back:
+	
+	;push the update onto the queue
+	push dword[ebp+12]
+	mov ecx, dword[ebp+8]
+	add ecx, 20
+	push ecx
+	call edx
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;allocates space for and initializes a graphics update object 
+;ChunkGraphicsUpdate4D* chunkManager4d_createGraphicsLoadUpdate_internal(ChunkManager4D* cm, Chunk4D* chomk)
+chunkManager4d_createGraphicsLoadUpdate_internal:
 	push ebp
 	mov ebp, esp
 	
@@ -2004,22 +2027,16 @@ chunkManager4d_registerGraphicsLoadUpdate_internal:
 	mov dword[eax], ecx		;chomk
 	mov dword[eax+4], 69	;load update
 	
-	;push it onto the queue
-	push eax
-	mov ecx, dword[ebp+8]
-	add ecx, 20
-	push ecx
-	call tsQueue_push
-	add esp, 8
-	
-	
+	;set return value
+	mov eax, dword[ebp-4]
+
 	mov esp, ebp
 	pop ebp
 	ret
-	
-	
-;void chunkManager4d_registerGraphicsUnloadUpdate_internal(ChunkManager4D* cm, Renderable* renderable, int isFanthom)
-chunkManager4d_registerGraphicsUnloadUpdate_internal:
+
+
+;void chunkManager4d_createGraphicsUnloadUpdate_internal(ChunkManager4D* cm, Renderable* renderable, int isFanthom)
+chunkManager4d_createGraphicsUnloadUpdate_internal:
 	push ebp
 	mov ebp, esp
 	
@@ -2037,18 +2054,58 @@ chunkManager4d_registerGraphicsUnloadUpdate_internal:
 	mov dword[eax+4], 0		;unload update
 	mov dword[eax+8], 0		;not fanthom
 	test dword[ebp+16], 0xffffffff
-	jz chunkManager4d_registerGraphicsUnloadUpdate_internal_not_fanthom
+	jz chunkManager4d_createGraphicsUnloadUpdate_internal_not_fanthom
 		mov ecx, dword[ebp+8]
 		mov dword[eax+8], ecx
-	chunkManager4d_registerGraphicsUnloadUpdate_internal_not_fanthom:
+	chunkManager4d_createGraphicsUnloadUpdate_internal_not_fanthom:
 	
-	;push it onto the queue
+	;set return value
+	mov eax, dword[ebp-4]
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+;creates a graphics load update and pushes it to the end of the pending updates queue
+;void chunkManager4d_createAndRegisterGraphicsLoadUpdate_internal(ChunkManager4D* cm, Chunk4D* chomk)
+chunkManager4d_createAndRegisterGraphicsLoadUpdate_internal:
+	push ebp
+	mov ebp, esp
+	
+	;create the update
+	push dword[ebp+12]
+	push dword[ebp+8]
+	call chunkManager4d_createGraphicsLoadUpdate_internal
+	
+	;register the update
+	push 0					;onto the end
 	push eax
-	mov ecx, dword[ebp+8]
-	add ecx, 20
-	push ecx
-	call tsQueue_push
-	add esp, 8
+	push dword[ebp+8]
+	call chunkManager4d_registerGraphicsUpdate_internal
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+
+;creates a graphics unload update and pushes it onto the end of the queue	
+;void chunkManager4d_createAndRegisterGraphicsUnloadUpdate_internal(ChunkManager4D* cm, Renderable* renderable, int isFanthom)
+chunkManager4d_createAndRegisterGraphicsUnloadUpdate_internal:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;graphics update			4
+	
+	push dword[ebp+16]
+	push dword[ebp+12]
+	push dword[ebp+8]
+	call chunkManager4d_createGraphicsUnloadUpdate_internal
+	
+	;register the update
+	push 0					;onto the end
+	push eax
+	push dword[ebp+8]
+	call chunkManager4d_registerGraphicsUpdate_internal
 	
 	
 	mov esp, ebp
