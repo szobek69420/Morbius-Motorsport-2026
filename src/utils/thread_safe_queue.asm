@@ -19,7 +19,7 @@ section .text use32
 	global tsQueue_pushBuffer	;int tsQueue_pushBuffer(tsQueue* pqueue, element* bufferToPush)
 	;eturns 0 if there were no problems
 	;the elements in the buffer will be added to the queue
-	global tsQueue_pushArray	;int tsQueue_pushArray(queue* pqueue, element* arrayOfElement, int elementCount)
+	global tsQueue_pushArray	;int tsQueue_pushArray(tsQueue* pqueue, element* arrayOfElement, int elementCount)
 	;returns 0 if there were no problems
 	global tsQueue_pushFront	;int tsQueue_pushFront(tsQueue* pqueue, element elementToPush)
 	;returns 0 if there were no problems
@@ -28,7 +28,7 @@ section .text use32
 	global tsQueue_pushBufferFront	;int tsQueue_pushBufferFront(tsQueue* pqueue, element* bufferToPush)
 	;eturns 0 if there were no problems
 	;the elements in the buffer will be added to the queue
-	global tsQueue_pushArrayFront		;int queue_pushArrayFront(queue* pqueue, element* arrayOfElements, int elementCount)
+	global tsQueue_pushArrayFront		;int queue_pushArrayFront(tsQueue* pqueue, element* arrayOfElements, int elementCount)
 	;returns 0 if there were no problems
 	global tsQueue_pop			;int tsQueue_pop(tsQueue* pqueue, element* nullableBuffer)
 	;returns 0 if there were no problems
