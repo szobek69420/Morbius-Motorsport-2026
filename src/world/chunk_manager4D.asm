@@ -9,7 +9,7 @@
 ;	HyperPlane hyperPlane;										32
 ;	hashMap<ivec3, ChangedBlockInfo>* changedBlocks;			96 //doesn't need a mutex as it is used only on the chunk generation thread
 ;	padding of 12 bytes
-;	tsQueue<ChangedBlockInfo> pendingChangedBlocks;				112
+;	tsQueue<PendingChangedBlockInfo> pendingChangedBlocks;		112
 ;	TextureArrayInfo* blockTextures;							120
 ;	vector<ivec3> veteranChunks;								124 //chunks that have been loaded at least once
 ;	vector<struct{ivec3;Renderable*}> fanthomChunks;			140 //fanthom chunks are remaining renderables of no longer existing chunks, they are kept during a reload to prevent flickering
@@ -28,8 +28,13 @@
 ;	int blockType;
 ;	int chunkX, chunkZ, chunkW;
 ;	int blockX, blockY, blockZ, blockW;
-;	int hasPriority;						//necessary, because just putting the block onto the beginning of the queue doesn't guarantee a swift chunk reload
-;}		36 bytes overall
+;}		32 bytes overall
+
+;layout:
+;struct PendingChangedBlockInfo{
+;	ChangedBlockInfo info;			0
+;	int hasPriority;				32	//necessary, because just putting the block onto the beginning of the queue doesn't guarantee a swift chunk reload
+;} 36 bytes overall 
 
 ;process of loading a chunk:
 ;
@@ -99,13 +104,14 @@ section .text use32
 	
 	;adds an array of blocks that needs to be changed to the pending changed blocks queue
 	;separates the blocks into two arrays - blocks with and without priority
+	;if nullableHasPriorityArray is NULL, all of the blocks count as non-priority
 	;void chunkManager4d_registerChangedBlockArray(
 	;	ChunkManager4D* cm,
 	;	int blockCount,
 	;	const int* blockTypeArray,
 	;	const ivec3* chunkPosArray,
 	;	const ivec4* chunkLocalBlockPosArray,
-	;	const int* hasPriorityArray)
+	;	const int* nullableHasPriorityArray)
 	global chunkManager4d_registerChangedBlockArray
 	
 	global chunkManager4d_processChangedBlocks	;void chunkManager4d_processChangedBlock(ChunkManager4D* cm)
@@ -114,6 +120,7 @@ section .text use32
 	extern my_malloc
 	extern my_free
 	extern my_memcpy
+	extern my_memset_dword
 	extern my_qsort
 	
 	extern chunk4d_generate
@@ -1286,8 +1293,9 @@ chunkManager4d_registerChangedBlockArray:
 	push ebx
 	mov ebp, esp
 	
-	sub esp, 16		;vector<ChangedBlockInfo> priority		;16
-	sub esp, 16		;vector<ChangedBlockInfo> nonPriority	;32
+	sub esp, 16		;vector<PendingChangedBlockInfo> priority		;16
+	sub esp, 16		;vector<PendingChangedBlockInfo> nonPriority	;32
+	sub esp, 4		;hasPriorityArray								;36
 	
 	;check if there are any blocks at all
 	cmp dword[ebp+24], 0
@@ -1302,12 +1310,32 @@ chunkManager4d_registerChangedBlockArray:
 	call vector_init
 	add esp, 8
 	
+	;initialize the local priority array
+	mov eax, dword[ebp+40]
+	mov dword[ebp-36], eax
+	test eax, eax
+	jnz chunkManager4d_registerChangedBlockArray_priority_array_not_null
+		;alloc temporary array
+		mov eax, dword[ebp+24]
+		shl eax, 2
+		push eax
+		call my_malloc
+		mov dword[ebp-36], eax
+		
+		;set the array to all non-priority
+		push 0
+		push eax
+		call my_memset_dword
+		add esp, 12
+		
+	chunkManager4d_registerChangedBlockArray_priority_array_not_null:
+	
 	;create and separate the changed block infos
 	xor ebx, ebx				;index in ebx
 	mov esi, dword[ebp+32]		;current chunk pos in esi
 	mov edi, dword[ebp+36]		;current chunk local pos in edi
 	chunkManager4d_registerChangedBlockArray_separate_loop_start:
-		mov eax, dword[ebp+40]
+		mov eax, dword[ebp-36]
 		push dword[eax+4*ebx]
 		push dword[edi+12]
 		push dword[edi+8]
@@ -1353,9 +1381,19 @@ chunkManager4d_registerChangedBlockArray:
 		mov eax, dword[ebp+20]
 		lea eax, [eax+112]
 		push eax
-		call tsQueue_pushArrayFront
+		call tsQueue_pushArray
 		
 	chunkManager4d_registerChangedBlockArray_no_non_priority_blocks:
+	
+	;delete the local priority array if it was created here
+	test dword[ebp+40], 0xffffffff
+	jnz chunkManager4d_registerChangedBlockArray_priority_array_not_null2
+		;dealloc temporary array
+		push dword[ebp-36]
+		call my_free
+		add esp, 4
+		
+	chunkManager4d_registerChangedBlockArray_priority_array_not_null2:
 	
 	;destroy the vectors
 	lea eax, [ebp-16]
@@ -1757,6 +1795,10 @@ chunkManager4d_loadChunk_internal:
 	sub esp, 4				;is first load							12
 	sub esp, 16				;first load changed blocks vector		28
 	
+	sub esp, 4				;int* changedBlockTypes					32
+	sub esp, 4				;ivec3* changedBlockChunks				36
+	sub esp, 4				;ivec4* changedBlockPositions			40
+	
 	mov dword[ebp-12], 0
 	
 	;check if the chunk is already registered
@@ -1817,32 +1859,94 @@ chunkManager4d_loadChunk_internal:
 	
 	;deal with the first load changed blocks vector
 	cmp dword[ebp-12], 0
-	je chunkManager4d_loadChunk_internal_chunk_already_registered3
-		push esi			;save esi
-		push edi			;save edi
+	je chunkManager4d_loadChunk_internal_chunk_already_registered3	
+		;check if there are first load blocks at all
+		cmp dword[ebp-28], 0
+		jle chunkManager4d_loadChunk_internal_no_first_load_blocks
+			push esi			;save esi
+			push edi			;save edi
+			push ebx			;save ebx
 		
-		mov esi, dword[ebp-28]			;index in esi
-		mov edi, dword[ebp-16]			;current block info in edi
-		cmp esi, 0
-		jle chunkManager4d_loadChunk_internal_register_block_loop_end
-		chunkManager4d_loadChunk_internal_register_block_loop_start:
-			push 0						;priority
-			lea eax, [edi+16]
-			push eax					;block pos
-			lea eax, [edi+4]
-			push eax					;chunk pos
-			push dword[edi]				;block
-			push dword[ebp+8]			;chunk manager
-			call chunkManager4d_registerChangedBlock
-			add esp, 20
+			;allocate the necessary arrays for registerChangedBlockArray
+			mov ebx, dword[ebp-28]
+			
+			lea eax, [4*ebx]
+			push eax
+			call my_malloc
+			mov dword[ebp-32], eax		;block types
+			
+			lea eax, [ebx+2*ebx]
+			shl eax, 2
+			push eax
+			call my_malloc
+			mov dword[ebp-36], eax		;block chunks
+			
+			mov eax, ebx
+			shl eax, 4
+			push eax
+			call my_malloc
+			mov dword[ebp-40], eax		;block positions
+			add esp, 12
+			
+			;fill up the arrays with the first block values
+			mov edi, dword[ebp-28]		;index in edi
+			mov esi, dword[ebp-16]		;first changed blocks in esi
+			mov eax, dword[ebp-32]		;block types in eax
+			mov ecx, dword[ebp-36]		;block chunks in ecx
+			mov edx, dword[ebp-40]		;block positions in edx
+			chunkManager4d_loadChunk_internal_block_data_transform_loop_start:
+				mov ebx, dword[esi]
+				mov dword[eax], ebx
+				
+				mov ebx, dword[esi+4]
+				mov dword[ecx], ebx
+				mov ebx, dword[esi+8]
+				mov dword[ecx+4], ebx
+				mov ebx, dword[esi+12]
+				mov dword[ecx+8], ebx
+				
+				mov ebx, dword[esi+16]
+				mov dword[edx], ebx
+				mov ebx, dword[esi+20]
+				mov dword[edx+4], ebx
+				mov ebx, dword[esi+24]
+				mov dword[edx+8], ebx
+				mov ebx, dword[esi+28]
+				mov dword[edx+12], ebx
+			
+			
+				add esi, 32
+				add eax, 4
+				add ecx, 12
+				add edx, 16
+				dec edi
+				test edi, edi
+				jnz chunkManager4d_loadChunk_internal_block_data_transform_loop_start
+				
+			;register the blocks
+			push 0					;no priority
+			push dword[ebp-40]
+			push dword[ebp-36]
+			push dword[ebp-32]
+			push dword[ebp-28]
+			push dword[ebp+8]
+			call chunkManager4d_registerChangedBlockArray
+			add esp, 24
+			
+			;dealloc the arrays
+			push dword[ebp-40]
+			call my_free
+			push dword[ebp-36]
+			call my_free
+			push dword[ebp-32]
+			call my_free
+			add esp, 12
 		
-			add edi, 32
-			dec esi
-			test esi, esi
-			jnz chunkManager4d_loadChunk_internal_register_block_loop_start
-		chunkManager4d_loadChunk_internal_register_block_loop_end:
-		pop edi				;restore edi
-		pop esi				;save esi
+			pop ebx				;restore ebx
+			pop edi				;restore edi
+			pop esi				;restore esi
+		chunkManager4d_loadChunk_internal_no_first_load_blocks:
+		
 	
 		lea eax, [ebp-28]
 		push eax
