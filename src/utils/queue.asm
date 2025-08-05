@@ -71,6 +71,8 @@ section .text use32
 	;the comparator must return 0 if a match is found
 	global queue_search			;int queue_search(queue* pqueue, int (*comparator)(element*, void* searchKey), void* searchKey)
 	
+	global queue_forEach		;void queue_forEach(queue* pqueue, void (*function)(element*, void* param), void* param)
+	
 	global queue_printInfo		;void queue_printInfo(queue* pqueue)
 	
 	
@@ -677,6 +679,53 @@ queue_search:
 	mov eax, dword[ebp-4]
 	
 	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+queue_forEach:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	;check if the queue is empty
+	mov eax, dword[ebp+20]
+	cmp dword[eax+4], 0
+	jle queue_forEach_end
+	
+	;do for each stuff
+	mov esi, dword[eax+16]		;elements in esi
+	mov edi, dword[eax+8]		;current element index in edi
+	mov ebx, dword[eax+4]		;index in ebx
+	queue_forEach_loop_start:
+		mov eax, dword[ebp+20]
+		mov ecx, edi
+		imul ecx, dword[eax+12]
+		add ecx, esi
+	
+		push dword[ebp+28]
+		push ecx
+		call dword[ebp+24]
+		add esp, 8
+	
+		inc edi
+		mov eax, dword[ebp+20]
+		cmp edi, dword[eax+8]
+		jl queue_forEach_loop_no_overflow
+			sub edi, dword[eax+8]
+		queue_forEach_loop_no_overflow:
+		
+		dec ebx
+		test ebx, ebx
+		jnz queue_forEach_loop_start
+	
+	queue_forEach_end:
+	mov esp, ebp
+	pop ebx
 	pop edi
 	pop esi
 	pop ebp

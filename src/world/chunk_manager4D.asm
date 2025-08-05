@@ -12,7 +12,7 @@
 ;	tsQueue<PendingChangedBlockInfo> pendingChangedBlocks;		112
 ;	TextureArrayInfo* blockTextures;							120
 ;	vector<ivec3> veteranChunks;								124 //chunks that have been loaded at least once
-;	vector<struct{ivec3;Renderable*}> fanthomChunks;			140 //fanthom chunks are remaining renderables of no longer existing chunks, they are kept during a reload to prevent flickering
+;	vector<struct{ivec3;Renderable*;int id}> fanthomChunks;			140 //fanthom chunks are remaining renderables of no longer existing chunks, they are kept during a reload to prevent flickering
 ;	Mutex* fanthomChunkMutex;									156
 ;}			160 bytes overall
 
@@ -78,6 +78,9 @@ section .rodata use32
 	ONE dd 1.0
 	MINUS_ONE dd -1.0
 	MINUS_SIXTEEN dd -16.0
+	
+section .data use32
+	CURRENT_FANTHOM_ID dd 0
 	
 section .text use32
 
@@ -277,7 +280,7 @@ chunkManager4d_create:
 	add esp, 8
 	
 	;init fanthom chunk vector
-	push 16
+	push 20
 	mov ecx, dword[ebp-4]
 	add ecx, 140
 	push ecx
@@ -730,7 +733,7 @@ chunkManager4d_render:
 			add esp, 16
 			
 			
-			add edi, 16
+			add edi, 20
 			dec esi
 			test esi, esi
 			jnz chunkManager4d_render_fanthom_chunks_loop_start
@@ -2201,6 +2204,7 @@ chunkManager4d_reloadChunkByPosition_internal:
 	push dword[ebp+20]
 	push dword[ebp+16]
 	call chunkManager4d_unloadChunkByPosition_internal
+	
 	test dword[ebp-4], 0xffffffff
 	jz chunkManager4d_reloadChunkByPosition_internal_no_renderable
 		;register the fanthom chunk
@@ -2383,10 +2387,11 @@ chunkManager4d_createAndRegisterGraphicsUnloadUpdate_internal:
 	
 
 ;this function shall only be called from the chunk loader thread, for there is no mutex of fanthom vector
-;void chunkManager4d_registerFanthomChunk_internal(ChunkManager4D* cm, int chunkX, int chunkZ, int chunkW, Renderable* renderable)
+;void chunkManager4d_registerFanthomChunk_internal(ChunkManager4D* cm, ivec3 chunkPos, Renderable* renderable)
 chunkManager4d_registerFanthomChunk_internal:
 	push ebp
 	mov ebp, esp
+	
 	
 	;lock fanthom mutex
 	push -1
@@ -2396,19 +2401,26 @@ chunkManager4d_registerFanthomChunk_internal:
 	add esp, 8
 	
 	;add fanthom chunk to the viktor
-	lea ecx, [ebp+12]
-	push ecx
+	inc dword[CURRENT_FANTHOM_ID]
+	
+	push dword[CURRENT_FANTHOM_ID]
+	push dword[ebp+24]
+	push dword[ebp+20]
+	push dword[ebp+16]
+	push dword[ebp+12]
+	
 	mov eax, dword[ebp+8]
 	add eax, 140
 	push eax
-	call vector_push_back_buffer
-	add esp, 8
+	call vector_push_back
+	add esp, 24
 	
 	;unlock fanthom mutex
 	mov eax, dword[ebp+8]
 	push dword[eax+156]
 	call mutex_unlock
 	add esp, 4
+	
 	
 	mov esp, ebp
 	pop ebp
@@ -2427,7 +2439,6 @@ chunkManager4d_unregisterFanthomChunk_internal:
 	sub esp, 4			;fanthom index		8
 	
 	mov dword[ebp-8], 0
-	
 	
 	;lock fanthom mutex
 	push -1
@@ -2458,7 +2469,7 @@ chunkManager4d_unregisterFanthomChunk_internal:
 	
 		chunkManager4d_unregisterFanthomChunk_internal_loop_continue:
 		inc dword[ebp-8]
-		add edi, 16
+		add edi, 8
 		dec esi
 		test esi, esi
 		jnz chunkManager4d_unregisterFanthomChunk_internal_loop_start
