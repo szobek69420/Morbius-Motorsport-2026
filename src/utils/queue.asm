@@ -699,7 +699,7 @@ queue_forEach:
 	
 	;do for each stuff
 	mov esi, dword[eax+16]		;elements in esi
-	mov edi, dword[eax+8]		;current element index in edi
+	mov edi, dword[eax]			;current element index in edi
 	mov ebx, dword[eax+4]		;index in ebx
 	queue_forEach_loop_start:
 		mov eax, dword[ebp+20]

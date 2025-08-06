@@ -18,7 +18,7 @@
 
 ;layout:
 ;struct ChunkGraphicsUpdate4D{
-;	void* data					0, it is Chunk4D* if load update, otherwise a renderable*
+;	void* data					0, it is Chunk4D* if load update, otherwise a renderable*; if it is NULL, then the update is yeeted
 ;	int isLoadUpdate;			4
 ;	int chunkManager;			8, only relevant if the update is an unload update and the renderable belongs to a fanthom chunk
 ;}		12 bytes overall
@@ -158,6 +158,7 @@ section .text use32
 	extern tsQueue_isEmpty
 	extern tsQueue_at
 	extern tsQueue_size
+	extern tsQueue_forEach
 	extern queue_printInfo
 	
 	extern hashMap_init
@@ -1057,6 +1058,22 @@ chunkManager4d_processGraphicsUpdate:
 	push eax
 	call tsQueue_pop
 	add esp, 8
+	
+	;check if the update shall be yeeted
+	mov eax, dword[ebp-4]
+	test dword[eax], 0xffffffff
+	jnz chunkManager4d_processGraphicsUpdate_no_yeet
+		;set return value
+		mov dword[ebp-28], 69
+		
+		;dealloc update
+		push eax
+		call my_free
+		add esp, 4
+		
+		jmp chunkManager4d_processGraphicsUpdate_end
+		
+	chunkManager4d_processGraphicsUpdate_no_yeet:
 
 	
 	;examine what kind of update it is
@@ -2245,6 +2262,34 @@ chunkManager4d_reloadChunkByPosition_internal:
 	
 	test dword[ebp-8], 0xffffffff
 	jz chunkManager4d_reloadChunkByPosition_internal_no_unload_update
+		;if there is an unload update for the current renderable, remove it
+		push dword[ebp-4]
+		push chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper
+		mov eax, dword[ebp+16]
+		add eax, 20
+		push eax
+		call tsQueue_forEach
+		add esp, 12
+		jmp chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_done
+		
+		;void function(ChunkGraphicsUpdate4D** pupdate, Renderable* renderable)
+		chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper:
+			mov eax, dword[esp+4]
+			mov eax, dword[eax]
+			test dword[eax+4], 0xffffffff
+			jnz chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper_end	;skip if load update
+			mov ecx, dword[esp+8]
+			cmp ecx, dword[eax]
+			jnz chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper_end	;different renderable
+
+				mov dword[eax], 0		;make it worthy of yeeting
+			
+			chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper_end:
+			ret
+		
+		chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_done:
+	
+		;register unload update
 		push 0
 		push dword[ebp-8]
 		push dword[ebp+16]
