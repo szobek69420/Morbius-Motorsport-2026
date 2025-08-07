@@ -20,8 +20,14 @@
 ;struct ChunkGraphicsUpdate4D{
 ;	void* data					0, it is Chunk4D* if load update, otherwise a renderable*; if it is NULL, then the update is yeeted
 ;	int isLoadUpdate;			4
-;	int chunkManager;			8, only relevant if the update is an unload update and the renderable belongs to a fanthom chunk
-;}		12 bytes overall
+;	union{	
+;		struct LoadData{};
+;		struct UnloadData{
+;			ChunkManager4D* chunkManager;	//NULL if no fanthom unload
+;			int chunkX, chunkZ, chunkW;
+;		}
+;	}	
+;}		8 bytes for load update, 24 bytes for unload update
 
 ;layout:
 ;struct ChangedBlockInfo{
@@ -2083,11 +2089,14 @@ chunkManager4d_unloadChunk_internal:
 	je chunkManager4d_unloadChunk_internal_no_renderable		;renderable should not be yeeted
 		mov dword[eax+60], 0			;unmark chunk as processed
 	
+		push dword[eax+8]
+		push dword[eax+4]
+		push dword[eax]
 		push 0
 		push dword[eax+12]
 		push dword[ebp+8]
 		call chunkManager4d_createAndRegisterGraphicsUnloadUpdate_internal
-		add esp, 12
+		add esp, 24
 		
 	chunkManager4d_unloadChunk_internal_no_renderable:
 	
@@ -2209,6 +2218,10 @@ chunkManager4d_reloadChunkByPosition_internal:
 	sub esp, 4		;unload update			8
 	sub esp, 4		;load update			12
 	
+	;helper variables for the unload update yeeting
+	sub esp, 16		;vector<Renderable*>	28
+	sub esp, 12		;ivec3 chunkPos			40
+	
 	mov dword[ebp-4], 0
 	mov dword[ebp-8], 0
 	mov dword[ebp-12], 0
@@ -2230,12 +2243,15 @@ chunkManager4d_reloadChunkByPosition_internal:
 		call chunkManager4d_registerFanthomChunk_internal
 		
 		;create the unload update
+		push dword[ebp+28]
+		push dword[ebp+24]
+		push dword[ebp+20]
 		push 69					;isFanthom
 		push dword[ebp-4]
 		push dword[ebp+16]
 		call chunkManager4d_createGraphicsUnloadUpdate_internal
 		mov dword[ebp-8], eax
-		add esp, 12
+		add esp, 24
 		
 	chunkManager4d_reloadChunkByPosition_internal_no_renderable:
 	add esp, 20
@@ -2262,8 +2278,27 @@ chunkManager4d_reloadChunkByPosition_internal:
 	
 	test dword[ebp-8], 0xffffffff
 	jz chunkManager4d_reloadChunkByPosition_internal_no_unload_update
+		;we need to delay the unload of any fanthom renderables for this chunk
+		;first, the matching (already registered) unload updates will be yeeted and their renderable in a vector saved
+		;then new updates will be erstellt using the previously gathered renderables
+	
+		;init the renderable vector and the chunk pos
+		push 4
+		lea eax, [ebp-28]
+		push eax
+		call vector_init
+		add esp, 8
+		
+		mov eax, dword[ebp+28]
+		mov dword[ebp-32], eax
+		mov ecx, dword[ebp+24]
+		mov dword[ebp-36], ecx
+		mov edx, dword[ebp+20]
+		mov dword[ebp-40], edx
+	
 		;if there is an unload update for the current renderable, remove it
-		push dword[ebp-4]
+		lea eax, [ebp-40]
+		push eax
 		push chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper
 		mov eax, dword[ebp+16]
 		add eax, 20
@@ -2272,22 +2307,68 @@ chunkManager4d_reloadChunkByPosition_internal:
 		add esp, 12
 		jmp chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_done
 		
-		;void function(ChunkGraphicsUpdate4D** pupdate, Renderable* renderable)
+		;void function(ChunkGraphicsUpdate4D** pupdate, struct{ivec3, vector<Renderable*>}* data)
 		chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper:
 			mov eax, dword[esp+4]
 			mov eax, dword[eax]
+			mov ecx, dword[esp+8]
+			
 			test dword[eax+4], 0xffffffff
 			jnz chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper_end	;skip if load update
-			mov ecx, dword[esp+8]
-			cmp ecx, dword[eax]
-			jnz chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper_end	;different renderable
-
-				mov dword[eax], 0		;make it worthy of yeeting
+			test dword[eax+8], 0xffffffff
+			jz chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper_end	;should be fanthom
+			
+			mov edx, dword[eax+12]
+			cmp dword[ecx], edx
+			jne chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper_end 
+			mov edx, dword[eax+16]
+			cmp dword[ecx+4], edx
+			jne chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper_end 
+			mov edx, dword[eax+20]
+			cmp dword[ecx+8], edx
+			jne chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper_end 
+				;yeet the update
+				mov edx, dword[eax]		;save the renderable
+				mov dword[eax], 0
+				
+				;add the renderable to the vector
+				push edx
+				add ecx, 12
+				push ecx
+				call vector_push_back
+				add esp, 8
 			
 			chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper_end:
 			ret
 		
 		chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_done:
+		
+		;re-register the yeeted unload updates
+		mov esi, dword[ebp-16]			;current renderable in esi
+		mov edi, dword[ebp-28]			;index in edi
+		cmp edi, 0
+		jle chunkManager4d_reloadChunkByPosition_internal_unload_reregister_loop_end
+		chunkManager4d_reloadChunkByPosition_internal_unload_reregister_loop_start:
+			push dword[ebp+28]
+			push dword[ebp+24]
+			push dword[ebp+20]
+			push 69
+			push dword[esi]
+			push dword[ebp+16]
+			call chunkManager4d_createAndRegisterGraphicsUnloadUpdate_internal
+			add esp, 24
+			
+			add esi, 4
+			dec edi
+			test edi, edi
+			jnz chunkManager4d_reloadChunkByPosition_internal_unload_reregister_loop_start
+		chunkManager4d_reloadChunkByPosition_internal_unload_reregister_loop_end:	
+		
+		;deinit the renderable vector
+		lea eax, [ebp-28]
+		push eax
+		call vector_destroy
+		add esp, 4
 	
 		;register unload update
 		push 0
@@ -2335,7 +2416,7 @@ chunkManager4d_createGraphicsLoadUpdate_internal:
 	sub esp, 4			;graphics update			4
 	
 	;alloc graphics update
-	push 12
+	push 8
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 8
@@ -2353,7 +2434,7 @@ chunkManager4d_createGraphicsLoadUpdate_internal:
 	ret
 
 
-;void chunkManager4d_createGraphicsUnloadUpdate_internal(ChunkManager4D* cm, Renderable* renderable, int isFanthom)
+;void chunkManager4d_createGraphicsUnloadUpdate_internal(ChunkManager4D* cm, Renderable* renderable, int isFanthom, int chunkX, int chunkZ, int chunkW)
 chunkManager4d_createGraphicsUnloadUpdate_internal:
 	push ebp
 	mov ebp, esp
@@ -2361,7 +2442,7 @@ chunkManager4d_createGraphicsUnloadUpdate_internal:
 	sub esp, 4			;graphics update			4
 	
 	;alloc graphics update
-	push 12
+	push 24
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 8
@@ -2376,6 +2457,12 @@ chunkManager4d_createGraphicsUnloadUpdate_internal:
 		mov ecx, dword[ebp+8]
 		mov dword[eax+8], ecx
 	chunkManager4d_createGraphicsUnloadUpdate_internal_not_fanthom:
+	mov edx, dword[ebp+20]
+	mov dword[eax+12], edx	;chunkX
+	mov ecx, dword[ebp+24]
+	mov dword[eax+16], ecx	;chunkZ
+	mov edx, dword[ebp+28]
+	mov dword[eax+20], edx	;chunkW
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -2407,13 +2494,16 @@ chunkManager4d_createAndRegisterGraphicsLoadUpdate_internal:
 	
 
 ;creates a graphics unload update and pushes it onto the end of the queue	
-;void chunkManager4d_createAndRegisterGraphicsUnloadUpdate_internal(ChunkManager4D* cm, Renderable* renderable, int isFanthom)
+;void chunkManager4d_createAndRegisterGraphicsUnloadUpdate_internal(ChunkManager4D* cm, Renderable* renderable, int isFanthom, int chunkX, int chunkZ, int chunkW)
 chunkManager4d_createAndRegisterGraphicsUnloadUpdate_internal:
 	push ebp
 	mov ebp, esp
 	
 	sub esp, 4			;graphics update			4
 	
+	push dword[ebp+28]
+	push dword[ebp+24]
+	push dword[ebp+20]
 	push dword[ebp+16]
 	push dword[ebp+12]
 	push dword[ebp+8]
