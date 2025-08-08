@@ -2331,7 +2331,7 @@ chunkManager4d_reloadChunkByPosition_internal:
 				mov edx, dword[eax]		;save the renderable
 				mov dword[eax], 0
 				
-				;add the renderable to the vector
+				;add the renderable to the viktor
 				push edx
 				add ecx, 12
 				push ecx

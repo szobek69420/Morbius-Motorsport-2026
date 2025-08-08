@@ -8,7 +8,8 @@
 ;	float colourG;			136
 ;	float colourB;			140
 ;	float colourA;			144
-;}	148 bytes
+;	float cornerRadius		148
+;}	152 bytes
 
 section .rodata use32
 	vertex_vector:
@@ -44,6 +45,7 @@ section .rodata use32
 	uniform_name_colour db "colour",0
 	uniform_name_position db "position",0
 	uniform_name_scale db "scale",0
+	uniform_name_cornerRadius db "cornerRadius",0
 	
 	ONE dd 1.0
 	
@@ -68,6 +70,7 @@ section .text use32
 	;UIImage* uiImage_setTexture(UIImage* image, const char* nullableTexturePath)
 	global uiImage_setTexture
 	global uiImage_setColour	;void uiImage_setColour(UIImage* image, float r, float g, float b, float a)
+	global uiImage_setCornerRadius	;void uiImage_setCornerRadius(UIImage* image, float cornerRadius)
 	
 	extern uiElement_initGeneralPart
 	
@@ -85,6 +88,7 @@ section .text use32
 	extern renderable_useShader
 	extern renderable_setUniform
 	extern renderable_setExtraTexture2D
+	extern RENDERABLE_UNIFORM_FLOAT
 	extern RENDERABLE_UNIFORM_VEC2
 	extern RENDERABLE_UNIFORM_VEC4_ARRAY
 	extern RENDERABLE_UNIFORM_MAT4
@@ -198,7 +202,7 @@ uiImage_create:
 	sub esp, 4			;image		4
 	
 	;alloc space
-	push 148
+	push 152
 	call my_malloc
 	mov dword[ebp-4], eax
 	
@@ -222,6 +226,10 @@ uiImage_create:
 	mov dword[eax+136], ecx
 	mov dword[eax+140], ecx
 	mov dword[eax+144], ecx
+	
+	push 0
+	push dword[ebp-4]
+	call uiImage_setCornerRadius
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -284,6 +292,13 @@ uiImage_setColour:
 	ret
 	
 	
+uiImage_setCornerRadius:
+	mov eax, dword[esp+4]
+	mov ecx, dword[esp+8]
+	mov dword[eax+148], ecx
+	ret
+	
+	
 ;internal functions	-------------------------------
 
 ;doesn't deallocate the memory region
@@ -342,6 +357,13 @@ uiImage_render:
 	push uniform_name_colour
 	push dword[shader]
 	call renderable_setUniform				;colour
+	
+	mov eax, dword[ebp+8]
+	push dword[eax+148]
+	push dword[RENDERABLE_UNIFORM_FLOAT]
+	push uniform_name_cornerRadius
+	push dword[shader]
+	call renderable_setUniform
 	
 	;set texture
 	mov eax, dword[ebp+8]

@@ -5,7 +5,8 @@ section .rodata use32
 
 	text_welcome db "zaoshang hao",0
 	
-	background_path db "sprites/ui/menu/background.bmp",0
+	background_texture_path db "sprites/ui/menu/background.bmp",0
+	exit_button_texture_path db "sprites/ui/menu/exit_button.bmp",0
 
 section .data use32
 
@@ -17,6 +18,7 @@ section .data use32
 	CANVAS_MENU dd 0
 	IMAGE_BACKGROUND dd 0
 	IMAGE_START_BUTTON dd 0
+	IMAGE_EXIT_BUTTON dd 0
 	TEXT_WELCOME dd 0
 	
 section .bss use32
@@ -81,6 +83,7 @@ section .text use32
 	extern uiElement_setOnClick
 	extern uiElement_setStatus
 	extern uiImage_setTexture
+	extern uiImage_setCornerRadius
 	extern uiText_setText
 	extern uiText_setTextAlignment
 	extern uiText_setFontSize
@@ -346,11 +349,11 @@ menuLoop_initCanvas:
 	call uiElement_setPosition
 	call uiElement_setSize
 	
-	push background_path
+	push background_texture_path
 	push dword[IMAGE_BACKGROUND]
 	call uiImage_setTexture
 
-	;create image
+	;create start image
 	push dword[UI_IMAGE]
 	call uiElement_create
 	mov dword[IMAGE_START_BUTTON], eax
@@ -366,14 +369,89 @@ menuLoop_initCanvas:
 	call uiElement_setPivot
 	
 	push dword[return_value]
-	push menuLoop_startButtonCallback
+	push menuLoop_initCanvas_startButtonCallback
 	push dword[IMAGE_START_BUTTON]
 	call uiElement_setOnClick
+	
+	push 0x41200000
+	push dword[IMAGE_START_BUTTON]
+	call uiImage_setCornerRadius
+	
+	push 50
+	push 200
+	push dword[IMAGE_START_BUTTON]
+	call uiElement_setSize
 	
 	push 69
 	push 69
 	push dword[IMAGE_START_BUTTON]
 	call uiElement_setStatus
+	
+	
+	jmp menuLoop_initCanvas_startButtonCallback_skip
+	;void menuLoop_startButtonCallback(UIElement* element, tsValue<int>* returnValue)
+	menuLoop_initCanvas_startButtonCallback:
+		mov eax, dword[esp+8]
+		push dword[GAME_STATE_INGAME]
+		push eax
+		call tsValue_set
+		add esp, 8
+		ret
+	menuLoop_initCanvas_startButtonCallback_skip:
+	
+	;create exit image
+	push dword[UI_IMAGE]
+	call uiElement_create
+	mov dword[IMAGE_EXIT_BUTTON], eax
+	
+	push dword[CANVAS_MENU]
+	push dword[IMAGE_EXIT_BUTTON]
+	call uiElement_setParent
+	
+	push word[UI_CENTER]
+	push word[UI_CENTER]
+	push dword[IMAGE_EXIT_BUTTON]
+	call uiElement_setAnchor
+	call uiElement_setPivot
+	
+	push exit_button_texture_path
+	push dword[IMAGE_EXIT_BUTTON]
+	call uiImage_setTexture
+	
+	push 0x41200000
+	push dword[IMAGE_EXIT_BUTTON]
+	call uiImage_setCornerRadius
+	
+	push 50
+	push 200
+	push dword[IMAGE_EXIT_BUTTON]
+	call uiElement_setSize
+	
+	push -70
+	push 0
+	push dword[IMAGE_EXIT_BUTTON]
+	call uiElement_setPosition
+	
+	push 69
+	push 69
+	push dword[IMAGE_EXIT_BUTTON]
+	call uiElement_setStatus
+	
+	push dword[return_value]
+	push menuLoop_initCanvas_exitButtonCallback
+	push dword[IMAGE_EXIT_BUTTON]
+	call uiElement_setOnClick
+	
+	jmp menuLoop_initCanvas_exitButtonCallback_skip
+	;void menuLoop_initCanvas_exitButtonCallback(UIElement* element, tsValue<int>* returnValue)
+	menuLoop_initCanvas_exitButtonCallback:
+		mov eax, dword[esp+8]
+		push dword[GAME_STATE_DEINIT]
+		push eax
+		call tsValue_set
+		add esp, 8
+		ret
+	menuLoop_initCanvas_exitButtonCallback_skip:
 	
 	;create text
 	push dword[UI_TEXT]
@@ -410,20 +488,6 @@ menuLoop_initCanvas:
 	push 0
 	push dword[TEXT_WELCOME]
 	call uiText_setColour
-	
-	mov esp, ebp
-	pop ebp
-	ret
-	
-
-;void menuLoop_startButtonCallback(UIElement* element, tsValue<int>* returnValue)
-menuLoop_startButtonCallback:
-	push ebp
-	mov ebp, esp
-	
-	push dword[GAME_STATE_INGAME]
-	push dword[ebp+12]
-	call tsValue_set
 	
 	mov esp, ebp
 	pop ebp

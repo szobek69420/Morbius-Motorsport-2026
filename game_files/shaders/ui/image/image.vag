@@ -2,6 +2,7 @@
 layout (location=0) in vec2 vertexData;
 
 out vec2 uv;
+out vec2 pos;
 
 uniform vec2 position;
 uniform vec2 scale;
@@ -10,6 +11,6 @@ uniform mat4 pv;
 void main()
 {
 	uv=vertexData;
-	
-	gl_Position=pv*vec4(position+vertexData*scale, 0.0, 1.0);
+	pos=position+vertexData*scale;
+	gl_Position=pv*vec4(pos, 0.0, 1.0);
 }
