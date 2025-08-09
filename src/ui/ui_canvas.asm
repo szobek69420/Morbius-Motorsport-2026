@@ -2,7 +2,7 @@
 
 ;struct UICanvas{
 ;	<UIElement>
-;}	128 bytes overall
+;}	192 bytes overall
 
 section .rodata use32
 
@@ -38,7 +38,7 @@ uiCanvas_create:
 	sub esp, 4			;canvas		4
 	
 	;alloc space
-	push 128
+	push 192
 	call my_malloc
 	mov dword[ebp-4], eax
 	

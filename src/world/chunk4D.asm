@@ -197,6 +197,18 @@ chunk4d_destroy:
 	
 	;NOTE: renderable is not destroyed here as it wasn't created here
 	
+	;check if there is unreleased vertex data
+	mov eax, dword[ebp+8]
+	test dword[eax+52], 0xffffffff
+	jz chunk4d_destroy_no_vertexData
+		;free vertex data
+		push dword[eax+52]
+		mov dword[eax+52], 0
+		mov dword[eax+56], 0
+		call my_free
+		add esp, 4
+	chunk4d_destroy_no_vertexData:
+	
 	;yeet cg
 	mov eax, dword[ebp+8]
 	push 69						;should destroy

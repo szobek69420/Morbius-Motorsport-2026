@@ -3,13 +3,13 @@
 ;layout
 ;struct UIImage{
 ;	<UIElement>
-;	GLuint texture;			128	//0 means default
-;	float colourR;			132
-;	float colourG;			136
-;	float colourB;			140
-;	float colourA;			144
-;	float cornerRadius		148
-;}	152 bytes
+;	GLuint texture;			192	//0 means default
+;	float colourR;			196
+;	float colourG;			200
+;	float colourB;			204
+;	float colourA;			208
+;	float cornerRadius		212
+;}	216 bytes
 
 section .rodata use32
 	vertex_vector:
@@ -202,7 +202,7 @@ uiImage_create:
 	sub esp, 4			;image		4
 	
 	;alloc space
-	push 152
+	push 216
 	call my_malloc
 	mov dword[ebp-4], eax
 	
@@ -219,13 +219,13 @@ uiImage_create:
 	mov dword[eax+72], uiImage_destroy
 	
 	;init values
-	mov dword[eax+128], 0
+	mov dword[eax+192], 0
 	
 	mov ecx, dword[ONE]
-	mov dword[eax+132], ecx
-	mov dword[eax+136], ecx
-	mov dword[eax+140], ecx
-	mov dword[eax+144], ecx
+	mov dword[eax+196], ecx
+	mov dword[eax+200], ecx
+	mov dword[eax+204], ecx
+	mov dword[eax+208], ecx
 	
 	push 0
 	push dword[ebp-4]
@@ -249,9 +249,9 @@ uiImage_setTexture:
 	
 	;unload previous texture if necessary
 	mov eax, dword[ebp+8]
-	test dword[eax+128], 0xffffffff
+	test dword[eax+192], 0xffffffff
 	jz uiImage_setTexture_no_previous_texture
-		push dword[eax+128]
+		push dword[eax+192]
 		call textureHandler_unload
 		
 	uiImage_setTexture_no_previous_texture:
@@ -270,7 +270,7 @@ uiImage_setTexture:
 	;set the new texture
 	mov eax, dword[ebp+8]
 	mov ecx, dword[ebp-4]
-	mov dword[eax+128], ecx
+	mov dword[eax+192], ecx
 	
 	mov esp, ebp
 	pop ebp
@@ -281,13 +281,13 @@ uiImage_setColour:
 	mov eax, dword[esp+4]
 	
 	mov ecx, dword[esp+8]
-	mov dword[eax+132], ecx
+	mov dword[eax+196], ecx
 	mov ecx, dword[esp+12]
-	mov dword[eax+136], ecx
+	mov dword[eax+200], ecx
 	mov ecx, dword[esp+16]
-	mov dword[eax+140], ecx
+	mov dword[eax+204], ecx
 	mov ecx, dword[esp+20]
-	mov dword[eax+144], ecx
+	mov dword[eax+208], ecx
 	
 	ret
 	
@@ -295,7 +295,7 @@ uiImage_setColour:
 uiImage_setCornerRadius:
 	mov eax, dword[esp+4]
 	mov ecx, dword[esp+8]
-	mov dword[eax+148], ecx
+	mov dword[eax+212], ecx
 	ret
 	
 	
@@ -350,7 +350,7 @@ uiImage_render:
 	call renderable_setUniform				;scale
 
 	mov eax, dword[ebp+8]
-	lea eax, [eax+132]
+	lea eax, [eax+196]
 	push eax
 	push 1
 	push dword[RENDERABLE_UNIFORM_VEC4_ARRAY]
@@ -359,7 +359,7 @@ uiImage_render:
 	call renderable_setUniform				;colour
 	
 	mov eax, dword[ebp+8]
-	push dword[eax+148]
+	push dword[eax+212]
 	push dword[RENDERABLE_UNIFORM_FLOAT]
 	push uniform_name_cornerRadius
 	push dword[shader]
@@ -367,10 +367,10 @@ uiImage_render:
 	
 	;set texture
 	mov eax, dword[ebp+8]
-	test dword[eax+128], 0xffffffff
+	test dword[eax+192], 0xffffffff
 	jz uiImage_render_texture_default
 		;set the non-default texture
-		push dword[eax+128]
+		push dword[eax+192]
 		push 0
 		push dword[renderable]
 		call renderable_setExtraTexture2D

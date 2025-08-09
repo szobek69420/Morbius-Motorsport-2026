@@ -3,12 +3,12 @@
 ;layout:
 ;struct UIText{
 ;	<UIElement>
-;	char* text;									128	//NULL means kein text
-;	float colourR, colourG, colourB, colourA;	132
-;	int spacing;								148
-;	int fontWidth, fontHeight;					152
-;	int16 textAlignX, textAlignY;				160
-;}	164 bytes
+;	char* text;									192	//NULL means kein text
+;	float colourR, colourG, colourB, colourA;	196
+;	int spacing;								212
+;	int fontWidth, fontHeight;					216
+;	int16 textAlignX, textAlignY;				224
+;}	228 bytes
 
 section .rodata use32
 	UI_TEXT_ALIGN_LEFT		dw 0b001
@@ -108,7 +108,7 @@ uiText_create:
 	sub esp, 4		;element		4
 	
 	;alloc space
-	push 164
+	push 228
 	call my_malloc
 	mov dword[ebp-4], eax
 	
@@ -124,20 +124,20 @@ uiText_create:
 	;set initial values
 	mov eax, dword[ebp-4]
 	
-	mov dword[eax+128], 0
+	mov dword[eax+192], 0
 	
 	mov eax, dword[ebp-4]
 	mov ecx, dword[default_spacing]
-	mov dword[eax+148], ecx
+	mov dword[eax+212], ecx
 	mov ecx, dword[default_font_width]
-	mov dword[eax+152], ecx
+	mov dword[eax+216], ecx
 	mov ecx, dword[default_font_height]
-	mov dword[eax+156], ecx
+	mov dword[eax+220], ecx
 	mov cx, word[UI_TEXT_ALIGN_CENTER]
-	mov word[eax+160], cx
-	mov word[eax+162], cx
+	mov word[eax+224], cx
+	mov word[eax+226], cx
 	
-	lea ecx, [eax+132]
+	lea ecx, [eax+196]
 	push 16
 	push default_colour_rgba
 	push ecx
@@ -178,13 +178,13 @@ uiText_setText:
 	
 	;delete previous text
 	mov eax, dword[ebp+8]
-	push dword[eax+128]
+	push dword[eax+192]
 	call my_free
 	
 	;set new text
 	mov eax, dword[ebp-4]
 	mov ecx, dword[ebp+8]
-	mov dword[ecx+128], eax
+	mov dword[ecx+192], eax
 	
 	mov esp, ebp
 	pop ebp
@@ -195,13 +195,13 @@ uiText_setColour:
 	mov eax, dword[esp+4]
 	
 	mov ecx, dword[esp+8]
-	mov dword[eax+132], ecx
+	mov dword[eax+196], ecx
 	mov edx, dword[esp+12]
-	mov dword[eax+136], edx
+	mov dword[eax+200], edx
 	mov ecx, dword[esp+16]
-	mov dword[eax+140], ecx
+	mov dword[eax+204], ecx
 	mov edx, dword[esp+20]
-	mov dword[eax+144], edx
+	mov dword[eax+208], edx
 	
 	ret
 	
@@ -209,7 +209,7 @@ uiText_setColour:
 uiText_setSpacing:
 	mov eax, dword[esp+4]
 	mov ecx, dword[esp+8]
-	mov dword[eax+148], ecx
+	mov dword[eax+212], ecx
 	ret
 	
 	
@@ -217,14 +217,14 @@ uiText_setFontSize:
 	mov eax, dword[esp+4]
 	mov ecx, dword[esp+8]
 	mov edx, dword[esp+12]
-	mov dword[eax+152], ecx
-	mov dword[eax+156], edx
+	mov dword[eax+216], ecx
+	mov dword[eax+220], edx
 	ret
 	
 uiText_setTextAlignment:
 	mov eax, dword[esp+4]
 	mov ecx, dword[esp+8]
-	mov dword[eax+160], ecx
+	mov dword[eax+224], ecx
 	ret
 	
 ;internal functions ---------------------------------------------
@@ -236,7 +236,7 @@ uiText_destroy:
 	
 	;free text
 	mov eax, dword[ebp+8]
-	push dword[eax+128]
+	push dword[eax+192]
 	call my_free
 	
 	mov esp, ebp
@@ -256,7 +256,7 @@ uiText_render:
 	
 	;check if the text is NULL
 	mov eax, dword[ebp+8]
-	cmp dword[eax+128], 0
+	cmp dword[eax+192], 0
 	je uiText_render_end
 	
 	mov eax, dword[TEXT_PIVOT_CENTER_CENTER]
@@ -274,24 +274,24 @@ uiText_render:
 	call textRenderer_setScreenSize
 	
 	mov eax, dword[ebp+8]
-	push dword[eax+156]
-	push dword[eax+152]
-	push dword[eax+148]
+	push dword[eax+220]
+	push dword[eax+216]
+	push dword[eax+212]
 	call textRenderer_setSpacing
 	add esp, 4
 	call textRenderer_setFontSize
 	
 	mov eax, dword[ebp+8]
-	push dword[eax+144]
-	push dword[eax+140]
-	push dword[eax+136]
-	push dword[eax+132]
+	push dword[eax+208]
+	push dword[eax+204]
+	push dword[eax+200]
+	push dword[eax+196]
 	call textRenderer_setColour
 	
 	;calculate the text position
 	;horizontal part
 	mov eax, dword[ebp+8]
-	mov cx, word[eax+160]
+	mov cx, word[eax+224]
 	cmp cx, word[UI_TEXT_ALIGN_CENTER]
 	je uiText_render_hpos_center
 	cmp cx, word[UI_TEXT_ALIGN_RIGHT]
@@ -320,7 +320,7 @@ uiText_render:
 	
 	;vertical part
 	mov eax, dword[ebp+8]
-	mov cx, word[eax+162]
+	mov cx, word[eax+226]
 	cmp cx, word[UI_TEXT_ALIGN_CENTER]
 	je uiText_render_vpos_center
 	cmp cx, word[UI_TEXT_ALIGN_TOP]
@@ -349,9 +349,9 @@ uiText_render:
 	
 	;get the current alignment
 	mov eax, dword[ebp+8]
-	mov cx, word[eax+162]
+	mov cx, word[eax+226]
 	shl ecx, 16
-	mov cx, word[eax+160]
+	mov cx, word[eax+224]
 	mov edx, 9
 	uiText_render_alignment_loop_start:
 		mov eax, ALIGNMENT_TO_PIVOT_LOOKUP
@@ -375,7 +375,7 @@ uiText_render:
 	push dword[ebp-4]
 	push dword[ebp-20]
 	push dword[TEXT_ORIGIN_BOTTOM_LEFT]
-	push dword[eax+128]
+	push dword[eax+192]
 	call textRenderer_drawText
 	
 	uiText_render_end:

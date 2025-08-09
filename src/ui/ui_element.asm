@@ -18,9 +18,9 @@
 ;	void (*onWindowResize)(UIElement*, int w, int h)	76
 ;	void (*onClick)(UIElement*, void* param)			80
 ;	void* onClickParam;									84
-;	padding of 40 bytes
+;	padding of 104 bytes
 ;	arbitrary long additional data
-;}	//at least 128 bytes
+;}	//at least 192 bytes
 
 ;if the anchor is set to UI_STRETCH, the xPos/yPos is considered the distance from the left/bottom side of the parent and the width/height is considered the distance from the right/top side of the parent
 ;the pivot is ignored in this case
@@ -644,7 +644,7 @@ uiElement_initGeneralPart:
 	mov ebp, esp
 	
 	;zero out everything
-	push 128
+	push 192
 	push 0
 	push dword[ebp+8]
 	call my_memset_dword

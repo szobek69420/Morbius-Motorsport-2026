@@ -47,7 +47,7 @@ section .text use32
 	;the comparator must return 0 if a match is found
 	global tsQueue_search		;int tsQueue_search(tsQueue* pqueue, int (*comparator)(element*, void* searchKey), void* searchKey)
 	
-	global tsQueue_forEach		;void tsQueue_forEach(queue* pqueue, void (*function)(element*, void* param), void* param)
+	global tsQueue_forEach		;void tsQueue_forEach(tsQueue* pqueue, void (*function)(element*, void* param), void* param)
 	
 	global tsQueue_printInfo	;void tsQueue_printInfo(tsQueue* pqueue)
 	

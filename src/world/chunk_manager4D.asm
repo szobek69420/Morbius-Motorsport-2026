@@ -2049,8 +2049,8 @@ chunkManager4d_unloadChunk_internal:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 4		;graphics update				;4
-	sub esp, 4		;vector_remove return value		;8
+	sub esp, 4		;graphics update									;4
+	sub esp, 4		;vector_remove return value							;8
 	
 	;do we need to remove the chunk from the loaded chunks vector?
 	cmp dword[ebp+16], 0
@@ -2087,6 +2087,7 @@ chunkManager4d_unloadChunk_internal:
 	je chunkManager4d_unloadChunk_internal_no_renderable		;there is no renderable
 	cmp dword[ebp+20], 0
 	je chunkManager4d_unloadChunk_internal_no_renderable		;renderable should not be yeeted
+		;there is a renderable
 		mov dword[eax+60], 0			;unmark chunk as processed
 	
 		push dword[eax+8]
@@ -2097,6 +2098,8 @@ chunkManager4d_unloadChunk_internal:
 		push dword[ebp+8]
 		call chunkManager4d_createAndRegisterGraphicsUnloadUpdate_internal
 		add esp, 24
+		
+		jmp chunkManager4d_unloadChunk_internal_no_renderable
 		
 	chunkManager4d_unloadChunk_internal_no_renderable:
 	
@@ -2278,105 +2281,19 @@ chunkManager4d_reloadChunkByPosition_internal:
 	
 	test dword[ebp-8], 0xffffffff
 	jz chunkManager4d_reloadChunkByPosition_internal_no_unload_update
-		;we need to delay the unload of any fanthom renderables for this chunk
-		;first, the matching (already registered) unload updates will be yeeted and their renderable in a vector saved
-		;then new updates will be erstellt using the previously gathered renderables
-	
-		;init the renderable vector and the chunk pos
-		push 4
-		lea eax, [ebp-28]
-		push eax
-		call vector_init
-		add esp, 8
-		
-		mov eax, dword[ebp+28]
-		mov dword[ebp-32], eax
-		mov ecx, dword[ebp+24]
-		mov dword[ebp-36], ecx
-		mov edx, dword[ebp+20]
-		mov dword[ebp-40], edx
-	
-		;if there is an unload update for the current renderable, remove it
-		lea eax, [ebp-40]
-		push eax
-		push chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper
-		mov eax, dword[ebp+16]
-		add eax, 20
-		push eax
-		call tsQueue_forEach
-		add esp, 12
-		jmp chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_done
-		
-		;void function(ChunkGraphicsUpdate4D** pupdate, struct{ivec3, vector<Renderable*>}* data)
-		chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper:
-			mov eax, dword[esp+4]
-			mov eax, dword[eax]
-			mov ecx, dword[esp+8]
-			
-			test dword[eax+4], 0xffffffff
-			jnz chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper_end	;skip if load update
-			test dword[eax+8], 0xffffffff
-			jz chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper_end	;should be fanthom
-			
-			mov edx, dword[eax+12]
-			cmp dword[ecx], edx
-			jne chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper_end 
-			mov edx, dword[eax+16]
-			cmp dword[ecx+4], edx
-			jne chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper_end 
-			mov edx, dword[eax+20]
-			cmp dword[ecx+8], edx
-			jne chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper_end 
-				;yeet the update
-				mov edx, dword[eax]		;save the renderable
-				mov dword[eax], 0
-				
-				;add the renderable to the viktor
-				push edx
-				add ecx, 12
-				push ecx
-				call vector_push_back
-				add esp, 8
-			
-			chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_helper_end:
-			ret
-		
-		chunkManager4d_reloadChunkByPosition_internal_unload_update_yeet_done:
-		
-		;re-register the yeeted unload updates
-		mov esi, dword[ebp-16]			;current renderable in esi
-		mov edi, dword[ebp-28]			;index in edi
-		cmp edi, 0
-		jle chunkManager4d_reloadChunkByPosition_internal_unload_reregister_loop_end
-		chunkManager4d_reloadChunkByPosition_internal_unload_reregister_loop_start:
-			push dword[ebp+28]
-			push dword[ebp+24]
-			push dword[ebp+20]
-			push 69
-			push dword[esi]
-			push dword[ebp+16]
-			call chunkManager4d_createAndRegisterGraphicsUnloadUpdate_internal
-			add esp, 24
-			
-			add esi, 4
-			dec edi
-			test edi, edi
-			jnz chunkManager4d_reloadChunkByPosition_internal_unload_reregister_loop_start
-		chunkManager4d_reloadChunkByPosition_internal_unload_reregister_loop_end:	
-		
-		;deinit the renderable vector
-		lea eax, [ebp-28]
-		push eax
-		call vector_destroy
-		add esp, 4
-	
 		;register unload update
 		push 0
 		push dword[ebp-8]
 		push dword[ebp+16]
 		call chunkManager4d_registerGraphicsUpdate_internal
 		add esp, 8
+		
+		jmp chunkManager4d_reloadChunkByPosition_internal_unload_update_done
+		
 	chunkManager4d_reloadChunkByPosition_internal_no_unload_update:
+		;in case there is no renderable for the chunk yet
+	
+	chunkManager4d_reloadChunkByPosition_internal_unload_update_done:
 	
 	mov esp, ebp
 	pop edi
