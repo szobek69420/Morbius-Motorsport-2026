@@ -16,9 +16,10 @@
 ;	void (*render)(UIElement*, const mat4* projection);	68
 ;	void (*destroy)(UIElement*);						72	//clears up the element-specific parts (everything from byte 128 on), doesn't deallocate the element
 ;	void (*onWindowResize)(UIElement*, int w, int h)	76
-;	void (*onClick)(UIElement*, void* param)			80
-;	void* onClickParam;									84
-;	padding of 104 bytes
+;	int isCursorInside, isMouseHeld;					80	//a clickStart of 0 means no click
+;	void (*onClick)(UIElement*, void* param)			88
+;	void* onClickParam;									92
+;	padding of 96 bytes
 ;	arbitrary long additional data
 ;}	//at least 192 bytes
 
@@ -56,6 +57,13 @@ section .rodata use32
 	global UI_IMAGE
 	global UI_TEXT
 	
+	;input type masks
+	UI_MOUSE_PRESSED equ 0b0001
+	UI_MOUSE_RELEASED equ 0b0010
+	UI_MOUSE_CLICKED equ 0b0100
+	UI_MOUSE_HELD equ 0b1000
+	
+	
 	test_text db "kim dong un",10,0
 	
 	error_create_invalid_type db "uiElement_create: %d is not a valid element type",10,0
@@ -79,7 +87,7 @@ section .bss use32
 	window_size_x resb 4				;int
 	window_size_y resb 4				;int
 	
-	click_started resb 4				;int
+	click_start_time resb 4				;int
 	
 section .text use32
 	
@@ -126,6 +134,13 @@ section .text use32
 	;void uiElement_initGeneralPart(UIElement* element)
 	global uiElement_initGeneralPart
 	
+	;basically just a wrapper function for GetTickCount
+	;int uiElement_getUITime()
+	global uiElement_getUITime
+	
+	import GetTickCount kernel32.dll
+	extern GetTickCount
+	
 	extern my_free
 	extern my_printf
 	extern my_memset_dword
@@ -144,9 +159,6 @@ section .text use32
 	extern input_mouseButtonPressed
 	extern input_mouseButtonReleased
 	extern GLFW_MOUSE_BUTTON_LEFT
-	
-	import GetTickCount kernel32.dll
-	extern GetTickCount
 	
 	extern uiCanvas_init
 	extern uiCanvas_deinit
@@ -176,7 +188,7 @@ uiElement_init:
 	mov dword[window_size_y], -1
 	
 	;set everything else
-	mov dword[click_started], -1
+	mov dword[click_start_time], -1
 	
 	;init subsystems
 	call uiCanvas_init
@@ -578,8 +590,8 @@ uiElement_setOnClick:
 	mov eax, dword[esp+4]
 	mov ecx, dword[esp+8]
 	mov edx, dword[esp+12]
-	mov dword[eax+80], ecx
-	mov dword[eax+84], edx
+	mov dword[eax+88], ecx
+	mov dword[eax+92], edx
 	ret
 	
 
@@ -680,6 +692,11 @@ uiElement_initGeneralPart:
 	
 	mov esp, ebp
 	pop ebp
+	ret
+	
+	
+uiElement_getUITime:
+	call [GetTickCount]
 	ret
 	
 	
@@ -1057,7 +1074,7 @@ uiElement_processClick_internal:
 	call input_mouseButtonPressed
 	test eax, 0xffffffff
 	jz uiElement_processClick_internal_no_press
-		call [GetTickCount]
+		call uiElement_getUITime
 		mov dword[click_started], eax
 		
 	uiElement_processClick_internal_no_press:
@@ -1068,7 +1085,7 @@ uiElement_processClick_internal:
 	test eax, 0xffffffff
 	jz uiElement_processClick_internal_end
 	
-	call [GetTickCount]
+	call uiElement_getUITime
 	sub eax, dword[click_started]
 	cmp eax, CLICK_THRESHOLD
 	jg uiElement_processClick_internal_end	;no click
@@ -1202,6 +1219,204 @@ uiElement_processClick_internal_helper:
 	
 	
 	uiElement_processClick_internal_helper_end:
+	mov eax, dword[ebp-4]		;set return value
+	
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
+
+;calls uiElement_processButtonInput_internal_helper on the elements that are fatherless
+;void uiElement_processButtonInput_internal()	
+uiElement_processButtonInput_internal:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	sub esp, 4			;cursor x		4
+	sub esp, 4			;cursor y		8
+	sub esp, 4			;input status	12
+	
+	mov dword[ebp-12], 0
+	
+	;calculate the input status
+	push dword[GLFW_MOUSE_BUTTON_LEFT]
+	call input_mouseButtonPressed
+	test eax, eax
+	jz uiElement_processButtonInput_internal_no_press
+		call uiElement_getUITime
+		mov dword[click_start_time], eax
+		
+		or dword[ebp-12], UI_MOUSE_PRESSED
+	uiElement_processButtonInput_internal_no_press:
+	
+	call input_mouseButtonHeld
+	test eax, eax
+	jz uiElement_processButtonInput_internal_no_hold
+		or dword[ebp-12], UI_MOUSE_HELD
+	uiElement_processButtonInput_internal_no_hold:
+	
+	call input_mouseButtonReleased
+	test eax, eax
+	jz uiElement_processButtonInput_internal_no_release
+		or dword[ebp-12], UI_MOUSE_RELEASED
+	
+		call uiElement_getUITime
+		sub eax, dword[click_start_time]
+		cmp eax, CLICK_THRESHOLD
+		jg uiElement_processButtonInput_internal_no_release
+			;it's a click
+			or dword[ebp-12], UI_MOUSE_CLICKED
+
+	uiElement_processButtonInput_internal_no_release:
+	
+	
+	;get the cursor position
+	lea eax, [ebp-4]
+	lea ecx, [ebp-8]
+	push ecx
+	push eax
+	call input_mousePosition
+	add esp, 8
+	
+	mov eax, dword[window_size_y]
+	sub eax, dword[ebp-8]
+	mov dword[ebp-8], eax
+	
+	
+	;call the onClick callback of the first suitable element
+	mov eax, instantiated_vector
+	mov esi, dword[eax+12]			;elements in esi
+	mov edi, dword[eax]				;index in edi
+	cmp edi, 0
+	jle uiElement_processButtonInput_internal_end
+	uiElement_processButtonInput_internal_loop_start:
+		;check if the element is fatherless
+		mov eax, dword[esi]
+		test dword[eax+40], 0xffffffff
+		jnz uiElement_processButtonInput_internal_loop_continue		
+			;call the helper if fatherless
+			push dword[ebp-12]
+			push dword[ebp-8]
+			push dword[ebp-4]
+			push eax
+			call uiElement_processButtonInput_internal_helper
+			add esp, 16
+		
+		uiElement_processButtonInput_internal_loop_continue:
+		add esi, 4
+		dec edi
+		test edi, edi
+		jnz uiElement_processButtonInput_internal_loop_start
+	
+	uiElement_processButtonInput_internal_end:
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+;calls itself on the children of the element
+;if no children ate the click event, the element is tested as a click target
+;returns non-zero if a click landed on a suitable target (cursor position is appropriate, interactable and has an onClick callback defined)
+;returns if the element is non-interactable
+;int uiElement_processButtonInput_internal_helper(UIElement* element, int cursorX, int cursorY, int inputStatus)
+uiElement_processButtonInput_internal_helper:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	sub esp, 4			;click landed			4
+	sub esp, 4			;isCursorInside	temp	8
+	sub esp, 4			;mutable input status	12
+	
+	mov dword[ebp-4], 0
+	mov dword[ebp-8], 0
+	
+	mov eax, dword[ebp+28]
+	mov dword[ebp-12], eax
+	
+	;check if the current element is interactable
+	mov eax, dword[ebp+16]
+	test dword[eax+64], 0xffffffff
+	jz uiElement_processButtonInput_internal_helper_end
+	
+	;check if children are clickable
+	mov eax, dword[ebp+16]
+	mov esi, dword[eax+36]		;children in esi
+	mov edi, dword[eax+24]		;index in edi
+	cmp edi, 0
+	jle uiElement_processButtonInput_internal_helper_children_loop_end
+	uiElement_processButtonInput_internal_helper_children_loop_start:
+		push dword[ebp-12]
+		push dword[ebp+24]
+		push dword[ebp+20]
+		push dword[esi]
+		call uiElement_processButtonInput_internal_helper
+		or dword[ebp-4], eax
+		add esp, 16
+		
+		;has the click landed?
+		test eax, eax
+		jz uiElement_processButtonInput_internal_helper_children_loop_continue
+			;modify the input status
+			mov ecx, UI_MOUSE_CLICKED
+			not ecx
+			and dword[ebp-12], ecx
+		
+		uiElement_processButtonInput_internal_helper_children_loop_continue:
+		add esi, 4
+		dec edi
+		test edi, edi
+		jnz uiElement_processButtonInput_internal_helper_children_loop_start
+		
+	uiElement_processButtonInput_internal_helper_children_loop_end:
+	
+	;check if there is any important input statuses
+	test dword[ebp-12], 0xffffffff
+	jz uiElement_processButtonInput_internal_helper_end
+	
+	;check if the cursor is inside the element
+	;cursorX-posX is in [0; width]
+	;cursorY-posY is in [0; height]
+	mov eax, dword[ebp+16]
+	mov ecx, dword[ebp+20]
+	mov edx, dword[ebp+24]
+	sub ecx, dword[eax+44]
+	sub edx, dword[eax+48]
+	
+	;check if the current element has an onClick callback
+	mov eax, dword[ebp+16]
+	test dword[eax+80], 0xffffffff
+	jz uiElement_processButtonInput_internal_helper_end
+	
+	
+	;check if the click is inside the element
+	;cursorX-posX is in [0; width]
+	;cursorY-posY is in [0; height]
+	mov ecx, dword[ebp+20]
+	mov edx, dword[ebp+24]
+	sub ecx, dword[eax+44]
+	sub edx, dword[eax+48]
+	
+	test ecx, 0x80000000
+	jnz uiElement_processButtonInput_internal_helper_not_inside
+	test edx, 0x80000000
+	jnz uiElement_processButtonInput_internal_helper_not_inside
+	cmp ecx, dword[eax+8]
+	jg uiElement_processButtonInput_internal_helper_not_inside
+	cmp edx, dword[eax+12]
+	jg uiElement_processButtonInput_internal_helper_not_inside
+		mov dword[ebp-8], 69
+	uiElement_processButtonInput_internal_helper_not_inside:
+	
+	
+	
+	uiElement_processButtonInput_internal_helper_end:
 	mov eax, dword[ebp-4]		;set return value
 	
 	mov esp, ebp
