@@ -135,6 +135,13 @@ section .text use32
 	;	void (*onClick)(UIElement*, void* param),
 	;	void* onClickParam)
 	global uiElement_setOnClick
+	;same arguments as setOnClick
+	global uiElement_setOnEnter					;called on cursor enter
+	global uiElement_setOnExit					;called on cursor exit
+	global uiElement_setOnStay					;called on cursor stay
+	global uiElement_setOnPress					;called if the LMB is pressed while the cursor is inside the element
+	global uiElement_setOnRelease				;called if the LMB is released and it has been pressed while the cursor was inside the element
+	global uiElement_setOnHold					;called if the LMB is held and it has been pressed while the cursor was inside the element
 	
 	;NULL means no parent
 	;removes the element from the children of the former parent (no alimony then)
@@ -605,6 +612,54 @@ uiElement_setOnClick:
 	mov edx, dword[esp+12]
 	mov dword[eax+88], ecx
 	mov dword[eax+92], edx
+	ret
+	
+uiElement_setOnEnter:
+	mov eax, dword[esp+4]
+	mov ecx, dword[esp+8]
+	mov edx, dword[esp+12]
+	mov dword[eax+96], ecx
+	mov dword[eax+100], edx
+	ret
+	
+uiElement_setOnExit:
+	mov eax, dword[esp+4]
+	mov ecx, dword[esp+8]
+	mov edx, dword[esp+12]
+	mov dword[eax+104], ecx
+	mov dword[eax+108], edx
+	ret
+	
+uiElement_setOnStay:
+	mov eax, dword[esp+4]
+	mov ecx, dword[esp+8]
+	mov edx, dword[esp+12]
+	mov dword[eax+112], ecx
+	mov dword[eax+116], edx
+	ret
+	
+uiElement_setOnPress:
+	mov eax, dword[esp+4]
+	mov ecx, dword[esp+8]
+	mov edx, dword[esp+12]
+	mov dword[eax+120], ecx
+	mov dword[eax+124], edx
+	ret
+	
+uiElement_setOnRelease:
+	mov eax, dword[esp+4]
+	mov ecx, dword[esp+8]
+	mov edx, dword[esp+12]
+	mov dword[eax+128], ecx
+	mov dword[eax+132], edx
+	ret
+	
+uiElement_setOnHold:
+	mov eax, dword[esp+4]
+	mov ecx, dword[esp+8]
+	mov edx, dword[esp+12]
+	mov dword[eax+136], ecx
+	mov dword[eax+140], edx
 	ret
 	
 
@@ -1327,12 +1382,17 @@ uiElement_processButtonInput_internal_helper:
 	test dword[ebp-12], UI_MOUSE_CLICKED
 	jz uiElement_processButtonInput_internal_buttonCallbacks_no_click
 		;the mouse has been clicked
+		test dword[ebp-8], 0xffffffff
+		jz uiElement_processButtonInput_internal_buttonCallbacks_no_click
+		
 		mov eax, dword[ebp+16]
 		test dword[eax+88], 0xffffffff
 		jz uiElement_processButtonInput_internal_buttonCallbacks_no_click
 			push dword[eax+92]
 			push eax
 			call dword[eax+88]
+			
+			mov dword[ebp-4], 69				;element consumeth the click event
 	uiElement_processButtonInput_internal_buttonCallbacks_no_click:
 	
 	test dword[ebp-12], UI_MOUSE_RELEASED

@@ -206,7 +206,7 @@ uiImage_create:
 	call my_malloc
 	mov dword[ebp-4], eax
 	
-	;init the cumvas
+	;init the general part
 	push dword[ebp-4]
 	call uiElement_initGeneralPart
 	
