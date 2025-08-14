@@ -20,7 +20,8 @@ section .data use32
 	IMAGE_START_BUTTON dd 0
 	IMAGE_EXIT_BUTTON dd 0
 	TEXT_WELCOME dd 0
-	BUTTON_TEST dd 0
+	BUTTON_START dd 0
+	BUTTON_EXIT dd 0
 	
 section .bss use32
 	
@@ -89,6 +90,8 @@ section .text use32
 	extern uiText_setTextAlignment
 	extern uiText_setFontSize
 	extern uiText_setColour
+	extern uiButton_getText
+	extern uiButton_getImage
 	extern UI_CANVAS
 	extern UI_IMAGE
 	extern UI_TEXT
@@ -401,47 +404,46 @@ menuLoop_initCanvas:
 		ret
 	menuLoop_initCanvas_startButtonCallback_skip:
 	
-	;create exit image
-	push dword[UI_IMAGE]
+	;create exit button
+	push dword[UI_BUTTON]
 	call uiElement_create
-	mov dword[IMAGE_EXIT_BUTTON], eax
+	mov dword[BUTTON_EXIT], eax
 	
 	push dword[CANVAS_MENU]
-	push dword[IMAGE_EXIT_BUTTON]
+	push dword[BUTTON_EXIT]
 	call uiElement_setParent
 	
 	push word[UI_CENTER]
 	push word[UI_CENTER]
-	push dword[IMAGE_EXIT_BUTTON]
+	push dword[BUTTON_EXIT]
 	call uiElement_setAnchor
 	call uiElement_setPivot
 	
 	push exit_button_texture_path
-	push dword[IMAGE_EXIT_BUTTON]
+	push dword[BUTTON_EXIT]
+	call uiButton_getImage
+	mov dword[esp], eax
 	call uiImage_setTexture
 	
 	push 0x41200000
-	push dword[IMAGE_EXIT_BUTTON]
+	push dword[BUTTON_EXIT]
+	call uiButton_getImage
+	mov dword[esp], eax
 	call uiImage_setCornerRadius
 	
 	push 50
 	push 200
-	push dword[IMAGE_EXIT_BUTTON]
+	push dword[BUTTON_EXIT]
 	call uiElement_setSize
 	
 	push -70
 	push 0
-	push dword[IMAGE_EXIT_BUTTON]
+	push dword[BUTTON_EXIT]
 	call uiElement_setPosition
-	
-	push 69
-	push 69
-	push dword[IMAGE_EXIT_BUTTON]
-	call uiElement_setStatus
 	
 	push dword[return_value]
 	push menuLoop_initCanvas_exitButtonCallback
-	push dword[IMAGE_EXIT_BUTTON]
+	push dword[BUTTON_EXIT]
 	call uiElement_setOnClick
 	
 	jmp menuLoop_initCanvas_exitButtonCallback_skip
@@ -490,15 +492,6 @@ menuLoop_initCanvas:
 	push 0
 	push dword[TEXT_WELCOME]
 	call uiText_setColour
-	
-	;test button
-	push dword[UI_BUTTON]
-	call uiElement_create
-	mov dword[BUTTON_TEST], eax
-	
-	push dword[CANVAS_MENU]
-	push dword[BUTTON_TEST]
-	call uiElement_setParent
 	
 	mov esp, ebp
 	pop ebp

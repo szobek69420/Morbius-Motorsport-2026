@@ -93,6 +93,12 @@ uiButton_create:
 	mov dword[eax+68], uiButton_render
 	mov dword[eax+72], uiButton_destroy
 	
+	push 69
+	push 69
+	push dword[ebp-4]
+	call uiElement_setStatus
+	add esp, 12
+	
 	;create and setup image
 	call uiImage_create
 	mov ecx, dword[ebp-4]

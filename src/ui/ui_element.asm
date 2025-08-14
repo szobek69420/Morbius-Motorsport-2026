@@ -83,6 +83,7 @@ section .rodata use32
 	error_create_invalid_type db "uiElement_create: %d is not a valid element type",10,0
 	error_render_not_initialized db "uiElement_render: call uiElement_init first fucko",10,0
 	
+	print_int_nl db "%d",10,0
 	print_two_ints_nl db "%d %d",10,0
 	print_two_floats_nl db "%f %f",10,0
 	print_six_floats_nl db "%f %f %f %f %f %f",10,0
@@ -1289,10 +1290,6 @@ uiElement_processButtonInput_internal_helper:
 		jnz uiElement_processButtonInput_internal_helper_children_loop_start
 		
 	uiElement_processButtonInput_internal_helper_children_loop_end:
-	
-	;check if there is any important input statuses
-	test dword[ebp-12], 0xffffffff
-	jz uiElement_processButtonInput_internal_helper_end
 	
 	;check if the click is inside the element
 	;cursorX-posX is in [0; width]
