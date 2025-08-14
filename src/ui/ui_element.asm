@@ -63,11 +63,13 @@ section .rodata use32
 	UI_CANVAS	dd 0
 	UI_IMAGE	dd 1
 	UI_TEXT		dd 2
+	UI_BUTTON	dd 3
 	UI_LAST:
 	
 	global UI_CANVAS
 	global UI_IMAGE
 	global UI_TEXT
+	global UI_BUTTON
 	
 	;input type masks
 	UI_MOUSE_PRESSED equ 0b0001
@@ -192,6 +194,7 @@ section .text use32
 	extern uiText_deinit
 	extern uiText_create
 	
+	extern uiButton_create
 	
 uiElement_init:
 	push ebp
@@ -414,6 +417,7 @@ uiElement_create:
 	dd uiCanvas_create
 	dd uiImage_create
 	dd uiText_create
+	dd uiButton_create
 	uiElement_create_done:
 	
 	;was the element actually created?

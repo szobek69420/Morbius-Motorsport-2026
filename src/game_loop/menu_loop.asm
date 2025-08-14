@@ -20,6 +20,7 @@ section .data use32
 	IMAGE_START_BUTTON dd 0
 	IMAGE_EXIT_BUTTON dd 0
 	TEXT_WELCOME dd 0
+	BUTTON_TEST dd 0
 	
 section .bss use32
 	
@@ -91,6 +92,7 @@ section .text use32
 	extern UI_CANVAS
 	extern UI_IMAGE
 	extern UI_TEXT
+	extern UI_BUTTON
 	extern UI_CENTER
 	extern UI_STRETCH
 	extern UI_TEXT_ALIGN_CENTER
@@ -488,6 +490,15 @@ menuLoop_initCanvas:
 	push 0
 	push dword[TEXT_WELCOME]
 	call uiText_setColour
+	
+	;test button
+	push dword[UI_BUTTON]
+	call uiElement_create
+	mov dword[BUTTON_TEST], eax
+	
+	push dword[CANVAS_MENU]
+	push dword[BUTTON_TEST]
+	call uiElement_setParent
 	
 	mov esp, ebp
 	pop ebp
