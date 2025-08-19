@@ -846,7 +846,7 @@ uiElement_calculateCurrentPosition:
 	uiElement_calculateCurrentPosition_anchor_x_center:
 		;center
 		mov edx, dword[ebp-28]
-		shr edx, 1
+		sar edx, 1
 		add edx, dword[eax]
 		mov dword[ebp-4], edx
 		jmp uiElement_calculateCurrentPosition_anchor_x_done
@@ -860,14 +860,12 @@ uiElement_calculateCurrentPosition:
 		
 	uiElement_calculateCurrentPosition_anchor_x_stretch:
 		;stretch
-		mov edx, dword[ebp-20]
-		add edx, dword[eax]
+		mov edx, dword[eax]
 		mov dword[ebp-4], edx
 		
-		mov edx, dword[ebp-20]
-		add edx, dword[ebp-28]
+		mov edx, dword[ebp-28]
 		sub edx, dword[eax+8]		;in stretch mode width is the distance from the right side of the parent
-		sub edx, dword[ebp-4]
+		sub edx, dword[eax]
 		mov dword[ebp-12], edx		;new width as well
 		jmp uiElement_calculateCurrentPosition_x_done		;pivot is irrelevant
 	
@@ -891,7 +889,7 @@ uiElement_calculateCurrentPosition:
 	uiElement_calculateCurrentPosition_pivot_x_center:
 		;center
 		mov edx, dword[eax+8]
-		shr edx, 1
+		sar edx, 1
 		sub dword[ebp-4], edx
 		jmp uiElement_calculateCurrentPosition_pivot_x_done
 	
@@ -934,7 +932,7 @@ uiElement_calculateCurrentPosition:
 	uiElement_calculateCurrentPosition_anchor_y_center:
 		;center
 		mov edx, dword[ebp-32]
-		shr edx, 1
+		sar edx, 1
 		add edx, dword[eax+4]
 		mov dword[ebp-8], edx
 		jmp uiElement_calculateCurrentPosition_anchor_y_done
@@ -948,14 +946,12 @@ uiElement_calculateCurrentPosition:
 		
 	uiElement_calculateCurrentPosition_anchor_y_stretch:
 		;stretch
-		mov edx, dword[ebp-24]
-		add edx, dword[eax+4]
+		mov edx, dword[eax+4]
 		mov dword[ebp-8], edx
 		
-		mov edx, dword[ebp-24]
-		add edx, dword[ebp-32]
+		mov edx, dword[ebp-32]
 		sub edx, dword[eax+12]		;in stretch mode height is the distance from the top side of the parent
-		sub edx, dword[ebp-8]
+		sub edx, dword[eax+4]
 		mov dword[ebp-16], edx		;new height as well
 		jmp uiElement_calculateCurrentPosition_y_done		;pivot is irrelevant
 	
@@ -978,7 +974,7 @@ uiElement_calculateCurrentPosition:
 	uiElement_calculateCurrentPosition_pivot_y_center:
 		;center
 		mov edx, dword[eax+12]
-		shr edx, 1
+		sar edx, 1
 		sub dword[ebp-8], edx
 		jmp uiElement_calculateCurrentPosition_pivot_y_done
 	

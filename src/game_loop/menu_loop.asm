@@ -3,10 +3,34 @@
 section .rodata use32
 	test_text db "sir, they ate the second respirator",10,0
 
-	text_welcome db "zaoshang hao",0
+	text_title db "Morbius",0
+	text_title2 db "Motorsport",0
+	text_title3 db "2026",0
+	text_startButton db "mmh",0
+	text_exitButton db "hmm",0
 	
 	background_texture_path db "sprites/ui/menu/background.bmp",0
-	exit_button_texture_path db "sprites/ui/menu/exit_button.bmp",0
+	start_button_texture_path db "sprites/ui/menu/start_button.bmp",0
+	
+	print_two_ints_nl db "%d %d",10,0
+	
+	HALF dd 0.5
+	ONE dd 1.0
+	
+	COLOUR_AQUA_R dd 0.0
+	COLOUR_AQUA_G dd 1.0
+	COLOUR_AQUA_B dd 1.0
+	COLOUR_AQUA_A dd 1.0
+	
+	COLOUR_RED_R dd 1.0
+	COLOUR_RED_G dd 0.0
+	COLOUR_RED_B dd 0.0
+	COLOUR_RED_A dd 1.0
+	
+	COLOUR_YELLOW_R dd 1.0
+	COLOUR_YELLOW_G dd 0.85
+	COLOUR_YELLOW_B dd 0.0
+	COLOUR_YELLOW_A dd 1.0
 
 section .data use32
 
@@ -17,9 +41,9 @@ section .data use32
 	;ui
 	CANVAS_MENU dd 0
 	IMAGE_BACKGROUND dd 0
-	IMAGE_START_BUTTON dd 0
-	IMAGE_EXIT_BUTTON dd 0
-	TEXT_WELCOME dd 0
+	TEXT_TITLE dd 0
+	TEXT_TITLE2 dd 0
+	TEXT_TITLE3 dd 0
 	BUTTON_START dd 0
 	BUTTON_EXIT dd 0
 	
@@ -86,19 +110,29 @@ section .text use32
 	extern uiElement_setStatus
 	extern uiImage_setTexture
 	extern uiImage_setCornerRadius
+	extern uiImage_setColour
 	extern uiText_setText
 	extern uiText_setTextAlignment
 	extern uiText_setFontSize
 	extern uiText_setColour
 	extern uiButton_getText
 	extern uiButton_getImage
+	extern uiButton_setTextColour
 	extern UI_CANVAS
 	extern UI_IMAGE
 	extern UI_TEXT
 	extern UI_BUTTON
+	extern UI_LEFT
+	extern UI_RIGHT
+	extern UI_BOTTOM
+	extern UI_TOP
 	extern UI_CENTER
 	extern UI_STRETCH
+	extern UI_TEXT_ALIGN_LEFT
+	extern UI_TEXT_ALIGN_BOTTOM
 	extern UI_TEXT_ALIGN_CENTER
+	extern UI_TEXT_ALIGN_RIGHT
+	extern UI_TEXT_ALIGN_TOP
 	
 	extern GAME_STATE_MENU
 	extern GAME_STATE_INGAME
@@ -357,40 +391,69 @@ menuLoop_initCanvas:
 	push background_texture_path
 	push dword[IMAGE_BACKGROUND]
 	call uiImage_setTexture
+	
+	push dword[ONE]
+	push dword[HALF]
+	push dword[HALF]
+	push dword[HALF]
+	push dword[IMAGE_BACKGROUND]
+	call uiImage_setColour
+	
 
-	;create start image
-	push dword[UI_IMAGE]
+	;create start button
+	push dword[UI_BUTTON]
 	call uiElement_create
-	mov dword[IMAGE_START_BUTTON], eax
+	mov dword[BUTTON_START], eax
+	
+	push 75
+	push 300
+	push dword[BUTTON_START]
+	call uiElement_setSize
+	
+	push 69
+	push 69
+	push dword[BUTTON_START]
+	call uiElement_setStatus
 	
 	push dword[CANVAS_MENU]
-	push dword[IMAGE_START_BUTTON]
+	push dword[BUTTON_START]
 	call uiElement_setParent
 	
 	push word[UI_CENTER]
 	push word[UI_CENTER]
-	push dword[IMAGE_START_BUTTON]
+	push dword[BUTTON_START]
 	call uiElement_setAnchor
 	call uiElement_setPivot
 	
 	push dword[return_value]
 	push menuLoop_initCanvas_startButtonCallback
-	push dword[IMAGE_START_BUTTON]
+	push dword[BUTTON_START]
 	call uiElement_setOnClick
 	
-	push 0x41200000
-	push dword[IMAGE_START_BUTTON]
+	push 0x41c00000
+	push dword[BUTTON_START]
+	call uiButton_getImage
+	mov dword[esp], eax
 	call uiImage_setCornerRadius
 	
-	push 50
-	push 200
-	push dword[IMAGE_START_BUTTON]
-	call uiElement_setSize
+	push start_button_texture_path
+	push dword[BUTTON_START]
+	call uiButton_getImage
+	mov dword[esp], eax
+	call uiImage_setTexture
 	
-	push 69
-	push 69
-	push dword[IMAGE_START_BUTTON]
-	call uiElement_setStatus
+	push dword[COLOUR_AQUA_A]
+	push dword[COLOUR_AQUA_B]
+	push dword[COLOUR_AQUA_G]
+	push dword[COLOUR_AQUA_R]
+	push dword[BUTTON_START]
+	call uiButton_setTextColour
+	
+	push text_startButton
+	push dword[BUTTON_START]
+	call uiButton_getText
+	mov dword[esp], eax
+	call uiText_setText
 	
 	
 	jmp menuLoop_initCanvas_startButtonCallback_skip
@@ -419,24 +482,18 @@ menuLoop_initCanvas:
 	call uiElement_setAnchor
 	call uiElement_setPivot
 	
-	push exit_button_texture_path
-	push dword[BUTTON_EXIT]
-	call uiButton_getImage
-	mov dword[esp], eax
-	call uiImage_setTexture
-	
-	push 0x41200000
+	push 0x41c00000
 	push dword[BUTTON_EXIT]
 	call uiButton_getImage
 	mov dword[esp], eax
 	call uiImage_setCornerRadius
 	
-	push 50
-	push 200
+	push 75
+	push 300
 	push dword[BUTTON_EXIT]
 	call uiElement_setSize
 	
-	push -70
+	push -105
 	push 0
 	push dword[BUTTON_EXIT]
 	call uiElement_setPosition
@@ -445,6 +502,20 @@ menuLoop_initCanvas:
 	push menuLoop_initCanvas_exitButtonCallback
 	push dword[BUTTON_EXIT]
 	call uiElement_setOnClick
+	
+	push dword[COLOUR_RED_A]
+	push dword[COLOUR_RED_B]
+	push dword[COLOUR_RED_G]
+	push dword[COLOUR_RED_R]
+	push dword[BUTTON_EXIT]
+	call uiButton_setTextColour
+	
+	push text_exitButton
+	push dword[BUTTON_EXIT]
+	call uiButton_getText
+	mov dword[esp], eax
+	call uiText_setText
+	
 	
 	jmp menuLoop_initCanvas_exitButtonCallback_skip
 	;void menuLoop_initCanvas_exitButtonCallback(UIElement* element, tsValue<int>* returnValue)
@@ -457,41 +528,145 @@ menuLoop_initCanvas:
 		ret
 	menuLoop_initCanvas_exitButtonCallback_skip:
 	
-	;create text
+	;create texts
 	push dword[UI_TEXT]
 	call uiElement_create
-	mov dword[TEXT_WELCOME], eax
+	mov dword[TEXT_TITLE], eax
 	
 	push dword[CANVAS_MENU]
-	push dword[TEXT_WELCOME]
+	push dword[TEXT_TITLE]
 	call uiElement_setParent
 	
 	push word[UI_CENTER]
 	push word[UI_CENTER]
-	push dword[TEXT_WELCOME]
+	push dword[TEXT_TITLE]
 	call uiElement_setAnchor
 	call uiElement_setPivot
 	
-	push 100
-	push 0
-	push dword[TEXT_WELCOME]
+	push 160
+	push 12
+	push dword[TEXT_TITLE]
 	call uiElement_setPosition
 	
-	push text_welcome
-	push dword[TEXT_WELCOME]
+	push 0
+	push 0
+	push dword[TEXT_TITLE]
+	call uiElement_setSize
+	
+	push text_title
+	push dword[TEXT_TITLE]
 	call uiText_setText
 	
-	push 20
+	push word[UI_TEXT_ALIGN_BOTTOM]
+	push word[UI_TEXT_ALIGN_RIGHT]
+	push dword[TEXT_TITLE]
+	call uiText_setTextAlignment
+	
 	push 30
-	push dword[TEXT_WELCOME]
+	push 25
+	push dword[TEXT_TITLE]
 	call uiText_setFontSize
 	
-	push 0x3f800000
-	push 0x3f800000
-	push 0x3f800000
-	push 0
-	push dword[TEXT_WELCOME]
+	push dword[COLOUR_YELLOW_A]
+	push dword[COLOUR_YELLOW_B]
+	push dword[COLOUR_YELLOW_G]
+	push dword[COLOUR_YELLOW_R]
+	push dword[TEXT_TITLE]
 	call uiText_setColour
+	
+	
+	
+	push dword[UI_TEXT]
+	call uiElement_create
+	mov dword[TEXT_TITLE2], eax
+	
+	push dword[CANVAS_MENU]
+	push dword[TEXT_TITLE2]
+	call uiElement_setParent
+	
+	push word[UI_CENTER]
+	push word[UI_CENTER]
+	push dword[TEXT_TITLE2]
+	call uiElement_setAnchor
+	call uiElement_setPivot
+	
+	push 150
+	push 12
+	push dword[TEXT_TITLE2]
+	call uiElement_setPosition
+	
+	push 0
+	push 0
+	push dword[TEXT_TITLE2]
+	call uiElement_setSize
+	
+	push text_title2
+	push dword[TEXT_TITLE2]
+	call uiText_setText
+	
+	push word[UI_TEXT_ALIGN_TOP]
+	push word[UI_TEXT_ALIGN_RIGHT]
+	push dword[TEXT_TITLE2]
+	call uiText_setTextAlignment
+	
+	push 30
+	push 25
+	push dword[TEXT_TITLE2]
+	call uiText_setFontSize
+	
+	push dword[COLOUR_YELLOW_A]
+	push dword[COLOUR_YELLOW_B]
+	push dword[COLOUR_YELLOW_G]
+	push dword[COLOUR_YELLOW_R]
+	push dword[TEXT_TITLE2]
+	call uiText_setColour
+	
+	
+	push dword[UI_TEXT]
+	call uiElement_create
+	mov dword[TEXT_TITLE3], eax
+	
+	push dword[CANVAS_MENU]
+	push dword[TEXT_TITLE3]
+	call uiElement_setParent
+	
+	push word[UI_CENTER]
+	push word[UI_CENTER]
+	push dword[TEXT_TITLE3]
+	call uiElement_setAnchor
+	call uiElement_setPivot
+	
+	push 155
+	push 22
+	push dword[TEXT_TITLE3]
+	call uiElement_setPosition
+	
+	push 0
+	push 0
+	push dword[TEXT_TITLE3]
+	call uiElement_setSize
+	
+	push text_title3
+	push dword[TEXT_TITLE3]
+	call uiText_setText
+	
+	push word[UI_TEXT_ALIGN_CENTER]
+	push word[UI_TEXT_ALIGN_LEFT]
+	push dword[TEXT_TITLE3]
+	call uiText_setTextAlignment
+	
+	push 70
+	push 55
+	push dword[TEXT_TITLE3]
+	call uiText_setFontSize
+	
+	push dword[ONE]
+	push dword[ONE]
+	push dword[ONE]
+	push dword[ONE]
+	push dword[TEXT_TITLE3]
+	call uiText_setColour
+	
 	
 	mov esp, ebp
 	pop ebp

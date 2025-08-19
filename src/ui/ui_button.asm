@@ -13,6 +13,8 @@
 
 section .rodata use32
 	test_text db "ligma blogger",10,0
+	
+	print_two_ints_nl db "%d %d",10,0
 
 	default_text db "mogger",0
 
