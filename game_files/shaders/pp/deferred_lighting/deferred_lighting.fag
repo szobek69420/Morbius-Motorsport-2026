@@ -12,9 +12,9 @@ layout (binding=4) uniform sampler2D ssaoTexture;
 uniform vec3 viewSpaceSunDirection;
 
 const vec2 sampleKernel[9]={
-	vec2(-0.01, -0.01), vec2(-0.01, 0), vec2(-0.01, 0.01),
-	vec2(0, -0.01), vec2(0, 0), vec2(0, 0.01),
-	vec2(0.01, -0.01), vec2(0.01, 0), vec2(0.01, 0.01)
+	vec2(-0.005, -0.005), vec2(-0.005, 0), vec2(-0.005, 0.005),
+	vec2(0, -0.005), vec2(0, 0), vec2(0, 0.005),
+	vec2(0.005, -0.005), vec2(0.005, 0), vec2(0.005, 0.005)
 };
 
 void main()

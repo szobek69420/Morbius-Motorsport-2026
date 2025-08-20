@@ -484,23 +484,6 @@ postProcessing_initDeferredPart:
 	call renderable_setUniform
 	add esp, 20
 	
-	;generate the random kernel
-	lea eax, [ebp-384]
-	push eax
-	push 32
-	call postProcessing_generateSamplesSSAO
-	add esp, 8
-	
-	;send the samples to the gpu
-	lea eax, [ebp-384]
-	push eax
-	push 32
-	push dword[RENDERABLE_UNIFORM_VEC3_ARRAY]
-	push uniform_name_ssaoKernel
-	push dword[shader_ssao]
-	call renderable_setUniform
-	add esp, 20
-	
 	
 	;generate noise texture
 	call postProcessing_generateSSAONoiseTexture
