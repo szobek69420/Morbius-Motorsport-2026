@@ -118,6 +118,7 @@ section .text use32
 	extern uiButton_getText
 	extern uiButton_getImage
 	extern uiButton_setTextColour
+	extern uiSlider_setOnlyInteger
 	extern UI_CANVAS
 	extern UI_IMAGE
 	extern UI_TEXT
@@ -679,6 +680,8 @@ menuLoop_initCanvas:
 	call uiElement_setParent
 	mov dword[esp+4], 0
 	call uiElement_setPosition
+	mov dword[esp+4], 69
+	call uiSlider_setOnlyInteger
 	
 	mov esp, ebp
 	pop ebp

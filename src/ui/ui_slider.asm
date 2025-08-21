@@ -9,12 +9,17 @@
 ;	padding of 8 bytes
 ;	float value;				212
 ;	float minValue, maxValue;	216
-;}	224 bytes
+;	int onlyInteger;			224
+;	void (*onValueChanged)(UISlider* slider, void* param);	228
+;	void* param;
+;}	236 bytes
 
 section .rodata use32
 	test_text db "a larissza az nem lany",10,0
 	
 	print_float_nl db "%f",10,0
+	
+	error_no_possible_integer db "uiSlider_setOnlyInteger: there is no integer value between minValue (%f) and maxValue (%f), abort",10,0
 
 	DEFAULT_SLIDER_WIDTH dd 200
 	DEFAULT_SLIDER_HEIGHT dd 30
@@ -27,17 +32,23 @@ section .rodata use32
 
 section .text use32
 
-	global uiSlider_create		;UISlider* uiSlider_create()
+	global uiSlider_create			;UISlider* uiSlider_create()
 	
-	global uiSlider_getFill		;UIImage* uiSlider_getFill(UISlider* slider)
-	global uiSlider_getOverlay	;UIImage* uiSlider_getOverlay(UISlider* slider)
-	global uiSlider_getKnob		;UIImage* uiSlider_getKnob(UISlider* slider)
+	global uiSlider_getFill			;UIImage* uiSlider_getFill(UISlider* slider)
+	global uiSlider_getOverlay		;UIImage* uiSlider_getOverlay(UISlider* slider)
+	global uiSlider_getKnob			;UIImage* uiSlider_getKnob(UISlider* slider)
 	
-	global uiSlider_getValue	;float uiSlider_getValue(UISlider* slider)	//pushes the result onto the FPU stack
-	global uiSlider_setValue	;void uiSlider_setValue(UISlider* slider, float value)
+	global uiSlider_getValue		;float uiSlider_getValue(UISlider* slider)	//pushes the result onto the FPU stack
+	global uiSlider_setValue		;void uiSlider_setValue(UISlider* slider, float value)
 	
-	global uiSlider_setMinValue	;void uiSlider_setMinValue(UISlider* slider, float minValue)
-	global uiSlider_setMaxValue	;void uiSlider_setMaxValue(UISlider* slider, float maxValue)
+	global uiSlider_setMinValue		;void uiSlider_setMinValue(UISlider* slider, float minValue)
+	global uiSlider_setMaxValue		;void uiSlider_setMaxValue(UISlider* slider, float maxValue)
+	
+	;returns 0 if successful
+	;void uiSlider_setOnlyInteger(UISlider* slider, int onlyInteger)
+	global uiSlider_setOnlyInteger
+	
+	global uiSlider_setOnValueChanged	;void uiSlider_setOnValueChanged(UISlider* slider, void (*onValueChanged)(UISlider*, void* param), void* param)
 	
 	extern my_printf
 	extern my_malloc
@@ -73,7 +84,7 @@ uiSlider_create:
 	sub esp, 4			;knob			16
 	
 	;alloc space
-	push 224
+	push 236
 	call my_malloc
 	mov dword[ebp-4], eax
 	
@@ -87,6 +98,11 @@ uiSlider_create:
 	mov dword[eax+216], 0
 	mov ecx, dword[ONE]
 	mov dword[eax+220], ecx
+	
+	mov dword[eax+224], 0
+	
+	mov dword[eax+228], 0
+	mov dword[eax+232], 0
 	
 	;set layout things
 	push dword[DEFAULT_SLIDER_HEIGHT]
@@ -203,6 +219,10 @@ uiSlider_create:
 	mov ecx, dword[ebp-16]
 	mov dword[eax+200], ecx
 	
+	;recalculate
+	push dword[ebp-4]
+	call uiSlider_recalculateLayout_internal
+	
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -297,6 +317,81 @@ uiSlider_setMaxValue:
 	ret
 
 
+uiSlider_setOnlyInteger:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4		;helper min		4
+	sub esp, 4		;helper max		8
+	sub esp, 4		;return value	12
+	
+	mov dword[ebp-12], 0
+	
+	test dword[ebp+12], 0xffffffff
+	jnz uiSlider_setOnlyInteger_only_integer
+		;not integer, no complications
+		mov eax, dword[ebp+8]
+		mov dword[eax+224], 0
+		jmp uiSlider_setOnlyInteger_end
+		
+	uiSlider_setOnlyInteger_only_integer:
+		;check if there is an integer between minValue and maxValue
+		mov eax, dword[ebp+8]
+		
+		mov ecx, dword[eax+216]
+		xor ecx, dword[eax+220]
+		test ecx, 0x80000000
+		jnz uiSlider_setOnlyInteger_only_integer_alles_gut	;different signs
+		
+		mov ecx, dword[eax+216]
+		and ecx, 0x7fffffff
+		mov dword[ebp-4], ecx
+		mov edx, dword[eax+220]
+		and edx, 0x7fffffff
+		mov dword[ebp-8], edx
+		fld dword[ebp-4]
+		fistp dword[ebp-4]
+		fld dword[ebp-8]
+		fistp dword[ebp-8]
+		mov ecx, dword[ebp-4]
+		cmp ecx, dword[ebp-8]
+		jne uiSlider_setOnlyInteger_only_integer_alles_gut	;(int)abs(minValue) != (int)abs(maxValue)
+			;no integer between minvalue and max value, abort
+			push dword[eax+220]
+			push dword[eax+216]
+			push error_no_possible_integer
+			call my_printf
+			
+			mov dword[ebp-12], 69
+			jmp uiSlider_setOnlyInteger_end
+			
+		uiSlider_setOnlyInteger_only_integer_alles_gut:
+			;set flag
+			mov dword[eax+224], 69
+			
+			;recalculate value
+			push dword[ebp+8]
+			call uiSlider_roundValueToInteger_internal
+			
+	uiSlider_setOnlyInteger_end:
+	mov eax, dword[ebp-12]			;set return value
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+uiSlider_setOnValueChanged:
+	mov eax, dword[esp+4]
+	
+	mov ecx, dword[esp+8]
+	mov edx, dword[esp+12]
+	mov dword[eax+228], ecx
+	mov dword[eax+232], edx
+	
+	ret
+	
+
 	
 ;internal functinos	-------------------------------------------------------------------
 
@@ -305,9 +400,37 @@ uiSlider_onMouseHold:
 	push ebp
 	mov ebp, esp
 	
+	sub esp, 4			;previous value		4
+	sub esp, 4			;new value			8
+
+	
+	;get previous value
+	push dword[ebp+8]
+	call uiSlider_getValue
+	fstp dword[ebp-4]
+	
+	;refresh slider
 	push dword[ebp+8]
 	call uiSlider_calculateValue_internal
 	call uiSlider_recalculateLayout_internal
+	
+	;check if the value changed
+	push dword[ebp+8]
+	call uiSlider_getValue
+	fstp dword[ebp-8]
+	
+	mov eax, dword[ebp+8]
+	test dword[eax+228], 0xffffffff
+	jz uiSlider_onMouseHold_no_value_change
+	mov ecx, dword[ebp-4]
+	cmp ecx, dword[ebp-8]
+	je uiSlider_onMouseHold_no_value_change
+		;value changed
+		push dword[eax+232]
+		push eax
+		call dword[eax+228]
+	
+	uiSlider_onMouseHold_no_value_change:
 	
 	mov esp, ebp
 	pop ebp
@@ -369,6 +492,14 @@ uiSlider_calculateValue_internal:
 	mov ecx, dword[ebp-12]
 	mov dword[eax+212], ecx
 	
+	;round it to an integer if necessary
+	mov eax, dword[ebp+8]
+	test dword[eax+224], 0xffffffff
+	jz uiSlider_calculateValue_internal_not_only_integer
+		push eax
+		call uiSlider_roundValueToInteger_internal
+	uiSlider_calculateValue_internal_not_only_integer:
+	
 	mov esp, ebp
 	pop ebp
 	ret
@@ -418,6 +549,36 @@ uiSlider_recalculateLayout_internal:
 	mov ecx, dword[eax+12]
 	mov dword[esp+8], ecx		;keep the y size
 	call uiElement_setSize
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+;rounds the value of the slider to an integer value within [minValue; maxValue]
+;void uiSlider_roundValueToInteger_internal(UISlider* slider)
+uiSlider_roundValueToInteger_internal:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;temp value		4
+	
+	;round the value
+	mov eax, dword[ebp+8]
+	fld dword[eax+212]
+	frndint
+	fstp dword[ebp-4]
+	
+	;check if it is valid
+	movss xmm0, dword[ebp-4]
+	ucomiss xmm0, dword[eax+216]
+	jae uiSlider_roundValueToInteger_internal_no_underflow
+		addss xmm0, dword[ONE]
+	uiSlider_roundValueToInteger_internal_no_underflow:
+	ucomiss xmm0, dword[eax+220]
+	jbe uiSlider_roundValueToInteger_internal_no_overflow
+		subss xmm0, dword[ONE]
+	uiSlider_roundValueToInteger_internal_no_overflow:
+	movss dword[eax+212], xmm0
 	
 	mov esp, ebp
 	pop ebp
