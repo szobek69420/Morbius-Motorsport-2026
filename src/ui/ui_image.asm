@@ -34,7 +34,7 @@ section .rodata use32
 	vertex_shader_path db "shaders/ui/image/image.vag",0
 	fragment_shader_path db "shaders/ui/image/image.fag",0
 	
-	default_texture_path db "sprites/ui/ui_image_default.bmp",0
+	default_texture_path db "sprites/ui/ui_default/ui_image/ui_image_default.bmp",0
 	
 	error_init_already_initialized db "uiImage_init: system is already initialized",10,0
 	error_deinit_already_deinitialized db "uiImage_deinit: system is already deinitialized",10,0

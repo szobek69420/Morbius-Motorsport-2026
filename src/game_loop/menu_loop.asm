@@ -122,6 +122,7 @@ section .text use32
 	extern UI_IMAGE
 	extern UI_TEXT
 	extern UI_BUTTON
+	extern UI_SLIDER
 	extern UI_LEFT
 	extern UI_RIGHT
 	extern UI_BOTTOM
@@ -667,6 +668,17 @@ menuLoop_initCanvas:
 	push dword[TEXT_TITLE3]
 	call uiText_setColour
 	
+	
+	;text slider
+	push dword[UI_SLIDER]
+	call uiElement_create
+	
+	push 250
+	push dword[CANVAS_MENU]
+	push eax
+	call uiElement_setParent
+	mov dword[esp+4], 0
+	call uiElement_setPosition
 	
 	mov esp, ebp
 	pop ebp

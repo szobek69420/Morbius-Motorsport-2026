@@ -64,12 +64,14 @@ section .rodata use32
 	UI_IMAGE	dd 1
 	UI_TEXT		dd 2
 	UI_BUTTON	dd 3
+	UI_SLIDER	dd 4
 	UI_LAST:
 	
 	global UI_CANVAS
 	global UI_IMAGE
 	global UI_TEXT
 	global UI_BUTTON
+	global UI_SLIDER
 	
 	;input type masks
 	UI_MOUSE_PRESSED equ 0b0001
@@ -113,6 +115,16 @@ section .text use32
 	
 	global uiElement_createProjection	;void uiElement_createProjection(mat4* buffer, int screenWidth, int screenHeight)
 	global uiElement_getScreenSize		;void uiElement_getScreenSize(int* width, int* height)
+	
+	;returns the local position ( (0,0) is the bottom left corner of the elemnt)
+	;of the screen position ( (0,0) is bottom left corner of the screen)
+	;the buffers contain the 
+	;void uiElement_screenToLocal(UIElement* element, ivec2 screenPos, ivec2* localPosBuffer)
+	global uiElement_screenToLocal
+	
+	;same as screenToLocal but umgekehrt
+	;void uiElement_localToScreen(UIElement* element, ivec2 localPos, ivec2* screenPosBuffer)
+	global uiElement_localToScreen
 	
 	;type can be for example dword[UI_IMAGE]
 	;UIElement* uiElement_create(int type)
@@ -196,6 +208,8 @@ section .text use32
 	extern uiText_create
 	
 	extern uiButton_create
+	
+	extern uiSlider_create
 	
 uiElement_init:
 	push ebp
@@ -380,6 +394,36 @@ uiElement_getScreenSize:
 	ret
 	
 	
+uiElement_screenToLocal:
+	mov eax, dword[esp+4]
+	
+	mov ecx, dword[esp+8]
+	mov edx, dword[esp+12]
+	sub ecx, dword[eax+44]
+	sub edx, dword[eax+48]
+	
+	mov eax, dword[esp+16]
+	mov dword[eax], ecx
+	mov dword[eax+4], edx
+	
+	ret
+	
+	
+uiElement_localToScreen:
+	mov eax, dword[esp+4]
+	
+	mov ecx, dword[esp+8]
+	mov edx, dword[esp+12]
+	add ecx, dword[eax+44]
+	add edx, dword[eax+48]
+	
+	mov eax, dword[esp+16]
+	mov dword[eax], ecx
+	mov dword[eax+4], edx
+	
+	ret
+	
+	
 uiElement_create:
 	push ebp
 	mov ebp, esp
@@ -419,6 +463,7 @@ uiElement_create:
 	dd uiImage_create
 	dd uiText_create
 	dd uiButton_create
+	dd uiSlider_create
 	uiElement_create_done:
 	
 	;was the element actually created?

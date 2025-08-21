@@ -16,6 +16,7 @@ mkdir build
 ..\build_tools\nasm.exe -fobj glfw/glfw.asm -o build/glfw.o
 ..\build_tools\nasm.exe -fobj opengl/opengl.asm -o build/opengl.o
 ..\build_tools\nasm.exe -fobj shader/shader.asm -o build/shader.o
+..\build_tools\nasm.exe -fobj ui/ui_slider.asm -o build/ui_slider.o
 ..\build_tools\nasm.exe -fobj ui/ui_button.asm -o build/ui_button.o
 ..\build_tools\nasm.exe -fobj ui/ui_text.asm -o build/ui_text.o
 ..\build_tools\nasm.exe -fobj ui/ui_image.asm -o build/ui_image.o
@@ -77,6 +78,7 @@ build/renderable.o ^
 build/opengl.o ^
 build/shader.o ^
 build/player.o ^
+build/ui_slider.o ^
 build/ui_button.o ^
 build/ui_text.o ^
 build/ui_image.o ^

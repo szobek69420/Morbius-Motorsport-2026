@@ -31,6 +31,8 @@ void main()
 		discard;
 
 	fragmentColour=colour*texture(tex, uv);
+	if(fragmentColour.a<0.01)
+		discard;
 }
 
 float sqrDistance(vec2 a, vec2 b)
