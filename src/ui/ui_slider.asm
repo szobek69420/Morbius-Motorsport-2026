@@ -564,9 +564,8 @@ uiSlider_roundValueToInteger_internal:
 	
 	;round the value
 	mov eax, dword[ebp+8]
-	fld dword[eax+212]
-	frndint
-	fstp dword[ebp-4]
+	roundss xmm0, dword[eax+212], 0b1000		;(3)no exception, (2)use immediate value, (1:0) banker's rounding
+	movss dword[ebp-4], xmm0
 	
 	;check if it is valid
 	movss xmm0, dword[ebp-4]

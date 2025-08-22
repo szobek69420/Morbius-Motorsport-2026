@@ -25,7 +25,7 @@
 
 section .rodata use32
 	read_mode db "r",0
-	print_int db "%d",10,0
+	print_int_nl db "%d",10,0
 
 	error_invalid_file db "image_loadBMP: invalid image path",10,0
 	error_not_bmp db "image_loadBMP: the given image is not a .bmp file",10,0
@@ -42,9 +42,12 @@ section .text use32
 	global image_flip				;void image_flip(int flipImages), it is a state-setting function
 	
 	extern my_printf
+	extern my_malloc
+	extern my_free
 	extern my_fopen
 	extern my_fclose
 	extern my_fgetc
+	extern my_fread
 	extern my_fjmp
 	
 	
@@ -52,12 +55,14 @@ image_loadBMP:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 4			;FILE* image
-	sub esp, 4			;data offset
-	sub esp, 4			;width in pixels
-	sub esp, 4			;height in pixels
-	sub esp, 4			;bits per pixel
+	sub esp, 4			;FILE* image			4
+	sub esp, 4			;data offset			8
+	sub esp, 4			;width in pixels		12
+	sub esp, 4			;height in pixels		16
+	sub esp, 4			;bits per pixel			20
 	sub esp, 4			;padding at the end of the rows in 24 bit format (row size must be divisible by 4 bytes, because Bill Chilling said so)
+	sub esp, 4			;file size in bytes		28
+	sub esp, 4			;raw data				32
 	
 	;open file
 	push read_mode
@@ -90,6 +95,18 @@ image_loadBMP:
 		add esp, 4
 		jmp image_loadBMP_end_with_fclose
 	image_loadBMP_good_format:
+	
+	;get the file size
+	;(file pointer already in place)
+	push dword[ebp-4]
+	call my_fgetc
+	mov byte[ebp-28], al
+	call my_fgetc
+	mov byte[ebp-27], al
+	call my_fgetc
+	mov byte[ebp-26], al
+	call my_fgetc
+	mov byte[ebp-25], al
 	 
 	;get the data offset
 	push 0
@@ -142,14 +159,38 @@ image_loadBMP:
 	mov byte[ebp-17], 0
 	add esp, 4
 	
-	;read the data
+	;alloc space for raw data
+	mov eax, dword[ebp-28]
+	sub eax, dword[ebp-8]
+	push eax					;file_size - data_offset = data_size
+	call my_malloc
+	mov dword[ebp-32], eax
+	add esp, 4
+	
+	;read raw data
+	push 0
+	push dword[ebp-8]
+	push dword[ebp-4]
+	call my_fjmp
+	add esp, 12
+	
+	push dword[ebp-4]
+	push 1
+	mov eax, dword[ebp-28]
+	sub eax, dword[ebp-8]
+	push eax
+	push dword[ebp-32]
+	call my_fread
+	add esp, 16
+	
+	;process data
 	cmp dword[ebp-20], 24
-	je image_loadBMP_read_24
+	je image_loadBMP_process_24
 	cmp dword[ebp-20], 32
-	je image_loadBMP_read_32
+	je image_loadBMP_process_32
 	jmp image_loadBMP_invalid_pixel_format
 	
-	image_loadBMP_read_24:
+	image_loadBMP_process_24:
 		;calculate padding at the end of the row
 		xor edx, edx
 		mov eax, dword[ebp-12]
@@ -170,84 +211,77 @@ image_loadBMP:
 		push esi			;save esi
 		push edi			;save edi
 		mov ebx, dword[ebp+12]			;current pos in buffer in ebx
+		mov edx, dword[ebp-32]			;current pos in raw data in edx
 		mov esi, dword[ebp-16]			;height in esi
 		push dword[ebp-4]
-		image_loadBMP_read_24_outer_loop_start:
+		image_loadBMP_process_24_outer_loop_start:
 			mov edi, dword[ebp-12]		;width in edi
-			image_loadBMP_read_24_inner_loop_start:
-				call my_fgetc
-				mov byte[ebx+2], al		;b
-				call my_fgetc
-				mov byte[ebx+1], al		;g
-				call my_fgetc
+			image_loadBMP_process_24_inner_loop_start:
+				mov al, byte[edx+2]
 				mov byte[ebx], al		;r
+				mov al, byte[edx+1]
+				mov byte[ebx+1], al		;g
+				mov al, byte[edx]
+				mov byte[ebx+2], al		;b
 				
 				add ebx, 3
+				add edx, 3
 				dec edi
 				test edi, edi
-				jnz image_loadBMP_read_24_inner_loop_start
+				jnz image_loadBMP_process_24_inner_loop_start
 		
 			;jump over the padding
-			push 69						;jump from current file pointer position
-			push dword[ebp-24]			;padding
-			push dword[ebp-4]			;file
-			call my_fjmp
-			add esp, 12
+			add edx, dword[ebp-24]
 		
 			dec esi
 			test esi, esi
-			jnz image_loadBMP_read_24_outer_loop_start
+			jnz image_loadBMP_process_24_outer_loop_start
 			
 		add esp, 4
 		pop edi				;restore edi
 		pop esi				;restore esi
 		pop ebx				;restore ebx
 	
-		jmp image_loadBMP_read_done
+		jmp image_loadBMP_process_done
 	
-	image_loadBMP_read_32:
-		;jump to the data
-		push 0
-		push dword[ebp-8]
-		push dword[ebp-4]
-		call my_fjmp
-		add esp, 12
-		
-		;read data
+	image_loadBMP_process_32:
+		;process data
 		push esi			;save esi
 		push edi			;save edi
+		push ebx			;save ebx
 		
 		mov esi, dword[ebp+12]		;current pos in buffer in esi
 		mov edi, dword[ebp-12]
-		imul edi, dword[ebp-16]	;pixel count in edi
-		push dword[ebp-4]			;file
-		image_loadBMP_read_32_loop_start:
-			call my_fgetc
-			mov byte[esi+2], al		;b
-			call my_fgetc
-			mov byte[esi+1], al		;g
-			call my_fgetc
+		imul edi, dword[ebp-16]		;pixel count in edi
+		mov ebx, dword[ebp-32]		;current pos in raw data in ebx
+		image_loadBMP_process_32_loop_start:
+			mov al, byte[ebx+2]
 			mov byte[esi], al		;r
-			call my_fgetc
+			mov al, byte[ebx+1]
+			mov byte[esi+1], al		;g
+			mov al, byte[ebx]
+			mov byte[esi+2], al		;b
+			mov al, byte[ebx+3]
 			mov byte[esi+3], al		;a
 			
 			add esi, 4
+			add ebx, 4
 			dec edi
 			test edi, edi
-			jnz image_loadBMP_read_32_loop_start
+			jnz image_loadBMP_process_32_loop_start
 		
-		add esp, 4
+		pop ebx				;restore ebx
 		pop edi				;restore edi
 		pop esi				;restore esi
 	
-		jmp image_loadBMP_read_done
+		jmp image_loadBMP_process_done
 	
 	image_loadBMP_invalid_pixel_format:
 		push error_invalid_pixel_format
 		call my_printf
-		jmp image_loadBMP_end_with_fclose
+		jmp image_loadBMP_end_with_free_and_fclose
 	
-	image_loadBMP_read_done:
+	image_loadBMP_process_done:
 	
 	;flip the data if necessary
 	cmp dword[flip_data], 0
@@ -278,7 +312,13 @@ image_loadBMP:
 	mov dword[eax], ecx
 	
 	
+	image_loadBMP_end_with_free_and_fclose:
+	;free raw data
+	push dword[ebp-32]
+	call my_free
+	
 	image_loadBMP_end_with_fclose:
+	;close file
 	push dword[ebp-4]
 	call my_fclose
 	

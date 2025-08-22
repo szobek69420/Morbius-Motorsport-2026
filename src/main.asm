@@ -30,6 +30,7 @@ section .text use32
 	extern GAME_STATE_EXIT
 	extern GAME_STATE_INGAME
 	extern GAME_STATE_MENU
+	extern GAME_STATE_SETTINGS
 	extern GAME_STATE_INIT
 	extern GAME_STATE_DEINIT
 	

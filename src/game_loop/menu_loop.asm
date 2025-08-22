@@ -670,19 +670,6 @@ menuLoop_initCanvas:
 	call uiText_setColour
 	
 	
-	;text slider
-	push dword[UI_SLIDER]
-	call uiElement_create
-	
-	push 250
-	push dword[CANVAS_MENU]
-	push eax
-	call uiElement_setParent
-	mov dword[esp+4], 0
-	call uiElement_setPosition
-	mov dword[esp+4], 69
-	call uiSlider_setOnlyInteger
-	
 	mov esp, ebp
 	pop ebp
 	ret
