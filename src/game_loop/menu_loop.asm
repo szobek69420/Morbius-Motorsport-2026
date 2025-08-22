@@ -6,11 +6,13 @@ section .rodata use32
 	text_title db "Morbius",0
 	text_title2 db "Motorsport",0
 	text_title3 db "2026",0
-	text_startButton db "mmh",0
-	text_exitButton db "hmm",0
+	text_startButton db "cheeky",0
+	text_settingsButton db "tweaky",0
+	text_exitButton db "freaky",0
 	
 	background_texture_path db "sprites/ui/menu/background.bmp",0
 	start_button_texture_path db "sprites/ui/menu/start_button.bmp",0
+	settings_button_texture_path db "sprites/ui/menu/settings_button.bmp",0
 	
 	print_two_ints_nl db "%d %d",10,0
 	
@@ -45,6 +47,7 @@ section .data use32
 	TEXT_TITLE2 dd 0
 	TEXT_TITLE3 dd 0
 	BUTTON_START dd 0
+	BUTTON_SETTINGS dd 0
 	BUTTON_EXIT dd 0
 	
 section .bss use32
@@ -137,6 +140,7 @@ section .text use32
 	extern UI_TEXT_ALIGN_TOP
 	
 	extern GAME_STATE_MENU
+	extern GAME_STATE_SETTINGS
 	extern GAME_STATE_INGAME
 	extern GAME_STATE_DEINIT
 	
@@ -407,10 +411,15 @@ menuLoop_initCanvas:
 	call uiElement_create
 	mov dword[BUTTON_START], eax
 	
-	push 75
+	push 60
 	push 300
 	push dword[BUTTON_START]
 	call uiElement_setSize
+	
+	push 0
+	push 0
+	push dword[BUTTON_START]
+	call uiElement_setPosition
 	
 	push 69
 	push 69
@@ -469,6 +478,72 @@ menuLoop_initCanvas:
 		ret
 	menuLoop_initCanvas_startButtonCallback_skip:
 	
+	;create settings button
+	push dword[UI_BUTTON]
+	call uiElement_create
+	mov dword[BUTTON_SETTINGS], eax
+	
+	push 60
+	push 300
+	push dword[BUTTON_SETTINGS]
+	call uiElement_setSize
+	
+	push -80
+	push 0
+	push dword[BUTTON_SETTINGS]
+	call uiElement_setPosition
+	
+	push 69
+	push 69
+	push dword[BUTTON_SETTINGS]
+	call uiElement_setStatus
+	
+	push dword[CANVAS_MENU]
+	push dword[BUTTON_SETTINGS]
+	call uiElement_setParent
+	
+	push word[UI_CENTER]
+	push word[UI_CENTER]
+	push dword[BUTTON_SETTINGS]
+	call uiElement_setAnchor
+	call uiElement_setPivot
+	
+	push dword[return_value]
+	push menuLoop_initCanvas_settingsButtonCallback
+	push dword[BUTTON_SETTINGS]
+	call uiElement_setOnClick
+	
+	push 0x41c00000
+	push dword[BUTTON_SETTINGS]
+	call uiButton_getImage
+	mov dword[esp], eax
+	call uiImage_setCornerRadius
+	
+	push settings_button_texture_path
+	push dword[BUTTON_SETTINGS]
+	call uiButton_getImage
+	mov dword[esp], eax
+	call uiImage_setTexture
+	
+	
+	push text_settingsButton
+	push dword[BUTTON_SETTINGS]
+	call uiButton_getText
+	mov dword[esp], eax
+	call uiText_setText
+	
+	
+	jmp menuLoop_initCanvas_settingsButtonCallback_skip
+	;void menuLoop_initCanvas_settingsButtonCallback(UIElement* element, tsValue<int>* returnValue)
+	menuLoop_initCanvas_settingsButtonCallback:
+		mov eax, dword[esp+8]
+		push dword[GAME_STATE_SETTINGS]
+		push eax
+		call tsValue_set
+		add esp, 8
+		ret
+	menuLoop_initCanvas_settingsButtonCallback_skip:
+	
 	;create exit button
 	push dword[UI_BUTTON]
 	call uiElement_create
@@ -490,12 +565,12 @@ menuLoop_initCanvas:
 	mov dword[esp], eax
 	call uiImage_setCornerRadius
 	
-	push 75
+	push 60
 	push 300
 	push dword[BUTTON_EXIT]
 	call uiElement_setSize
 	
-	push -105
+	push -160
 	push 0
 	push dword[BUTTON_EXIT]
 	call uiElement_setPosition

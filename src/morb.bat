@@ -3,6 +3,7 @@ mkdir build
 ..\build_tools\nasm.exe -fobj main.asm -o build/main.o
 ..\build_tools\nasm.exe -fobj window/window.asm -o build/window.o
 ..\build_tools\nasm.exe -fobj game_loop/game_states.asm -o build/game_states.o
+..\build_tools\nasm.exe -fobj game_loop/settings_loop.asm -o build/settings_loop.o
 ..\build_tools\nasm.exe -fobj game_loop/menu_loop.asm -o build/menu_loop.o
 ..\build_tools\nasm.exe -fobj game_loop/game_loop.asm -o build/game_loop.o
 ..\build_tools\nasm.exe -fobj sun/sun.asm -o build/sun.o
@@ -59,6 +60,7 @@ build/sun.o ^
 build/sky.o ^
 build/player.o ^
 build/game_states.o ^
+build/settings_loop.o ^
 build/menu_loop.o ^
 build/game_loop.o ^
 build/chunk_manager4d.o ^

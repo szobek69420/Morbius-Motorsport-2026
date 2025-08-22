@@ -7,6 +7,7 @@ section .rodata use32
 	message_current_game_state_init db "main: current game state: init",10,0
 	message_current_game_state_deinit db "main: current game state: deinit",10,0
 	message_current_game_state_menu db "main: current game state: menu",10,0
+	message_current_game_state_settings db "main: current game state: settings",10,0
 	message_current_game_state_ingame db "main: current game state: ingame",10,0
 	message_current_game_state_exit db "main: current game state: exit",10,0
 	message_current_game_state_unknown db "main: current game state: unknown",10,0
@@ -27,6 +28,7 @@ section .text use32
 	
 	extern gameLoop_main
 	extern menuLoop_main
+	extern settingsLoop_main
 	extern GAME_STATE_EXIT
 	extern GAME_STATE_INGAME
 	extern GAME_STATE_MENU
@@ -53,6 +55,8 @@ section .text use32
 				je start_loop_deinit
 				cmp eax, dword[GAME_STATE_MENU]
 				je start_loop_menu
+				cmp eax, dword[GAME_STATE_SETTINGS]
+				je start_loop_settings
 				cmp eax, dword[GAME_STATE_INGAME]
 				je start_loop_ingame
 				cmp eax, dword[GAME_STATE_EXIT]
@@ -88,6 +92,19 @@ section .text use32
 				
 				push dword[pwindow]
 				call menuLoop_main
+				mov dword[ebp-4], eax
+				add esp, 4
+				
+				jmp start_loop_continue
+				
+				
+			start_loop_settings:
+				push message_current_game_state_settings
+				call my_printf
+				add esp, 4
+				
+				push dword[pwindow]
+				call settingsLoop_main
 				mov dword[ebp-4], eax
 				add esp, 4
 				
