@@ -2,12 +2,45 @@
 
 section .rodata use32
 
+	test_text db "lowkey ruzsa magdi",10,0
+
 	HALF dd 0.5
+	ONE dd 1.0
+	THREE dd 3.0
+	FIVE dd 5.0
+	SEVEN dd 7.0
+	
+	print_int_nl db "%d",10,0
+	
+	print_render_distance db "Render distance: %d",0
 
 	text_title db "settings",0
 	text_returnButton db "save changes",0
 	
 	background_texture_path db "sprites/ui/menu/background.bmp",0
+	slider_knob_texture_path db "sprites/ui/settings/slider_knob.bmp",0
+	
+	;resolutions
+	RESOLUTION_WIDTHS dd 10, 256, 640, 1280, 1920, 1920, 2560, 15360
+	RESOLUTION_HEIGHTS dd 10, 144, 480, 720, 1080, 1, 1440, 8640
+	RESOLUTION_NAMES:
+	dd RESOLUTION_NAME_0
+	dd RESOLUTION_NAME_1
+	dd RESOLUTION_NAME_2
+	dd RESOLUTION_NAME_3
+	dd RESOLUTION_NAME_4
+	dd RESOLUTION_NAME_5
+	dd RESOLUTION_NAME_6
+	dd RESOLUTION_NAME_7
+	
+	RESOLUTION_NAME_0 db "Helen Keller (0x0)",0
+	RESOLUTION_NAME_1 db "256x144",0
+	RESOLUTION_NAME_2 db "640x480",0
+	RESOLUTION_NAME_3 db "HD (1280x720)",0
+	RESOLUTION_NAME_4 db "FHD (1920x1080)",0
+	RESOLUTION_NAME_5 db "Chinese FHD (1920x1)",0
+	RESOLUTION_NAME_6 db "QHD (2560x1440)",0
+	RESOLUTION_NAME_7 db "Mogger (15360x8640)",0
 
 section .data use32
 	window dd 0					;GLFWwindow*
@@ -18,6 +51,14 @@ section .data use32
 	IMAGE_BACKGROUND dd 0
 	TEXT_TITLE dd 0
 	BUTTON_RETURN dd 0
+	SLIDER_RENDER_DISTANCE dd 0
+	TEXT_RENDER_DISTANCE_VALUE dd 0
+	SLIDER_RESOLUTION dd 0
+	TEXT_RESOLUTION_VALUE dd 0
+	
+	;current game values
+	VALUE_RENDER_DISTANCE dd 3			;int
+	VALUE_RESOLUTION dd 3				;int
 
 section .bss use32
 	
@@ -30,6 +71,7 @@ section .text use32
 	global settingsLoop_main
 	
 	extern my_printf
+	extern my_sprintf
 	
 	extern input_update
 	extern input_keyReleased
@@ -42,6 +84,8 @@ section .text use32
 	
 	extern renderable_init
 	extern renderable_deinit
+	extern renderable_enableBlending
+	extern renderable_enableDepthTest
 	extern textRenderer_init
 	extern textRenderer_deinit
 	extern textureHandler_init
@@ -56,8 +100,6 @@ section .text use32
 	extern glDisable
 	extern glClear
 	extern glClearColor
-	extern GL_DEPTH_TEST
-	extern GL_BLEND
 	extern GL_COLOR_BUFFER_BIT
 	
 	extern glfwSetFramebufferSizeCallback
@@ -90,6 +132,13 @@ section .text use32
 	extern uiButton_getImage
 	extern uiButton_setTextColour
 	extern uiSlider_setOnlyInteger
+	extern uiSlider_getFill
+	extern uiSlider_getKnob
+	extern uiSlider_getValue
+	extern uiSlider_setValue
+	extern uiSlider_setMinValue
+	extern uiSlider_setMaxValue
+	extern uiSlider_setOnValueChanged
 	extern UI_CANVAS
 	extern UI_IMAGE
 	extern UI_TEXT
@@ -160,6 +209,9 @@ settingsLoop_main:
 	call window_enableVsync
 	add esp, 8
 	
+	;load values
+	call settingsLoop_loadValues
+	
 	;create canvas
 	call settingsLoop_initCanvas
 	
@@ -190,11 +242,13 @@ settingsLoop_main:
 		push dword[GL_COLOR_BUFFER_BIT]
 		call [glClear]
 		
-		push dword[GL_DEPTH_TEST]
-		call [glDisable]
+		push 0
+		call renderable_enableDepthTest
+		add esp, 4
 		
-		push dword[GL_BLEND]
-		call [glEnable]
+		push 69
+		call renderable_enableBlending
+		add esp, 4
 		
 		;render ui
 		push dword[WINDOW_SIZE_Y]
@@ -288,6 +342,18 @@ settingsLoop_main:
 	pop ebp
 	ret
 	
+;currently only a placeholder
+;void settingsLoop_loadValues()
+settingsLoop_loadValues:
+	push ebp
+	mov ebp, esp
+	
+	mov dword[VALUE_RENDER_DISTANCE], 3
+	mov dword[VALUE_RESOLUTION], 3
+	
+	mov esp, ebp
+	pop ebp
+	ret
 	
 ;void settingsLoop_windowResizeCallback(GLFWwindow* pwindow, int width, int height)
 settingsLoop_windowResizeCallback:
@@ -366,12 +432,46 @@ settingsLoop_initCanvas:
 	push dword[IMAGE_BACKGROUND]
 	call uiImage_setTexture
 	
-	push dword[HALF]
+	push dword[ONE]
 	push dword[HALF]
 	push dword[HALF]
 	push dword[HALF]
 	push dword[IMAGE_BACKGROUND]
 	call uiImage_setColour
+	
+	;create title
+	push dword[UI_TEXT]
+	call uiElement_create
+	mov dword[TEXT_TITLE], eax
+	
+	push dword[CANVAS_SETTINGS]
+	push dword[TEXT_TITLE]
+	call uiElement_setParent
+	
+	push word[UI_CENTER]
+	push word[UI_CENTER]
+	push dword[TEXT_TITLE]
+	call uiElement_setAnchor
+	call uiElement_setPivot
+	
+	push 120
+	push 0
+	push dword[TEXT_TITLE]
+	call uiElement_setPosition
+	
+	push 0
+	push 0
+	push dword[TEXT_TITLE]
+	call uiElement_setSize
+	
+	push 45
+	push 30
+	push dword[TEXT_TITLE]
+	call uiText_setFontSize
+	
+	push text_title
+	push dword[TEXT_TITLE]
+	call uiText_setText
 	
 	;create return button
 	push dword[UI_BUTTON]
@@ -426,35 +526,242 @@ settingsLoop_initCanvas:
 		ret
 	settingsLoop_initCanvas_returnButtonCallback_skip:
 	
-	;create title
+	;create render distance value text
 	push dword[UI_TEXT]
 	call uiElement_create
-	mov dword[TEXT_TITLE], eax
+	mov dword[TEXT_RENDER_DISTANCE_VALUE], eax
 	
 	push dword[CANVAS_SETTINGS]
-	push dword[TEXT_TITLE]
+	push dword[TEXT_RENDER_DISTANCE_VALUE]
 	call uiElement_setParent
 	
 	push word[UI_CENTER]
 	push word[UI_CENTER]
-	push dword[TEXT_TITLE]
+	push dword[TEXT_RENDER_DISTANCE_VALUE]
 	call uiElement_setAnchor
 	call uiElement_setPivot
 	
-	push 200
-	push 0
-	push dword[TEXT_TITLE]
-	call uiElement_setPosition
-	
 	push 0
 	push 0
-	push dword[TEXT_TITLE]
+	push dword[TEXT_RENDER_DISTANCE_VALUE]
 	call uiElement_setSize
 	
-	push text_title
-	push dword[TEXT_TITLE]
+	push 25
+	push 0
+	push dword[TEXT_RENDER_DISTANCE_VALUE]
+	call uiElement_setPosition
+	
+	push dword[ONE]
+	push dword[ONE]
+	push dword[ONE]
+	push 0
+	push dword[TEXT_RENDER_DISTANCE_VALUE]
+	call uiText_setColour
+	
+	
+	;create render distance slider
+	push dword[UI_SLIDER]
+	call uiElement_create
+	mov dword[SLIDER_RENDER_DISTANCE], eax
+	
+	push dword[CANVAS_SETTINGS]
+	push dword[SLIDER_RENDER_DISTANCE]
+	call uiElement_setParent
+	
+	push 50
+	push 400
+	push dword[SLIDER_RENDER_DISTANCE]
+	call uiElement_setSize
+	
+	push 25
+	push 0
+	push dword[SLIDER_RENDER_DISTANCE]
+	call uiElement_setPosition
+	
+	push 69
+	push dword[SLIDER_RENDER_DISTANCE]
+	call uiSlider_setOnlyInteger
+	
+	push dword[ONE]
+	push dword[SLIDER_RENDER_DISTANCE]
+	call uiSlider_setMinValue
+	
+	push dword[FIVE]
+	push dword[SLIDER_RENDER_DISTANCE]
+	call uiSlider_setMaxValue
+	
+	push dword[TEXT_RENDER_DISTANCE_VALUE]
+	push settingsLoop_renderDistanceOnValueChangedCallback
+	push dword[SLIDER_RENDER_DISTANCE]
+	call uiSlider_setOnValueChanged
+	
+	cvtsi2ss xmm0, dword[VALUE_RENDER_DISTANCE]
+	sub esp, 4
+	movss dword[esp], xmm0
+	push dword[SLIDER_RENDER_DISTANCE]
+	call uiSlider_setValue
+	
+	push dword[SLIDER_RENDER_DISTANCE]
+	call uiSlider_getFill
+	push 0
+	push 0
+	push eax
+	call uiElement_setStatus
+	
+	push dword[SLIDER_RENDER_DISTANCE]
+	call uiSlider_getKnob
+	push 44
+	push 44
+	push eax
+	call uiElement_setSize
+	mov dword[esp+4], slider_knob_texture_path
+	call uiImage_setTexture
+	
+	;create resolution value text
+	push dword[UI_TEXT]
+	call uiElement_create
+	mov dword[TEXT_RESOLUTION_VALUE], eax
+	
+	push dword[CANVAS_SETTINGS]
+	push dword[TEXT_RESOLUTION_VALUE]
+	call uiElement_setParent
+	
+	push word[UI_CENTER]
+	push word[UI_CENTER]
+	push dword[TEXT_RESOLUTION_VALUE]
+	call uiElement_setAnchor
+	call uiElement_setPivot
+	
+	push 0
+	push 0
+	push dword[TEXT_RESOLUTION_VALUE]
+	call uiElement_setSize
+	
+	push -50
+	push 0
+	push dword[TEXT_RESOLUTION_VALUE]
+	call uiElement_setPosition
+	
+	push dword[ONE]
+	push dword[ONE]
+	push dword[ONE]
+	push 0
+	push dword[TEXT_RESOLUTION_VALUE]
+	call uiText_setColour
+	
+	
+	;create resolution slider
+	push dword[UI_SLIDER]
+	call uiElement_create
+	mov dword[SLIDER_RESOLUTION], eax
+	
+	push dword[CANVAS_SETTINGS]
+	push dword[SLIDER_RESOLUTION]
+	call uiElement_setParent
+	
+	push 50
+	push 400
+	push dword[SLIDER_RESOLUTION]
+	call uiElement_setSize
+	
+	push -50
+	push 0
+	push dword[SLIDER_RESOLUTION]
+	call uiElement_setPosition
+	
+	push 69
+	push dword[SLIDER_RESOLUTION]
+	call uiSlider_setOnlyInteger
+	
+	push 0
+	push dword[SLIDER_RESOLUTION]
+	call uiSlider_setMinValue
+	
+	push dword[SEVEN]
+	push dword[SLIDER_RESOLUTION]
+	call uiSlider_setMaxValue
+	
+	push dword[TEXT_RESOLUTION_VALUE]
+	push settingsLoop_resolutionOnValueChangedCallback
+	push dword[SLIDER_RESOLUTION]
+	call uiSlider_setOnValueChanged
+	
+	cvtsi2ss xmm0, dword[VALUE_RESOLUTION]
+	sub esp, 4
+	movss dword[esp], xmm0
+	push dword[SLIDER_RESOLUTION]
+	call uiSlider_setValue
+	
+	push dword[SLIDER_RESOLUTION]
+	call uiSlider_getFill
+	push 0
+	push 0
+	push eax
+	call uiElement_setStatus
+	
+	push dword[SLIDER_RESOLUTION]
+	call uiSlider_getKnob
+	push 44
+	push 44
+	push eax
+	call uiElement_setSize
+	mov dword[esp+4], slider_knob_texture_path
+	call uiImage_setTexture
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;void settingsLoop_renderDistanceOnValueChangedCallback(UISlider* slider, UIText* valueText)
+settingsLoop_renderDistanceOnValueChangedCallback:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 100			;text buffer		100
+	
+	push dword[ebp+8]
+	call uiSlider_getValue
+	fistp dword[VALUE_RENDER_DISTANCE]
+	
+	push dword[VALUE_RENDER_DISTANCE]
+	push print_render_distance
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	
+	lea eax, [ebp-100]
+	push eax
+	push dword[ebp+12]
 	call uiText_setText
 	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;void settingsLoop_resolutionOnValueChangedCallback(UISlider* slider, UIText* valueText)
+settingsLoop_resolutionOnValueChangedCallback:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;value (int)		4
+	
+	;get and round value
+	push dword[ebp+8]
+	call uiSlider_getValue
+	frndint
+	fistp dword[ebp-4]
+	
+	;set the value
+	mov eax, dword[ebp-4]
+	mov dword[VALUE_RESOLUTION], eax
+	
+	;set the text
+	mov eax, dword[ebp-4]
+	push dword[RESOLUTION_NAMES+4*eax]
+	push dword[ebp+12]
+	call uiText_setText
 	
 	mov esp, ebp
 	pop ebp

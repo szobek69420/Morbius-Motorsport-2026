@@ -11,7 +11,7 @@
 ;	float minValue, maxValue;	216
 ;	int onlyInteger;			224
 ;	void (*onValueChanged)(UISlider* slider, void* param);	228
-;	void* param;
+;	void* param;				232
 ;}	236 bytes
 
 section .rodata use32
@@ -257,6 +257,14 @@ uiSlider_setValue:
 	push ebp
 	mov ebp, esp
 	
+	sub esp, 4			;previous value		4
+	sub esp, 4			;current value		8
+	
+	;get previous value
+	push dword[ebp+8]
+	call uiSlider_getValue
+	fstp dword[ebp-4]
+	
 	;calculate value
 	mov eax, dword[ebp+8]
 	push dword[eax+220]
@@ -269,6 +277,25 @@ uiSlider_setValue:
 	;refresh the slider
 	push dword[ebp+8]
 	call uiSlider_recalculateLayout_internal
+	
+	;get the current value
+	push dword[ebp+8]
+	call uiSlider_getValue
+	fstp dword[ebp-8]
+	
+	;check if the onValueChanged needs to be called
+	mov eax, dword[ebp-4]
+	cmp eax, dword[ebp-8]
+	je uiSlider_setValue_no_change
+	mov eax, dword[ebp+8]
+	test dword[eax+228], 0xffffffff
+	jz uiSlider_setValue_no_change
+		;call onValueChanged
+		push dword[eax+232]
+		push eax
+		call dword[eax+228]
+	
+	uiSlider_setValue_no_change:
 	
 	mov esp, ebp
 	pop ebp

@@ -74,6 +74,8 @@ section .text use32
 	
 	extern renderable_init
 	extern renderable_deinit
+	extern renderable_enableDepthTest
+	extern renderable_enableBlending
 	extern textRenderer_init
 	extern textRenderer_deinit
 	extern textureHandler_init
@@ -222,11 +224,13 @@ menuLoop_main:
 		push dword[GL_COLOR_BUFFER_BIT]
 		call [glClear]
 		
-		push dword[GL_DEPTH_TEST]
-		call [glDisable]
+		push 0
+		call renderable_enableDepthTest
+		add esp, 4
 		
-		push dword[GL_BLEND]
-		call [glEnable]
+		push 69
+		call renderable_enableBlending
+		add esp, 4
 		
 		;render ui
 		push dword[WINDOW_SIZE_Y]
