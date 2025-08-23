@@ -12,6 +12,9 @@ section .rodata use32
 	message_current_game_state_exit db "main: current game state: exit",10,0
 	message_current_game_state_unknown db "main: current game state: unknown",10,0
 	
+	convertable db "-0.69",0
+	print_float_nl db "%d",10,0
+	
 section .bss use32
 	pwindow resb 4		;GLFWwindow*
 
@@ -36,6 +39,8 @@ section .text use32
 	extern GAME_STATE_INIT
 	extern GAME_STATE_DEINIT
 	
+	extern cvt_str2float
+	
 	..start:
 		push ebp
 		mov ebp, esp
@@ -46,6 +51,12 @@ section .text use32
 		mov dword[ebp-4], eax
 	
 		finit
+		
+		push convertable
+		call cvt_str2float
+		push eax
+		push print_float_nl
+		call my_printf
 		
 		start_loop_start:
 			mov eax, dword[ebp-4]

@@ -39,6 +39,8 @@ mkdir build
 ..\build_tools\nasm.exe -fobj utils/console.asm -o build/console.o
 ..\build_tools\nasm.exe -fobj utils/memory.asm -o build/memory.o
 ..\build_tools\nasm.exe -fobj utils/file.asm -o build/file.o
+..\build_tools\nasm.exe -fobj utils/ctype.asm -o build/ctype.o
+..\build_tools\nasm.exe -fobj utils/cvt.asm -o build/cvt.o
 ..\build_tools\nasm.exe -fobj glm3/vec3.asm -o build/vec3.o
 ..\build_tools\nasm.exe -fobj glm3/vec4.asm -o build/vec4.o
 ..\build_tools\nasm.exe -fobj glm3/mat3.asm -o build/mat3.o
@@ -108,6 +110,8 @@ build/string.o ^
 build/console.o ^
 build/memory.o ^
 build/file.o ^
+build/ctype.o ^
+build/cvt.o ^
 glfw3dll.lib ^
 -o build/test.exe
 copy build\test.exe ..\game_files
