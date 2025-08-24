@@ -20,6 +20,12 @@ section .rodata use32
 	background_texture_path db "sprites/ui/menu/background.bmp",0
 	slider_knob_texture_path db "sprites/ui/settings/slider_knob.bmp",0
 	
+	open_mode_read db "r",0
+	open_mode_write db "w",0
+	settings_file_path db "./settings/spaghetti.bolognese",0
+	format_render_distance db "render_distance: %d",10,0
+	format_resolution db "resolution: %d",10,0
+	
 	;resolutions
 	RESOLUTION_WIDTHS dd 10, 256, 640, 1280, 1920, 1920, 2560, 15360
 	RESOLUTION_HEIGHTS dd 10, 144, 480, 720, 1080, 1, 1440, 8640
@@ -72,6 +78,11 @@ section .text use32
 	
 	extern my_printf
 	extern my_sprintf
+	
+	extern my_fopen
+	extern my_fclose
+	extern my_fprintf
+	extern my_fscanf
 	
 	extern input_update
 	extern input_keyReleased
@@ -342,14 +353,91 @@ settingsLoop_main:
 	pop ebp
 	ret
 	
-;currently only a placeholder
 ;void settingsLoop_loadValues()
 settingsLoop_loadValues:
 	push ebp
 	mov ebp, esp
 	
-	mov dword[VALUE_RENDER_DISTANCE], 3
-	mov dword[VALUE_RESOLUTION], 3
+	sub esp, 4			;render distance		4
+	sub esp, 4			;resolution				8
+	sub esp, 4			;file					12
+	
+	;check if the settings file exists and create it if necessary
+	push open_mode_read
+	push settings_file_path
+	call my_fopen
+	test eax, eax
+	jnz settingsLoop_loadValues_file_exists
+		;save default values
+		mov dword[VALUE_RENDER_DISTANCE], 3
+		mov dword[VALUE_RESOLUTION], 3
+		
+		call settingsLoop_saveValues
+		
+		;open file noch 'mal
+		push open_mode_read
+		push settings_file_path
+		call my_fopen
+	settingsLoop_loadValues_file_exists:
+	
+	mov dword[ebp-12], eax
+	
+	;read values
+	lea eax, [ebp-4]
+	push eax
+	push format_render_distance
+	push dword[ebp-12]
+	call my_fscanf
+	
+	lea eax, [ebp-8]
+	push eax
+	push format_resolution
+	push dword[ebp-12]
+	call my_fscanf
+	
+	;close file
+	push dword[ebp-12]
+	call my_fclose
+	
+	;set values	
+	mov eax, dword[ebp-4]
+	mov dword[VALUE_RENDER_DISTANCE], eax
+	
+	mov ecx, dword[ebp-8]
+	mov dword[VALUE_RESOLUTION], ecx
+	
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+;void settingsLoop_loadValues()
+settingsLoop_saveValues:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;file		4
+	
+	;open file
+	push open_mode_write
+	push settings_file_path
+	call my_fopen
+	mov dword[ebp-4], eax
+	
+	;write things
+	push dword[VALUE_RENDER_DISTANCE]
+	push format_render_distance
+	push dword[ebp-4]
+	call my_fprintf
+	
+	push dword[VALUE_RESOLUTION]
+	push format_resolution
+	push dword[ebp-4]
+	call my_fprintf
+	
+	;close file
+	push dword[ebp-4]
+	call my_fclose
 	
 	mov esp, ebp
 	pop ebp
@@ -518,6 +606,8 @@ settingsLoop_initCanvas:
 	jmp settingsLoop_initCanvas_returnButtonCallback_skip
 	;void settingsLoop_initCanvas_returnButtonCallback(UIElement* element, tsValue<int>* returnValue)
 	settingsLoop_initCanvas_returnButtonCallback:
+		call settingsLoop_saveValues
+	
 		mov eax, dword[esp+8]
 		push dword[GAME_STATE_MENU]
 		push eax
