@@ -56,6 +56,8 @@ section .text use32
 	
 	extern my_printf
 	
+	extern my_malloc
+	
 	extern my_memcpy
 	extern my_memset_dword
 	
@@ -466,7 +468,7 @@ my_fscanf:
 				lea eax, [ebp-200]
 				push eax
 				push dword[ebp+16]
-				call file_readUntilSpace
+				call file_readUntilSpace_internal
 				add esp, 8
 				
 				;convert it to int
@@ -494,7 +496,7 @@ my_fscanf:
 				lea eax, [ebp-200]
 				push eax
 				push dword[ebp+16]
-				call file_readUntilSpace
+				call file_readUntilSpace_internal
 				add esp, 8
 				
 				;convert it to float
@@ -566,27 +568,27 @@ my_fjmp:
 ;internal functinos -----------------------------------------------------------
 
 ;reads the file until the first whitespace (the whitespace doesn't get eaten and isn't added to the buffer)
-;void file_readUntilSpace(FILE* file, char* buffer)
-file_readUntilSpace:
+;void file_readUntilSpace_internal(FILE* file, char* buffer)
+file_readUntilSpace_internal:
 	push ebp
 	push esi
 	mov ebp, esp
 	
 	mov esi, dword[ebp+16]			;current pos in buffer in esi
 	push dword[ebp+12]
-	file_readUntilSpace_loop_start:
+	file_readUntilSpace_internal_loop_start:
 		call my_fgetc
 		push eax
 		call ctype_isSpace
 		test eax, eax
-		jnz file_readUntilSpace_loop_end
+		jnz file_readUntilSpace_internal_loop_end
 			;copy the character
 			pop eax
 			mov byte[esi], al
 		
 		inc esi
-		jmp file_readUntilSpace_loop_start
-	file_readUntilSpace_loop_end:
+		jmp file_readUntilSpace_internal_loop_start
+	file_readUntilSpace_internal_loop_end:
 	push 69
 	push -1
 	push dword[ebp+12]
@@ -595,6 +597,107 @@ file_readUntilSpace:
 	mov byte[esi], 0
 	
 	mov esp, ebp
+	pop esi
+	pop ebp
+	ret
+	
+global file_separateRelativeFilePath_internal
+;separates a relative path (possible separators are '/','\' or any combination of the two )
+;behaviour for absolute paths is undefined
+;partCount is the number of parts in the path
+;the returned char array is the concatenation of the parts, each separated with a '\0'
+;returns NULL if the path is of length 0
+;the returned array shall be deallocated after use
+;void file_separateRelativeFilePath_internal(const char* path, char** outSeparatedPath, int* outPartCount)
+file_separateRelativeFilePath_internal:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 4			;allocated array		4
+	sub esp, 4			;part count				8
+	
+	mov dword[ebp-4], 0
+	mov dword[ebp-8], 0
+	
+	;allocate the array
+	push dword[ebp+20]
+	call my_strlen
+	test eax, eax
+	jz file_separateRelativeFilePath_internal_end
+	inc eax
+	push eax
+	call my_malloc
+	mov dword[ebp-4], eax
+	
+	;separate the file path
+	mov esi, dword[ebp+20]		;current char in path in esi
+	mov edi, dword[ebp-4]		;current char in array in edi
+	xor ebx, ebx				;length of current part
+	file_separateRelativeFilePath_internal_loop_start:
+		;has a part ended?
+		cmp byte[esi], '\'
+		je file_separateRelativeFilePath_internal_loop_part_end
+		cmp byte[esi], '/'
+		je file_separateRelativeFilePath_internal_loop_part_end
+		;has the path ended?
+		cmp byte[esi], 0
+		je file_separateRelativeFilePath_internal_loop_path_end
+			;normal character
+			mov al, byte[esi]
+			mov byte[edi], al
+			inc ebx
+			jmp file_separateRelativeFilePath_internal_loop_continue
+			
+		file_separateRelativeFilePath_internal_loop_part_end:
+			;set the current array char to 0
+			mov byte[edi], 0
+			
+			;eat any subsequent separators as well
+			;thinks first before you change this part
+			file_separateRelativeFilePath_internal_loop_part_end_loop_start:
+				inc esi
+				cmp byte[esi], '\'
+				je file_separateRelativeFilePath_internal_loop_part_end_loop_start
+				cmp byte[esi], '/'
+				je file_separateRelativeFilePath_internal_loop_part_end_loop_start
+				dec esi
+				
+			xor ebx, ebx
+			inc dword[ebp-8]
+			jmp file_separateRelativeFilePath_internal_loop_continue
+		
+		file_separateRelativeFilePath_internal_loop_path_end:
+			;set the current array char to 0
+			mov byte[edi], 0
+			
+			;increment part count only if the part exists
+			test ebx, ebx
+			jz file_separateRelativeFilePath_internal_loop_end
+			inc dword[ebp-8]
+			jmp file_separateRelativeFilePath_internal_loop_end
+		
+		file_separateRelativeFilePath_internal_loop_continue:
+		inc esi
+		inc edi
+		jmp file_separateRelativeFilePath_internal_loop_start
+	file_separateRelativeFilePath_internal_loop_end:
+	
+	file_separateRelativeFilePath_internal_end:
+	;set values
+	mov eax, dword[ebp+24]
+	mov ecx, dword[ebp-4]
+	mov dword[eax], ecx
+	
+	mov eax, dword[ebp+28]
+	mov ecx, dword[ebp-8]
+	mov dword[eax], ecx
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
 	pop esi
 	pop ebp
 	ret

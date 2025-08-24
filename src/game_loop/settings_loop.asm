@@ -607,7 +607,7 @@ settingsLoop_initCanvas:
 	;void settingsLoop_initCanvas_returnButtonCallback(UIElement* element, tsValue<int>* returnValue)
 	settingsLoop_initCanvas_returnButtonCallback:
 		call settingsLoop_saveValues
-	
+		
 		mov eax, dword[esp+8]
 		push dword[GAME_STATE_MENU]
 		push eax
