@@ -475,12 +475,14 @@ my_fscanf:
 				call cvt_str2int
 				add esp, 4
 				
-				;set the parameter
+				;set the parameters
 				mov ecx, dword[ebp-204]
 				mov ecx, dword[ebp+ecx]
 				mov dword[ecx], eax
 				
 				add dword[ebp-204], 4
+				
+				inc dword[ebp-212]
 				
 				;% is no more active
 				mov dword[ebp-208], 0
@@ -488,6 +490,35 @@ my_fscanf:
 				jmp my_fscanf_outer_loop_continue
 				
 			my_fscanf_outer_loop_float:
+				;get the number string
+				lea eax, [ebp-200]
+				push eax
+				push dword[ebp+16]
+				call file_readUntilSpace
+				add esp, 8
+				
+				;convert it to float
+				lea eax, [ebp-200]
+				push eax
+				call cvt_str2float
+				fstp dword[esp]
+				mov eax, dword[esp]
+				add esp, 4
+				
+				;set the parameters
+				mov ecx, dword[ebp-204]
+				mov ecx, dword[ebp+ecx]
+				mov dword[ecx], eax
+				
+				add dword[ebp-204], 4
+				
+				inc dword[ebp-212]
+				
+				;% is no more active
+				mov dword[ebp-208], 0
+				
+				jmp my_fscanf_outer_loop_continue
+				
 		my_fscanf_outer_loop_no_input:
 			push dword[ebp+16]
 			call my_fgetc
@@ -503,11 +534,15 @@ my_fscanf:
 		jmp my_fscanf_outer_loop_start
 	my_fscanf_outer_loop_end:
 	
+	;set return value
+	mov eax, dword[ebp-212]
+	
 	mov esp, ebp
 	pop edi
 	pop esi
 	pop ebp
 	ret
+	
 	
 my_fjmp:
 	push ebp
