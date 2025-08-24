@@ -13,8 +13,11 @@ section .rodata use32
 	my_fclose_error_1 db "my_fclose: Failed with code %d",10,0
 	
 	INVALID_HANDLE_VALUE dd -1
+	INVALID_FILE_ATTRIBUTES dd -1
+	FILE_ATTRIBUTE_DIRECTORY dd 0x00000010
 	
 	print_char_nl db "%c",10,0
+	print_string_nl db "%s",10,0
 	
 section .bss use32
 	my_fprintf_buffer resb 10000
@@ -44,7 +47,9 @@ section .text use32
 	;if fromCurrent is zero, the new position of the file pointer will be numBytes, otherwise it will be the current position of the file pointer + numBytes
 	global my_fjmp			;void my_fjmp(FILE* file, int numBytes, int fromCurrent)
 	
+	dll_import kernel32.dll, GetFileAttributesA
 	dll_import kernel32.dll, CreateFileA
+	dll_import kernel32.dll, CreateDirectoryA
 	dll_import kernel32.dll, CloseHandle
 	
 	dll_import kernel32.dll, ReadFile
@@ -74,7 +79,10 @@ my_fopen:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 4			;HANDLE		;4
+	sub esp, 4			;HANDLE					;4
+	sub esp, 4			;file path				;8
+	sub esp, 4			;file path part count	;12
+	sub esp, 4			;loop index				;16
 	
 	mov dword[ebp-4], 0
 	
@@ -101,6 +109,52 @@ my_fopen:
 		jmp my_fopen_end
 	
 	my_fopen_read:
+		;segment the path
+		lea eax, [ebp-12]
+		push eax
+		lea ecx, [ebp-8]
+		push ecx
+		push dword[ebp+8]
+		call file_separateRelativeFilePath_internal
+		add esp, 12
+	
+		;create any intermediate directories if necessary
+		mov dword[ebp-16], 1
+		cmp dword[ebp-12], 1
+		jle my_fopen_read_create_directory_loop_end
+		my_fopen_read_create_directory_loop_start:		
+			;check if the directory exists
+			push dword[ebp-8]
+			call [GetFileAttributesA]
+			cmp eax, dword[INVALID_FILE_ATTRIBUTES]
+			je my_fopen_read_create_directory_loop_no_existence
+			test eax, dword[FILE_ATTRIBUTE_DIRECTORY]
+			jz my_fopen_read_create_directory_loop_no_existence
+			jmp my_fopen_read_create_directory_loop_continue
+			
+			my_fopen_read_create_directory_loop_no_existence:
+				;directory doesn't exist, create it
+				push 0
+				push dword[ebp-8]
+				call [CreateDirectoryA]
+			
+			my_fopen_read_create_directory_loop_continue:
+			mov eax, dword[ebp-16]
+			inc eax
+			cmp eax, dword[ebp-12]
+			jge my_fopen_read_create_directory_loop_end
+			
+			mov dword[ebp-16], eax
+			push dword[ebp-8]
+			call my_strlen
+			add esp, 4
+			mov ecx, dword[ebp-8]
+			mov byte[ecx+eax], '/'
+			jmp my_fopen_read_create_directory_loop_start
+			
+		my_fopen_read_create_directory_loop_end:
+	
+		;actually open the file
 		push 0
 		push 0x80				;FILE_ATTRIBUTE_NORMAL
 		push 3					;OPEN_EXISTING
@@ -601,7 +655,6 @@ file_readUntilSpace_internal:
 	pop ebp
 	ret
 	
-global file_separateRelativeFilePath_internal
 ;separates a relative path (possible separators are '/','\' or any combination of the two )
 ;behaviour for absolute paths is undefined
 ;partCount is the number of parts in the path
