@@ -14,6 +14,8 @@ section .rodata use32
 	
 	INVALID_HANDLE_VALUE dd -1
 	
+	print_char_nl db "%c",10,0
+	
 section .bss use32
 	my_fprintf_buffer resb 10000
 
@@ -34,7 +36,9 @@ section .text use32
 	;nmemb: the number of elements to read
 	;stream: the file
 	;returns the number of elements read
-	global my_fread			;int my_size_t fread(void *ptr, int size, int nmemb, FILE *stream)
+	global my_fread			;int my_fread(void *ptr, int size, int nmemb, FILE *stream)
+	
+	global my_fscanf		;int my_fscanf(FILE* file, const char* format, ...args)
 	
 	;jumps numBytes from the specified position
 	;if fromCurrent is zero, the new position of the file pointer will be numBytes, otherwise it will be the current position of the file pointer + numBytes
@@ -53,11 +57,16 @@ section .text use32
 	extern my_printf
 	
 	extern my_memcpy
+	extern my_memset_dword
 	
 	extern my_strcmp
 	extern my_sprintf
 	extern my_strlen
 	
+	extern ctype_isSpace
+	
+	extern cvt_str2int
+	extern cvt_str2float
 	
 my_fopen:
 	push ebp
@@ -413,6 +422,93 @@ my_fread:
 	ret
 	
 	
+my_fscanf:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	sub esp, 200		;buffer							200
+	sub esp, 4			;current parameter offset		204
+	sub esp, 4			;is % active					208
+	sub esp, 4			;successful reads				212
+	
+	push 200
+	push 0
+	lea eax, [ebp-200]
+	push eax
+	call my_memset_dword
+	
+	mov dword[ebp-204], 24
+	mov dword[ebp-208], 0
+	mov dword[ebp-212], 0
+	
+	mov esi, dword[ebp+20]			;current character in esi
+	my_fscanf_outer_loop_start:
+		test byte[esi], 0xff
+		jz my_fscanf_outer_loop_end
+		
+		cmp byte[esi], '%'
+		jne my_fscanf_outer_loop_no_input_start
+			mov dword[ebp-208], 69
+			inc esi
+		my_fscanf_outer_loop_no_input_start:
+	
+		test dword[ebp-208], 0xffffffff
+		jz my_fscanf_outer_loop_no_input
+			;inside input
+			cmp byte[esi], 'd'
+			je my_fscanf_outer_loop_int
+			cmp byte[esi], 'f'
+			je my_fscanf_outer_loop_float
+			my_fscanf_outer_loop_int:
+				;get the number string
+				lea eax, [ebp-200]
+				push eax
+				push dword[ebp+16]
+				call file_readUntilSpace
+				add esp, 8
+				
+				;convert it to int
+				lea eax, [ebp-200]
+				push eax
+				call cvt_str2int
+				add esp, 4
+				
+				;set the parameter
+				mov ecx, dword[ebp-204]
+				mov ecx, dword[ebp+ecx]
+				mov dword[ecx], eax
+				
+				add dword[ebp-204], 4
+				
+				;% is no more active
+				mov dword[ebp-208], 0
+				
+				jmp my_fscanf_outer_loop_continue
+				
+			my_fscanf_outer_loop_float:
+		my_fscanf_outer_loop_no_input:
+			push dword[ebp+16]
+			call my_fgetc
+			add esp, 4
+			
+			cmp al, -1
+			je my_fscanf_outer_loop_end					;end of file
+
+			cmp al, byte[esi]
+			jne my_fscanf_outer_loop_end				;differing formats
+		my_fscanf_outer_loop_continue:
+		inc esi
+		jmp my_fscanf_outer_loop_start
+	my_fscanf_outer_loop_end:
+	
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
 my_fjmp:
 	push ebp
 	mov ebp, esp
@@ -428,5 +524,42 @@ my_fjmp:
 	call [SetFilePointer]
 	
 	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;internal functinos -----------------------------------------------------------
+
+;reads the file until the first whitespace (the whitespace doesn't get eaten and isn't added to the buffer)
+;void file_readUntilSpace(FILE* file, char* buffer)
+file_readUntilSpace:
+	push ebp
+	push esi
+	mov ebp, esp
+	
+	mov esi, dword[ebp+16]			;current pos in buffer in esi
+	push dword[ebp+12]
+	file_readUntilSpace_loop_start:
+		call my_fgetc
+		push eax
+		call ctype_isSpace
+		test eax, eax
+		jnz file_readUntilSpace_loop_end
+			;copy the character
+			pop eax
+			mov byte[esi], al
+		
+		inc esi
+		jmp file_readUntilSpace_loop_start
+	file_readUntilSpace_loop_end:
+	push 69
+	push -1
+	push dword[ebp+12]
+	call my_fjmp			;un-eat the white space
+	
+	mov byte[esi], 0
+	
+	mov esp, ebp
+	pop esi
 	pop ebp
 	ret

@@ -106,7 +106,6 @@ cvt_str2float:
 	sub esp, 4				;ganzzahlteil					216
 	sub esp, 4				;bruchteil						220
 	sub esp, 4				;bruchteil character length		224
-	sub esp, 4				;bruchteil divisor				228
 	
 	mov dword[ebp-204], 0
 	mov dword[ebp-212], -1
@@ -190,11 +189,13 @@ cvt_str2float:
 	cvt_str2float_no_bruchteil:
 	
 	;convert the ganzteil to float
-	roundss xmm0, dword[ebp-216], 0b1000
+	mov eax, dword[ebp-216]
+	cvtsi2ss xmm0, eax
 	movss dword[ebp-216], xmm0
 	
 	;convert the brunchteil to float
-	roundss xmm0, dword[ebp-220], 0b1000
+	mov eax, dword[ebp-220]
+	cvtsi2ss xmm0, eax
 	movss dword[ebp-220], xmm0
 	
 	;transform the bruchteil into bruchteil
@@ -208,8 +209,7 @@ cvt_str2float:
 		dec eax
 		jnz cvt_str2float_bruchteil_transform_loop_start
 	cvt_str2float_bruchteil_transform_loop_end:
-	mov dword[ebp-228], ecx
-	roundss xmm0, dword[ebp-228], 0b1000
+	cvtsi2ss xmm0, ecx
 	movss xmm1, dword[ebp-220]
 	divss xmm1, xmm0
 	movss dword[ebp-220], xmm1
@@ -219,8 +219,15 @@ cvt_str2float:
 	addss xmm0, dword[ebp-220]
 	movss dword[ebp-204], xmm0
 	
+	;check if signed
+	mov eax, dword[ebp+8]
+	cmp byte[eax], '-'
+	jne cvt_str2float_no_sign2
+		or dword[ebp-204], 0x80000000
+	cvt_str2float_no_sign2:
+	
 	cvt_str2float_end:
-	mov eax, dword[ebp-204]			;set return value
+	fld dword[ebp-204]			;set return value
 	
 	mov esp, ebp
 	pop ebp

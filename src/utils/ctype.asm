@@ -2,7 +2,7 @@
 
 section .rodata use32
 
-	ARRAY_WHITE_SPACE db 0x20, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0xff
+	ARRAY_WHITE_SPACE db 0x00, 0x20, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0xff
 	ARRAY_INTEGER db '0','1','2','3','4','5','6','7','8','9','-',0xff
 	ARRAY_FLOAT db '0','1','2','3','4','5','6','7','8','9','-','.',0xff
 
@@ -15,10 +15,14 @@ section .text use32
 	
 ctype_isSpace:
 	mov eax, dword[esp+4]
-	push ARRAY_WHITE_SPACE
-	push eax
-	call ctype_isInArray
-	add esp, 8
+	cmp al, -1
+	je ctype_isSpace_end			;end-of-file
+		;not end-of-file
+		push ARRAY_WHITE_SPACE
+		push eax
+		call ctype_isInArray
+		add esp, 8
+	ctype_isSpace_end:
 	ret
 	
 ctype_isInt:

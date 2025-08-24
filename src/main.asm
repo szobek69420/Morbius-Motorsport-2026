@@ -12,8 +12,10 @@ section .rodata use32
 	message_current_game_state_exit db "main: current game state: exit",10,0
 	message_current_game_state_unknown db "main: current game state: unknown",10,0
 	
-	convertable db "-0.69",0
-	print_float_nl db "%d",10,0
+	mode db "w",0
+	mode2 db "r",0
+	format db "amogus %d",0
+	file_name db "globus.mustar",0
 	
 section .bss use32
 	pwindow resb 4		;GLFWwindow*
@@ -39,23 +41,53 @@ section .text use32
 	extern GAME_STATE_INIT
 	extern GAME_STATE_DEINIT
 	
-	extern cvt_str2float
+	extern my_fopen
+	extern my_fclose
+	extern my_fprintf
+	extern my_fscanf
 	
 	..start:
 		push ebp
 		mov ebp, esp
 		
 		sub esp, 4		;current game state		4
+		sub esp, 4		;test file
+		sub esp, 4		;test int
 	
 		mov eax, dword[GAME_STATE_INIT]
 		mov dword[ebp-4], eax
 	
 		finit
 		
-		push convertable
-		call cvt_str2float
+		push mode
+		push file_name
+		call my_fopen
+		mov dword[ebp-8], eax
+		
+		push 69
+		push format
+		push dword[ebp-8]
+		call my_fprintf
+		
+		push dword[ebp-8]
+		call my_fclose
+		
+		push mode2
+		push file_name
+		call my_fopen
+		mov dword[ebp-8], eax
+		
+		lea eax, [ebp-12]
 		push eax
-		push print_float_nl
+		push format
+		push dword[ebp-8]
+		call my_fscanf
+		
+		push dword[ebp-8]
+		call my_fclose
+		
+		push dword[ebp-12]
+		push format
 		call my_printf
 		
 		start_loop_start:
