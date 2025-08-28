@@ -37,6 +37,8 @@ section .text use32
 	;the comparator must return 0 if a match is found
 	global vector_search		;int vector_search(vector*, int (*comparator)(element*, void* searchKey), void* searchKey)
 
+	global vector_element_size	;int vector_element_size(vector*)
+
 vector_init: ;vector vector_init(element_size)
 	push ebp
 	mov ebp, esp
@@ -578,4 +580,10 @@ vector_search:
 	pop edi
 	pop esi
 	pop ebp
+	ret
+	
+	
+vector_element_size:
+	mov eax, dword[esp+4]
+	mov eax, dword[eax+8]
 	ret

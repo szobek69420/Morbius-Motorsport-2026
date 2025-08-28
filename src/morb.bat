@@ -29,6 +29,7 @@ mkdir build
 ..\build_tools\nasm.exe -fobj utils/perlin.asm -o build/perlin.o
 ..\build_tools\nasm.exe -fobj utils/math.asm -o build/math.o
 ..\build_tools\nasm.exe -fobj utils/qsort.asm -o build/qsort.o
+..\build_tools\nasm.exe -fobj utils/thread_safe_vector.asm -o build/thread_safe_vector.o
 ..\build_tools\nasm.exe -fobj utils/thread_safe_queue.asm -o build/thread_safe_queue.o
 ..\build_tools\nasm.exe -fobj utils/thread_safe_value.asm -o build/thread_safe_value.o
 ..\build_tools\nasm.exe -fobj utils/multithreading.asm -o build/multithreading.o
@@ -100,6 +101,7 @@ build/audio.o ^
 build/perlin.o ^
 build/math.o ^
 build/qsort.o ^
+build/thread_safe_vector.o ^
 build/thread_safe_queue.o ^
 build/thread_safe_value.o ^
 build/multithreading.o ^
