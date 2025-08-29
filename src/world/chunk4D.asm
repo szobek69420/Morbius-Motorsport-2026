@@ -61,7 +61,7 @@ section .text use32
 	;changedBlocks can be null
 	;firstGenChangedBlocks should be empty initially, it is filled with blocks connected to terrain generation (e.g. trees) and serves as an output variable that will be used by the calling chunkmanager
 	;firstGenChangedBlocks is null if it is not the first generation of the chunk
-	global chunk4d_generate			;Chunk4D* chunk4d_generate(int chunkX, int chunkZ, int chunkW, const vector<ChangedBlockInfo>* changedBlocks, vector<ChangedBlockInfo>* firstGenChangedBlocks)
+	global chunk4d_generate			;Chunk4D* chunk4d_generate(int chunkX, int chunkZ, int chunkW, const vector<ChangedBlock>* nullableChangedBlocks, vector<ChangedBlock>* firstGenChangedBlocks)
 	;the renderable is destroyed by the chunk manager
 	global chunk4d_destroy			;void chunk4d_destroy(Chunk4D* chunk)
 	

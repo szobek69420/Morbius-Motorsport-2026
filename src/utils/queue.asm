@@ -496,7 +496,7 @@ queue_pop:
 	cmp dword[eax+4], 0
 	jne queue_pop_not_empty
 		push error_queue_is_empty
-		call my_printf
+		;call my_printf
 		mov eax, 69
 		jmp queue_pop_end
 	queue_pop_not_empty:
