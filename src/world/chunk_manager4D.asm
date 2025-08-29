@@ -4,7 +4,7 @@
 ;	tsVector<Chunk4D*> loadedChunks;						0
 ;	hashMap<ivec3, vector<ChangedBlock>>* changedBlocks;	8
 ;	vector<ivec3> veteranChunks;							12
-;	tsVector<Renderable*> fantomChunks;						28
+;	tsVector<FantomChunk> fantomChunks;						28
 ;	tsQueue<GraphicsUpdate> pendingGraphicsUpdates;			36
 ;	tsQueue<PendingChangedBlock> pendingChangedBlocks;		44
 ;	queue<ReloadUpdate>	pendingReloads;						52
@@ -41,6 +41,12 @@
 ;	ChangedBlock info;				0
 ;	int hasPriority;				32	//necessary, because just putting the block onto the beginning of the queue doesn't guarantee a swift chunk reload
 ;} 36 bytes overall
+
+;layout:
+;struct FantomChunk{
+;	Renderable* renderable;			0
+;	ivec3 chunkPos;					4
+;}	16 bytes
 
 section .rodata use32
 	vertex_shader_path db "./shaders/chunk/chunk4D.vag",0
@@ -94,6 +100,7 @@ section .text use32
 	extern tsVector_init
 	extern tsVector_pushBack
 	extern tsVector_remove
+	extern tsVector_removeCustom
 	extern tsVector_search
 	
 	extern queue_init
@@ -144,7 +151,7 @@ chunkManager4d_create:
 	;init fantom chunk vector
 	mov ecx, dword[ebp-4]
 	lea ecx, [ecx+28]
-	push 4
+	push 16
 	push ecx
 	call vector_init
 	
@@ -272,8 +279,21 @@ chunkManager4d_processGraphicsUpdate:
 			mov eax, dword[ebp+8]
 			add eax, 28
 			push dword[ebp-8]
+			push chunkManager4d_processGraphicsUpdate_unload_update_fantom_comparator
 			push eax
-			call tsVector_remove
+			call tsVector_removeCustom
+			jmp chunkManager4d_processGraphicsUpdate_unload_update_not_fantom
+			;returns 0 on match
+			;int chunkManager4d_processGraphicsUpdate_unload_update_fantom_comparator(FantomChunk*, Renderable*)
+			chunkManager4d_processGraphicsUpdate_unload_update_fantom_comparator:
+				mov eax, 69
+				mov ecx, dword[esp+4]
+				mov ecx, dword[ecx]
+				cmp ecx, dword[esp+8]
+				jne chunkManager4d_processGraphicsUpdate_unload_update_fantom_comparator_end
+					xor eax, eax
+				chunkManager4d_processGraphicsUpdate_unload_update_fantom_comparator_end:
+				ret
 		chunkManager4d_processGraphicsUpdate_unload_update_not_fantom:
 		
 		;destroy renderable

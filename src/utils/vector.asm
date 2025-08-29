@@ -32,6 +32,9 @@ section .text use32
 	global vector_insert		;void vector_insert(vector*, int index, <element> element)
 	global vector_remove_at		;void vector_remove_at(vector*, int index)
 	global vector_remove		;int vector_remove(vector*, <element> element)	removes the first matching element. returns 0 if no removal took place, 69 else
+	;removes the first matching element. returns 0 if no removal took place, 69 else
+	;the comparator must return 0 if a match is found
+	global vector_removeCustom	;int vector_removeCustom(vector*, int (*comparator)(element*, void* searchKey), void* searchKey)
 	
 	;returns the index of the first matching element, otherwise -1 is returned
 	;the comparator must return 0 if a match is found
@@ -523,6 +526,67 @@ vector_remove:		;int vector_remove(vector*, <element> element)
 		cmp esi, dword[eax]
 		jl _remove_compare_loop_start
 	_remove_compare_loop_end:
+	
+	
+	mov eax, dword[ebp-8]
+	
+	mov esp, ebp
+	pop ebp
+	pop ebx
+	pop edi
+	pop esi
+	ret
+	
+	
+vector_removeCustom:	;int vector_remove(vector*, int (*comparator)(element*, void*), void*)
+	push esi
+	push edi
+	push ebx
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4				;vector*			4
+	sub esp, 4				;return value		8
+	
+	mov eax, dword[ebp+20]
+	mov dword[ebp-4], eax
+	
+	mov dword[ebp-8], 0
+	
+	
+	xor esi, esi
+	mov edi, dword[eax+12]		;data* in edi 
+	mov ebx, dword[eax+8]		;element size in ebx
+	
+	mov eax, dword[ebp+20]
+	cmp dword[eax], 0
+	jle vector_removeCustom_compare_loop_end		;is the vector empty?
+	vector_removeCustom_compare_loop_start:
+		
+		push dword[ebp+28]
+		push edi
+		call dword[ebp+24]
+		add esp, 8
+		
+		;check if element is found
+		cmp eax, 0
+		jne vector_removeCustom_compare_loop_continue
+			mov dword[ebp-8], 69			;set return value
+		
+			push esi
+			push dword[ebp+20]
+			call vector_remove_at
+			add esp, 8
+			jmp vector_removeCustom_compare_loop_end
+		
+		
+		vector_removeCustom_compare_loop_continue:
+		add edi, ebx
+		inc esi
+		mov eax, dword[ebp+20]
+		cmp esi, dword[eax]
+		jl vector_removeCustom_compare_loop_start
+	vector_removeCustom_compare_loop_end:
 	
 	
 	mov eax, dword[ebp-8]

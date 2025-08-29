@@ -17,6 +17,9 @@ section .text use32
 	global tsVector_insert			;void tsVector_insert(tsVector*, int index, <element> element)
 	global tsVector_removeAt		;void tsVector_removeAt(tsVector*, int index)
 	global tsVector_remove			;int tsVector_remove(tsVector*, <element> element)	removes the first matching element. returns 0 if no removal took place, 69 else
+	;removes the first matching element. returns 0 if no removal took place, 69 else
+	;the comparator must return 0 if a match is found
+	global tsVector_removeCustom	;int tsVector_removeCustom(tsVector*, int (*comparator)(element*, void* searchKey), void* searchKey)
 	
 	;returns the index of the first matching element, otherwise -1 is returned
 	;the comparator must return 0 if a match is found
@@ -45,6 +48,7 @@ section .text use32
 	extern vector_insert
 	extern vector_remove_at
 	extern vector_remove
+	extern vector_removeCustom
 	extern vector_element_size
 	extern vector_search
 	
@@ -330,6 +334,39 @@ tsVector_remove:
 	mov eax, dword[ebp+8]
 	push dword[eax+4]			;vector
 	call vector_remove
+	mov dword[ebp-4], eax
+	
+	;unlock mutex
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	call mutex_unlock
+	
+	;set return value
+	mov eax, dword[ebp-4]
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+tsVector_removeCustom:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;return value
+	
+	;lock mutex
+	mov eax, dword[ebp+8]
+	push -1
+	push dword[eax]
+	call mutex_lock
+	
+	;call removeCustom
+	mov eax, dword[ebp+8]
+	push dword[ebp+16]
+	push dword[ebp+12]
+	push dword[eax+4]			;vector
+	call vector_removeCustom
 	mov dword[ebp-4], eax
 	
 	;unlock mutex
