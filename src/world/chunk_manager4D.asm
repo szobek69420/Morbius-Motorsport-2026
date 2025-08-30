@@ -88,6 +88,8 @@ section .text use32
 	;	const int* nullableHasPriorityArray)
 	global chunkManager4d_registerChangedBlockArray
 	
+	global chunkManager4d_processChangedBlocks	;void chunkManager4d_processChangedBlocks(ChunkManager4D* cm)
+	
 	global chunkManager4d_getHyperPlane			;HyperPlane* chunkManager4d_getHyperPlane(ChunkManager4D* cm)
 	global chunkManager4d_setHyperPlane			;void chunkManager4d_setHyperPlane(ChunkManager4D* cm, HyperPlane* ph)
 	
@@ -95,6 +97,7 @@ section .text use32
 	
 	extern my_malloc
 	extern my_free
+	extern my_qsort
 	
 	extern vector_init
 	extern tsVector_init
@@ -412,6 +415,165 @@ chunkManager4d_registerChangedBlockArray:
 	pop ebp
 	ret
 	
+	
+chunkManager4d_processChangedBlocks:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 16			;popped blocks vector			16
+	sub esp, 36			;pending changed block buffer	52
+	sub esp, 4			;vector<ChangedBlock>*			56
+	sub esp, 12			;ivec3 previousChunkPos			68
+
+	;init vector
+	push 36
+	lea eax, [ebp-16]
+	push eax
+	call vector_init
+	
+	;pop blocks
+	chunkManager4d_processChangedBlocks_pop_loop_start:
+		mov eax, dword[ebp+20]
+		add eax, 44
+		lea ecx, [ebp-52]
+		push ecx
+		push eax
+		call tsQueue_pop
+		add esp, 8
+		test eax, eax
+		jnz chunkManager4d_processChangedBlocks_pop_loop_end
+			lea eax, [ebp-52]
+			lea ecx, [ebp-16]
+			push eax
+			push ecx
+			call vector_push_back_buffer
+			add esp, 8
+			
+			jmp chunkManager4d_processChangedBlocks_pop_loop_start
+	
+	chunkManager4d_processChangedBlocks_pop_loop_end:
+	
+	;check if there are blocks
+	cmp dword[ebp-16], 0
+	jle chunkManager4d_processChangedBlocks_end
+	
+		;sort the blocks in chunk order
+		push chunkManager4d_processChangedBlocks_qsort_comparator
+		push 36
+		push dword[ebp-16]
+		push dword[ebp-4]
+		call my_qsort
+		
+		jmp chunkManager4d_processChangedBlocks_qsort_comparator_skip
+		
+		;int chunkManager4d_processChangedBlocks_qsort_comparator(PendingChangedBlock*, PendingChangedBlock*)
+		chunkManager4d_processChangedBlocks_qsort_comparator:
+			mov ecx, dword[esp+4]
+			mov edx, dword[esp+8]
+			
+			mov eax, dword[ecx+4]
+			sub eax, dword[edx+4]
+			jnz chunkManager4d_processChangedBlocks_qsort_comparator_end
+			mov eax, dword[ecx+8]
+			sub eax, dword[edx+8]
+			jnz chunkManager4d_processChangedBlocks_qsort_comparator_end
+			mov eax, dword[ecx+12]
+			sub eax, dword[edx+12]
+			chunkManager4d_processChangedBlocks_qsort_comparator_end:
+			ret
+		chunkManager4d_processChangedBlocks_qsort_comparator_skip:
+		
+		;add the changed blocks to the hashmap
+		mov esi, dword[ebp-4]			;current block in esi
+		mov edi, dword[ebp-16]			;index in edi
+		chunkManager4d_processChangedBlocks_register_outer_loop_start:
+			;set current chunk
+			mov eax, dword[esi+4]
+			mov dword[ebp-68], eax
+			mov ecx, dword[esi+8]
+			mov dword[ebp-64], ecx
+			mov edx, dword[esi+12]
+			mov dword[ebp-60], edx
+			
+			;get the changed block vector
+			mov eax, dword[ebp+20]
+			lea ecx, [ebp-68]
+			push 12
+			push ecx
+			push dword[eax+8]
+			call hashMap_get
+			test eax, eax
+			jnz chunkManager4d_processChangedBlocks_register_outer_loop_vector_exists
+				;create an empty vector and add it to the hash map
+				sub esp, 16
+				mov eax, esp
+				push 32
+				push eax
+				call vector_init
+				add esp, 8
+				
+				mov eax, dword[ebp+20]
+				mov ecx, esp
+				lea edx, [ebp-68]
+				push 16
+				push 12
+				push ecx
+				push edx
+				push dword[eax+8]
+				call hashMap_add
+				add esp, 36
+				
+				mov eax, dword[ebp+20]
+				lea ecx, [ebp-68]
+				push 12
+				push ecx
+				push dword[eax+8]
+				call hashMap_get
+			chunkManager4d_processChangedBlocks_register_outer_loop_vector_exists:
+			mov dword[ebp-56], eax
+			
+			;add blocks
+			mov ebx, dword[ebp-56]		;vector in ebx
+			chunkManager4d_processChangedBlocks_register_inner_loop_start:
+				push esi
+				push ebx
+				call vector_push_back_buffer
+				add esp, 8
+				
+				;continue if there are more blocks and the next block is in this chunk as well
+				add esi, 36
+				dec edi
+				jz chunkManager4d_processChangedBlocks_register_inner_loop_end
+				mov eax, dword[esi+4]
+				cmp eax, dword[ebp-68]
+				jne chunkManager4d_processChangedBlocks_register_inner_loop_end
+				mov eax, dword[esi+8]
+				cmp eax, dword[ebp-64]
+				jne chunkManager4d_processChangedBlocks_register_inner_loop_end
+				mov eax, dword[esi+12]
+				cmp eax, dword[ebp-60]
+				jne chunkManager4d_processChangedBlocks_register_inner_loop_end
+					jmp chunkManager4d_processChangedBlocks_register_inner_loop_start
+			chunkManager4d_processChangedBlocks_register_inner_loop_end:
+	
+			cmp edi, 0
+			jg chunkManager4d_processChangedBlocks_register_outer_loop_start
+			
+	chunkManager4d_processChangedBlocks_end:
+	;delete vector
+	lea eax, [ebp-16]
+	push eax
+	call vector_destroy
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
 	
 chunkManager4d_setHyperPlane:
 	push ebp
