@@ -113,6 +113,7 @@ section .text use32
 	extern my_malloc
 	extern my_free
 	extern my_printf
+	extern my_memcpy
 	
 	extern math_clamp
 	extern math_repeat
@@ -178,6 +179,7 @@ section .text use32
 	extern BLOCK_STONE
 	extern chunk4d_vec4ToBlockPos
 	extern chunkManager4d_getHyperPlane
+	extern chunkManager4d_setHyperPlane
 	extern chunkManager4d_registerChangedBlock
 	
 	extern renderable_createCustom
@@ -928,10 +930,12 @@ player_rotatePlane:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 4			;delta scroll x
-	sub esp, 4			;delta scroll y
+	sub esp, 4			;delta scroll x			4
+	sub esp, 4			;delta scroll y			8
 	
-	sub esp, 4			;rotation angle
+	sub esp, 4			;rotation angle			12
+	
+	sub esp, 64			;hyperplane				76
 	
 	
 	;obtain scroll delta
@@ -968,8 +972,15 @@ player_rotatePlane:
 	mov ecx, dword[ebp+8]
 	push dword[ecx+28]
 	call chunkManager4d_getHyperPlane
-	add esp, 4
+	push 64
+	push eax
+	lea ecx, [ebp-76]
+	push ecx
+	call my_memcpy
+	add esp, 12
+	
 	pop ecx						;restore aabb.position
+	lea eax, [ebp-76]
 	
 	mov edx, dword[ecx]
 	mov dword[eax], edx
@@ -997,10 +1008,7 @@ player_rotatePlane:
 	push dword[ebp-12]
 	push HYPERPLANE_ROTATION_VECTOR_2
 	push HYPERPLANE_ROTATION_VECTOR_1
-	mov eax, dword[ebp+8]
-	push dword[eax+28]
-	call chunkManager4d_getHyperPlane
-	add esp, 4
+	lea eax, [ebp-76]
 	push eax
 	call hyperPlane_rotate
 	pop eax					;restore hyperplane
@@ -1011,6 +1019,13 @@ player_rotatePlane:
 	call aabb4d_setHyperPlane
 	add esp, 4
 	
+	;set the chunk manager's hyperplane
+	mov eax, dword[ebp+8]
+	mov eax, dword[eax+28]
+	lea ecx, [ebp-76]
+	push ecx
+	push eax
+	call chunkManager4d_setHyperPlane
 	
 	;unlock hyperplane mutex
 	mov eax, dword[ebp+8]

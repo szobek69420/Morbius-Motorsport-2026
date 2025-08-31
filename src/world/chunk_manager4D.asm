@@ -78,9 +78,11 @@ section .rodata use32
 	print_four_floats_nl db "%f %f %f %f",10,0
 
 section .text use32
-	global chunkManager4d_loadChunk_internal
 	;should be called from the graphics thread
 	global chunkManager4d_create					;ChunkManager4D* chunkManager4d_create()
+	
+	global chunkManager4d_load						;void chunkManager4d_load(ChunkManager4D* manager, vec3* playerPos3D, int renderDistance)
+	global chunkManager4d_unload					;void chunkManager4d_unload(ChunkManager4D* manager, vec3* playerPos3D, int renderDistance)
 	
 	global chunkManager4d_render					;void chunkManager4d_render(ChunkManager4D* manager, mat4* view, mat4* projection)
 	
@@ -121,6 +123,7 @@ section .text use32
 	extern vector_push_back
 	extern vector_push_back_buffer
 	extern vector_search
+	extern vector_clear
 	extern tsVector_init
 	extern tsVector_pushBack
 	extern tsVector_remove
@@ -136,6 +139,9 @@ section .text use32
 	extern tsQueue_pop
 	extern tsQueue_search
 	extern tsQueue_forEach
+	extern tsVector_lock
+	extern tsVector_unlock
+	extern tsVector_vector
 	
 	extern hashMap_init
 	extern hashMap_destroy
@@ -339,15 +345,10 @@ chunkManager4d_render:
 	
 	;set hyperplane pos uniform
 	mov eax, dword[ebp+20]
-	sub esp, 16
-	mov ecx, dword[eax+100]
-	mov dword[esp], ecx
-	mov ecx, dword[eax+104]
-	mov dword[esp+4], ecx
-	mov ecx, dword[eax+108]
-	mov dword[esp+8], ecx
-	mov ecx, dword[eax+112]
-	mov dword[esp+12], ecx
+	push dword[eax+112]
+	push dword[eax+108]
+	push dword[eax+104]
+	push dword[eax+100]
 	push dword[RENDERABLE_UNIFORM_VEC4]
 	push uniform_name_hyperPlanePos
 	push dword[eax+184]
@@ -356,15 +357,10 @@ chunkManager4d_render:
 	
 	;set hyperplane dir1 uniform
 	mov eax, dword[ebp+20]
-	sub esp, 16
-	mov ecx, dword[eax+116]
-	mov dword[esp], ecx
-	mov ecx, dword[eax+120]
-	mov dword[esp+4], ecx
-	mov ecx, dword[eax+124]
-	mov dword[esp+8], ecx
-	mov ecx, dword[eax+128]
-	mov dword[esp+12], ecx
+	push dword[eax+128]
+	push dword[eax+124]
+	push dword[eax+120]
+	push dword[eax+116]
 	push dword[RENDERABLE_UNIFORM_VEC4]
 	push uniform_name_hyperPlaneDir1
 	push dword[eax+184]
@@ -373,15 +369,10 @@ chunkManager4d_render:
 	
 	;set hyperplane dir2 uniform
 	mov eax, dword[ebp+20]
-	sub esp, 16
-	mov ecx, dword[eax+132]
-	mov dword[esp], ecx
-	mov ecx, dword[eax+136]
-	mov dword[esp+4], ecx
-	mov ecx, dword[eax+140]
-	mov dword[esp+8], ecx
-	mov ecx, dword[eax+144]
-	mov dword[esp+12], ecx
+	push dword[eax+144]
+	push dword[eax+140]
+	push dword[eax+136]
+	push dword[eax+132]
 	push dword[RENDERABLE_UNIFORM_VEC4]
 	push uniform_name_hyperPlaneDir2
 	push dword[eax+184]
@@ -390,15 +381,10 @@ chunkManager4d_render:
 	
 	;set hyperplane dir3 uniform
 	mov eax, dword[ebp+20]
-	sub esp, 16
-	mov ecx, dword[eax+148]
-	mov dword[esp], ecx
-	mov ecx, dword[eax+152]
-	mov dword[esp+4], ecx
-	mov ecx, dword[eax+156]
-	mov dword[esp+8], ecx
-	mov ecx, dword[eax+160]
-	mov dword[esp+12], ecx
+	push dword[eax+160]
+	push dword[eax+156]
+	push dword[eax+152]
+	push dword[eax+148]
 	push dword[RENDERABLE_UNIFORM_VEC4]
 	push uniform_name_hyperPlaneDir3
 	push dword[eax+184]
@@ -595,6 +581,128 @@ chunkManager4d_render:
 		pop ebp
 		ret
 	
+	
+chunkManager4d_load:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 4				;player chunk x					4
+	sub esp, 4				;player chunk z					8
+	sub esp, 4				;player chunk w					12
+	
+	sub esp, 4				;loaded chunk X					16
+	sub esp, 4				;loaded chunk Z					20
+	sub esp, 4				;loaded chunk W					24
+	sub esp, 4				;chunk to load found			28
+	
+	sub esp, 4				;temp chunk w					32
+	sub esp, 4				;temp chunk z					36
+	sub esp, 4				;temp chunk x					40
+	
+	mov dword[ebp-28], 0
+	
+	;calculate player chunk pos
+	lea eax, [ebp-12]
+	push eax
+	add eax, 4
+	push eax
+	add eax, 4
+	push eax
+	push dword[ebp+24]
+	push dword[ebp+20]
+	call chunkManager4d_getPlayerChunk
+	add esp, 20
+	
+	;search for an unloaded chunk
+	;searches in an expanding radius from the player chunk
+	xor ebx, ebx			;radius in ebx
+	chunkManager4d_load_radius_loop_start:
+		mov esi, ebx
+		neg esi				;x index in esi
+		chunkManager4d_load_x_loop_start:
+			mov edi, ebx
+			neg edi				;z index in edi
+			chunkManager4d_load_z_loop_start:
+				mov eax, ebx
+				neg eax				;w index in eax
+				chunkManager4d_load_w_loop_start:
+					;check if the chunk is loaded
+					push eax						;save eax
+					
+					mov ecx, dword[ebp-4]
+					add ecx, esi
+					mov dword[ebp-40], ecx			;chunkX
+					mov ecx, dword[ebp-8]
+					add ecx, edi
+					mov dword[ebp-36], ecx			;chunkZ
+					mov ecx, dword[ebp-12]
+					add ecx, eax
+					mov dword[ebp-32], ecx			;chunkW
+					
+					push dword[ebp-32]
+					push dword[ebp-36]
+					push dword[ebp-40]
+					push dword[ebp+20]
+					call chunkManager4d_isChunkLoaded
+					add esp, 16
+					test eax, eax
+					jnz chunkManager4d_load_w_loop_continue
+					
+					
+					;the chunk is not loaded yet, mark it as loadable
+					mov dword[ebp-28], 69
+					
+					mov edx, dword[ebp-40]
+					mov dword[ebp-16], edx
+					mov edx, dword[ebp-36]
+					mov dword[ebp-20], edx
+					mov edx, dword[ebp-32]
+					mov dword[ebp-24], edx
+					jmp chunkManager4d_load_radius_loop_end
+					
+					chunkManager4d_load_w_loop_continue:
+					pop eax					;restore eax
+					
+					inc eax
+					cmp eax, ebx
+					jle chunkManager4d_load_w_loop_start
+				
+				inc edi
+				cmp edi, ebx
+				jle chunkManager4d_load_z_loop_start
+				
+			inc esi
+			cmp esi, ebx
+			jle chunkManager4d_load_x_loop_start
+			
+		inc ebx
+		cmp ebx, dword[ebp+28]
+		jle chunkManager4d_load_radius_loop_start
+		
+	chunkManager4d_load_radius_loop_end:
+	
+	;did we find a loadable chunk?
+	test dword[ebp-28], 0xffffffff
+	jz chunkManager4d_load_end
+	
+		;generate chunk
+		push dword[ebp-24]			;chunkw
+		push dword[ebp-20]			;chunkz
+		push dword[ebp-16]			;chunkx
+		push dword[ebp+20]
+		call chunkManager4d_loadChunk_internal
+		add esp, 16
+	
+	chunkManager4d_load_end:
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
 	
 chunkManager4d_processGraphicsUpdate:
 	push ebp
@@ -1270,6 +1378,7 @@ chunkManager4d_loadChunk_internal:
 		call tsVector_pushBack
 	
 	chunkManager4d_loadChunk_internal_graphics_update_done:
+
 	
 	chunkManager4d_loadChunk_internal_end:
 	mov eax, dword[ebp-4]
@@ -1280,7 +1389,7 @@ chunkManager4d_loadChunk_internal:
 	pop esi
 	pop ebp
 	ret
-	;int chunkManager4d_loadChunk_internal_veteran_comparator(Chunk4D** pchunk, ivec3* chunkPos)
+	;int chunkManager4d_loadChunk_internal_veteran_comparator(ivec3* chunkPos, ivec3* searchKey)
 	chunkManager4d_loadChunk_internal_veteran_comparator:
 		push ebp
 		mov ebp, esp
@@ -1288,7 +1397,6 @@ chunkManager4d_loadChunk_internal:
 		mov dword[ebp-4], 69
 		
 		mov eax, dword[ebp+8]
-		mov eax, dword[eax]
 		mov ecx, dword[ebp+12]
 		
 		mov edx, dword[eax]

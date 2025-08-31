@@ -323,7 +323,6 @@ section .text use32
 	extern chunkManager4d_processChangedBlocks
 	extern chunkManager4d_render
 	extern chunkManager4d_getHyperPlane
-	extern chunkManager4d_loadChunk_internal
 	
 	extern sun_init
 	extern sun_deinit
@@ -936,13 +935,6 @@ gameLoop_chunkLoader:
 			push dword[chunk_manager_4d]
 			call chunkManager4d_processChangedBlocks
 			add esp, 4
-			
-			push 0
-			push 0
-			push 0
-			push dword[chunk_manager_4d]
-			call chunkManager4d_loadChunk_internal
-			add esp, 16
 		
 			;do chunk update things		
 			mov eax, dword[pplayer]
@@ -950,7 +942,7 @@ gameLoop_chunkLoader:
 			push dword[render_distance]
 			push eax
 			push dword[chunk_manager_4d]
-			;call chunkManager4d_load
+			call chunkManager4d_load
 			;call chunkManager4d_unload
 			add esp, 12
 			

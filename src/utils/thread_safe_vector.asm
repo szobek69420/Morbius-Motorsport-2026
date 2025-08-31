@@ -31,6 +31,11 @@ section .text use32
 	global tsVector_sizeNonBlocking			;int tsVector_sizeNonBlocking(tsVector*)
 	global tsVector_elementSize				;int tsVector_elementSize(tsVector*)
 	
+	global tsVector_vector					;vector* tsVector_vector(tsVector*)
+	global tsVector_lock					;void tsVector_lock(tsVector*)
+	global tsVector_unlock					;void tsVector_unlock(tsVector*)
+	
+	
 	extern my_malloc
 	extern my_realloc
 	extern my_free
@@ -501,6 +506,38 @@ tsVector_elementSize:
 	mov eax, dword[ebp+8]
 	push dword[eax+4]
 	call vector_element_size
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+tsVector_vector:
+	mov eax, dword[esp+4]
+	mov eax, dword[eax+4]
+	ret
+	
+tsVector_lock:
+	push ebp
+	mov ebp, esp
+	
+	mov eax, dword[ebp+8]
+	push -1
+	push dword[eax]
+	call mutex_lock
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+tsVector_unlock:
+	push ebp
+	mov ebp, esp
+	
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	call mutex_unlock
 	
 	mov esp, ebp
 	pop ebp
