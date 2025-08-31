@@ -10,9 +10,10 @@
 ;	queue<ReloadUpdate>	pendingReloads;						52
 ;	padding of 28 bytes
 ;	HyperPlane hyperPlane;									100
-;	GLuint shader;											164
-;	TextureArrayInfo* blockTextures;						168
-;}	172 bytes
+;	vec5 hyperPlaneEquation;								164		//(A,B,C,D) normal and E
+;	GLuint shader;											184
+;	TextureArrayInfo* blockTextures;						188
+;}	192 bytes
 
 ;layout:
 ;struct GraphicsUpdate{
@@ -64,10 +65,24 @@ section .rodata use32
 	uniform_name_view_mat db "view_mat",0
 	uniform_name_projection_mat db "projection_mat",0
 	uniform_name_normal_mat db "normal_mat",0
+	
+	test_text db "you're so portuguese",10,0
+	test_text2 db "you're so portuguese2",10,0
+	test_text3 db "you're so portuguese3",10,0
+	
+	print_int_nl db "%d",10,0
+	print_two_ints_nl db "%d %d",10,0
+	print_three_ints_nl db "%d %d %d",10,0
+	print_four_ints_nl db "%d %d %d %d",10,0
+	print_float_nl db "%f",10,0
+	print_four_floats_nl db "%f %f %f %f",10,0
 
 section .text use32
+	global chunkManager4d_loadChunk_internal
 	;should be called from the graphics thread
 	global chunkManager4d_create					;ChunkManager4D* chunkManager4d_create()
+	
+	global chunkManager4d_render					;void chunkManager4d_render(ChunkManager4D* manager, mat4* view, mat4* projection)
 	
 	;should be called from the graphics thread
 	;returns 0 if no graphics update has been processed
@@ -95,16 +110,23 @@ section .text use32
 	
 	global chunkManager4d_getPlayerChunk4D			;void chunkManager4d_getPlayerChunk4D(ChunkManager4D* cm, vec3* playerPos3D, int* chunkX, int* chunkZ, int* chunkW)
 	
+	extern my_printf
 	extern my_malloc
 	extern my_free
+	extern my_memcpy
 	extern my_qsort
 	
 	extern vector_init
+	extern vector_destroy
+	extern vector_push_back
+	extern vector_push_back_buffer
+	extern vector_search
 	extern tsVector_init
 	extern tsVector_pushBack
 	extern tsVector_remove
 	extern tsVector_removeCustom
 	extern tsVector_search
+	extern tsVector_forEach
 	
 	extern queue_init
 	extern tsQueue_init
@@ -115,12 +137,42 @@ section .text use32
 	extern tsQueue_search
 	extern tsQueue_forEach
 	
+	extern hashMap_init
+	extern hashMap_destroy
+	extern hashMap_get
+	extern hashMap_add
+	
+	extern vec3_normalize
+	extern vec4_dot
+	extern vec4_add
+	extern vec4_scale
+	extern mat4_mul
+	
 	extern renderable_createCustom
 	extern renderable_destroy
+	extern renderable_renderCustom
+	extern renderable_createShader
+	extern renderable_useShader
+	extern renderable_calculateNormalMatrix
+	extern renderable_setPrimitive
+	extern renderable_setUniform
+	extern RENDERABLE_UNIFORM_VEC3
+	extern RENDERABLE_UNIFORM_VEC4
+	extern RENDERABLE_UNIFORM_MAT3
+	extern RENDERABLE_UNIFORM_MAT4
+	extern textureHandler_bindArray
+	extern GL_POINTS
 	
 	extern hyperPlane_create
+	extern hyperPlane_getNormal
+	extern hyperPlane_directionTo3d
 	
+	extern chunk4d_generate
+	extern chunk4d_destroy
+	extern CHUNK_WIDTH
 	extern block_importTextures
+	
+	extern sun_getDirection
 	
 chunkManager4d_create:
 	push ebp
@@ -129,12 +181,12 @@ chunkManager4d_create:
 	sub esp, 4			;chunk manager		4
 	
 	;alloc chunk manager
-	push 172
+	push 192
 	call my_malloc
 	mov dword[ebp-4], eax
 	
 	;init loaded chunks vector
-	mov ecx, dword[ebp-4], ecx
+	mov ecx, dword[ebp-4]
 	push 4
 	push ecx
 	call tsVector_init
@@ -156,7 +208,7 @@ chunkManager4d_create:
 	lea ecx, [ecx+28]
 	push 16
 	push ecx
-	call vector_init
+	call tsVector_init
 	
 	;init graphics update queue
 	mov ecx, dword[ebp-4]
@@ -183,10 +235,12 @@ chunkManager4d_create:
 	call queue_init
 	
 	;init hyperplane
-	mov eax, dword[ebp-4]
-	add eax, 100
+	sub esp, 64
+	mov eax, esp
 	push eax
 	call hyperPlane_create
+	push dword[ebp-4]
+	call chunkManager4d_setHyperPlane
 	
 	;create shader
 	push geometry_shader_path
@@ -194,12 +248,12 @@ chunkManager4d_create:
 	push vertex_shader_path
 	call renderable_createShader
 	mov ecx, dword[ebp-4]
-	mov dword[ecx+164], eax
+	mov dword[ecx+184], eax
 	
 	;import textures
 	call block_importTextures
 	mov ecx, dword[ebp-4]
-	mov dword[ecx+168], eax
+	mov dword[ecx+188], eax
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -207,6 +261,339 @@ chunkManager4d_create:
 	mov esp, ebp
 	pop ebp
 	ret
+	
+	
+chunkManager4d_render:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 24					;unused							24
+	sub esp, 16					;sun direction 4d and then 3d	40
+	sub esp, 64					;pv	matrix						104
+	sub esp, 36					;normal matrix					140
+	sub esp, 8					;foreach param					148
+	
+	;calculate the pv matrix
+	mov eax, dword[ebp+24]			;view
+	mov ecx, dword[ebp+28]			;projection
+	lea edx, [ebp-104]
+	push eax
+	push ecx
+	push edx
+	call mat4_mul
+	add esp, 12
+	
+	;calculate the normal matrix
+	;NOTE: the model matrix is not necessary for there is only translation in the case of chomks
+	push dword[ebp+24]
+	lea eax, [ebp-140]
+	push eax
+	call renderable_calculateNormalMatrix
+	add esp, 8
+	
+	;calculate the sun direction
+	lea eax, [ebp-40]
+	push eax
+	call sun_getDirection
+	pop eax
+	
+	push eax
+	push eax
+	push dword[ebp-24]
+	call hyperPlane_directionTo3d
+	add esp, 8
+	call vec3_normalize
+	add esp, 4
+	
+	;set renderable primitive
+	push dword[GL_POINTS]
+	call renderable_setPrimitive
+	add esp, 4
+
+	;bind block textures
+	push 0
+	mov eax, dword[ebp+20]
+	push dword[eax+188]
+	call textureHandler_bindArray
+	add esp, 8
+	
+	;use shader
+	mov eax, dword[ebp+20]
+	push dword[eax+184]
+	call renderable_useShader
+	add esp, 4
+	
+	;set sun direction uniform
+	push dword[ebp-32]
+	push dword[ebp-36]
+	push dword[ebp-40]
+	push dword[RENDERABLE_UNIFORM_VEC3]
+	push uniform_name_sunDirection
+	mov eax, dword[ebp+20]
+	push dword[eax+184]
+	call renderable_setUniform
+	add esp, 24
+	
+	;set hyperplane pos uniform
+	mov eax, dword[ebp+20]
+	sub esp, 16
+	mov ecx, dword[eax+100]
+	mov dword[esp], ecx
+	mov ecx, dword[eax+104]
+	mov dword[esp+4], ecx
+	mov ecx, dword[eax+108]
+	mov dword[esp+8], ecx
+	mov ecx, dword[eax+112]
+	mov dword[esp+12], ecx
+	push dword[RENDERABLE_UNIFORM_VEC4]
+	push uniform_name_hyperPlanePos
+	push dword[eax+184]
+	call renderable_setUniform
+	add esp, 28
+	
+	;set hyperplane dir1 uniform
+	mov eax, dword[ebp+20]
+	sub esp, 16
+	mov ecx, dword[eax+116]
+	mov dword[esp], ecx
+	mov ecx, dword[eax+120]
+	mov dword[esp+4], ecx
+	mov ecx, dword[eax+124]
+	mov dword[esp+8], ecx
+	mov ecx, dword[eax+128]
+	mov dword[esp+12], ecx
+	push dword[RENDERABLE_UNIFORM_VEC4]
+	push uniform_name_hyperPlaneDir1
+	push dword[eax+184]
+	call renderable_setUniform
+	add esp, 28
+	
+	;set hyperplane dir2 uniform
+	mov eax, dword[ebp+20]
+	sub esp, 16
+	mov ecx, dword[eax+132]
+	mov dword[esp], ecx
+	mov ecx, dword[eax+136]
+	mov dword[esp+4], ecx
+	mov ecx, dword[eax+140]
+	mov dword[esp+8], ecx
+	mov ecx, dword[eax+144]
+	mov dword[esp+12], ecx
+	push dword[RENDERABLE_UNIFORM_VEC4]
+	push uniform_name_hyperPlaneDir2
+	push dword[eax+184]
+	call renderable_setUniform
+	add esp, 28
+	
+	;set hyperplane dir3 uniform
+	mov eax, dword[ebp+20]
+	sub esp, 16
+	mov ecx, dword[eax+148]
+	mov dword[esp], ecx
+	mov ecx, dword[eax+152]
+	mov dword[esp+4], ecx
+	mov ecx, dword[eax+156]
+	mov dword[esp+8], ecx
+	mov ecx, dword[eax+160]
+	mov dword[esp+12], ecx
+	push dword[RENDERABLE_UNIFORM_VEC4]
+	push uniform_name_hyperPlaneDir3
+	push dword[eax+184]
+	call renderable_setUniform
+	add esp, 28
+	
+	;set hyperplane normal uniform
+	mov eax, dword[ebp+20]
+	push dword[eax+176]
+	push dword[eax+172]
+	push dword[eax+168]
+	push dword[eax+164]
+	push dword[RENDERABLE_UNIFORM_VEC4]
+	push uniform_name_hyperPlaneNormal
+	push dword[eax+184]
+	call renderable_setUniform
+	add esp, 28
+	
+	;set view matrix uniform
+	push dword[ebp+24]
+	push dword[RENDERABLE_UNIFORM_MAT4]
+	push uniform_name_view_mat
+	mov ecx, dword[ebp+20]
+	push dword[ecx+184]
+	call renderable_setUniform
+	add esp, 16
+	
+	;set normal matrix uniform
+	lea eax, [ebp-140]
+	push eax
+	push dword[RENDERABLE_UNIFORM_MAT3]
+	push uniform_name_normal_mat
+	mov ecx, dword[ebp+20]
+	push dword[ecx+184]
+	call renderable_setUniform
+	add esp, 16
+	
+	;set render foreach param
+	mov eax, dword[ebp+20]
+	lea ecx, [ebp-104]			;pv
+	mov dword[ebp-148], eax
+	mov dword[ebp-144], ecx
+	
+	;render loaded chunks
+	mov eax, dword[ebp+20]
+	lea ecx, [ebp-148]
+	push ecx
+	push chunkManager4d_render_render_loaded_function
+	push eax
+	call tsVector_forEach
+	
+	;render fantom chunks
+	mov eax, dword[ebp+20]
+	add eax, 28
+	lea ecx, [ebp-148]
+	push ecx
+	push chunkManager4d_render_render_fantom_function
+	push eax
+	call tsVector_forEach
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	;void chunkManager4d_render_render_loaded_function(Chunk4D**, struct{ChunkManager4D*, mat4* pv}*)
+	chunkManager4d_render_render_loaded_function:
+		push ebp
+		mov ebp, esp
+		
+		sub esp, 4			;chunk			4
+		sub esp, 4			;chunk manager	8
+		sub esp, 4			;pv				12
+		
+		mov eax, dword[ebp+8]
+		mov eax, dword[eax]
+		mov dword[ebp-4], eax
+		
+		mov ecx, dword[ebp+12]
+		mov edx, dword[ecx]
+		mov dword[ebp-8], edx
+		mov edx, dword[ecx+4]
+		mov dword[ebp-12], edx
+		
+		;check if there is a renderable for the current chunk
+		cmp dword[eax+12], 0
+		je chunkManager4d_render_render_loaded_function_end
+		
+		;set chunkPos uniform
+		mov eax, dword[ebp-4]
+		
+		mov ecx, dword[eax+8]
+		imul ecx, dword[CHUNK_WIDTH]
+		push ecx
+		fild dword[esp]
+		fstp dword[esp]
+		
+		mov ecx, dword[eax+4]
+		imul ecx, dword[CHUNK_WIDTH]
+		push ecx
+		fild dword[esp]
+		fstp dword[esp]
+		
+		push 0
+		
+		mov ecx, dword[eax]
+		imul ecx, dword[CHUNK_WIDTH]
+		push ecx
+		fild dword[esp]
+		fstp dword[esp]
+		
+		
+		push dword[RENDERABLE_UNIFORM_VEC4]
+		push uniform_name_chunkPos
+		mov eax, dword[ebp-8]
+		push dword[eax+184]
+		call renderable_setUniform
+		add esp, 28
+		
+		;render chunk
+		mov eax, dword[ebp-4]
+		push 69					;use textures
+		mov ecx, dword[ebp-8]
+		push dword[ecx+184]		;shader
+		push dword[ebp-12]		;pv
+		push dword[eax+12]
+		call renderable_renderCustom
+		add esp, 16
+		
+		chunkManager4d_render_render_loaded_function_end:
+		mov esp, ebp
+		pop ebp
+		ret
+	
+	;render fantom chunks
+	;void chunkManager4d_render_render_loaded_function(FantomChunk*, struct{ChunkManager4D*, mat4* pv}*)
+	chunkManager4d_render_render_fantom_function:
+		push ebp
+		mov ebp, esp
+		
+		sub esp, 4			;unused			4
+		sub esp, 4			;chunk manager	8
+		sub esp, 4			;pv				12
+		
+		mov ecx, dword[ebp+12]
+		mov edx, dword[ecx]
+		mov dword[ebp-8], edx
+		mov edx, dword[ecx+4]
+		mov dword[ebp-12], edx
+		
+		;set chunkPos uniform
+		mov eax, dword[ebp+8]
+		
+		mov ecx, dword[eax+12]
+		imul ecx, dword[CHUNK_WIDTH]
+		push ecx
+		fild dword[esp]
+		fstp dword[esp]
+		
+		mov ecx, dword[eax+8]
+		imul ecx, dword[CHUNK_WIDTH]
+		push ecx
+		fild dword[esp]
+		fstp dword[esp]
+		
+		push 0
+		
+		mov ecx, dword[eax+4]
+		imul ecx, dword[CHUNK_WIDTH]
+		push ecx
+		fild dword[esp]
+		fstp dword[esp]
+		
+		
+		push dword[RENDERABLE_UNIFORM_VEC4]
+		push uniform_name_chunkPos
+		mov eax, dword[ebp-8]
+		push dword[eax+184]
+		call renderable_setUniform
+		add esp, 28
+		
+		;render chunk
+		mov eax, dword[ebp+8]
+		push 69					;use textures
+		mov ecx, dword[ebp-8]
+		push dword[ecx+184]		;shader
+		push dword[ebp-12]		;pv
+		push dword[eax]
+		call renderable_renderCustom
+		add esp, 16
+		
+		mov esp, ebp
+		pop ebp
+		ret
 	
 	
 chunkManager4d_processGraphicsUpdate:
@@ -372,8 +759,9 @@ chunkManager4d_registerChangedBlockArray:
 		mov edx, dword[ecx+8]
 		mov dword[esi+12], edx
 		
-		mov eax, dword[ebp+36]
-		lea eax, [eax+16*edi]
+		mov eax, edi
+		sal eax, 4
+		add eax, dword[ebp+36]
 		mov ecx, dword[eax]
 		mov dword[esi+16], ecx
 		mov edx, dword[eax+4]
@@ -579,12 +967,25 @@ chunkManager4d_setHyperPlane:
 	push ebp
 	mov ebp, esp
 	
+	;copy hyperplane
 	mov eax, dword[ebp+8]
 	add eax, 100
 	push 64
 	push dword[ebp+12]
 	push eax
 	call my_memcpy
+	
+	;calculate hyperplane equation	
+	mov eax, dword[ebp+8]
+	lea ecx, [eax+100]
+	lea edx, [eax+164]
+	push edx
+	push ecx
+	call hyperPlane_getNormal		;calculate normal
+	call vec4_dot					;calculate E
+	mov eax, dword[ebp+8]
+	fstp dword[eax+180]
+	xor dword[eax+180], 0x80000000
 	
 	mov esp, ebp
 	pop ebp
@@ -722,7 +1123,7 @@ chunkManager4d_loadChunk_internal:
 	lea ecx, [ebp+24]
 	push 12
 	push ecx
-	push dword[eax+4]
+	push dword[eax+8]
 	call hashMap_get
 	mov dword[ebp-12], eax
 	
@@ -782,7 +1183,8 @@ chunkManager4d_loadChunk_internal:
 			lea ecx, [eax+2*eax]
 			sal ecx, 2
 			push ecx
-			lea ecx, [16*eax]
+			mov ecx, eax
+			sal ecx, 4
 			push ecx
 			call my_malloc
 			mov dword[ebp-40], eax
@@ -1043,6 +1445,8 @@ chunkManager4d_isChunkLoaded:
 		mov eax, dword[ebp+8]
 		test dword[eax], 0xffffffff
 		jz chunkManager4d_isChunkLoaded_graphics_update_comparator_end		;not load update
+		test dword[eax+4], 0xffffffff
+		jz chunkManager4d_isChunkLoaded_graphics_update_comparator_end		;ignorable update
 		mov eax, dword[eax+4]
 		mov ecx, dword[ebp+12]
 		

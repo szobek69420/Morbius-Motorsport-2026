@@ -13,6 +13,8 @@ section .data use32
 	pop_error_message db "vector is empty bozo",10,0
 	at_error_message db "vector_at: %d is out of bounds",10,0
 	remove_at_error_message db "vector_remove_at: %d is out of bounds",10,0
+	
+	test_text db "aludj el szepen kicks balazs",10,0
 
 section .text use32
 	extern my_malloc
@@ -40,6 +42,9 @@ section .text use32
 	;the comparator must return 0 if a match is found
 	global vector_search		;int vector_search(vector*, int (*comparator)(element*, void* searchKey), void* searchKey)
 
+	global vector_for_each		;void vector_for_each(vector*, void (*function)(element*, void* param), void* param)
+
+	global vector_size			;int vector_size(vector*)
 	global vector_element_size	;int vector_element_size(vector*)
 
 vector_init: ;vector vector_init(element_size)
@@ -646,6 +651,43 @@ vector_search:
 	pop ebp
 	ret
 	
+	
+vector_for_each:	
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	mov eax, dword[ebp+20]
+	mov esi, dword[eax+12]		;current element in esi
+	mov edi, dword[eax]			;index in edi
+	mov ebx, dword[eax+8]		;element size in ebx
+	cmp edi, 0
+	jle vector_for_each_loop_end
+	vector_for_each_loop_start:
+		push dword[ebp+28]
+		push esi
+		call dword[ebp+24]
+		add esp, 8
+		
+		add esi, ebx
+		dec edi
+		jnz vector_for_each_loop_start
+	vector_for_each_loop_end:
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+vector_size:
+	mov eax, dword[esp+4]
+	mov eax, dword[eax]
+	ret
 	
 vector_element_size:
 	mov eax, dword[esp+4]

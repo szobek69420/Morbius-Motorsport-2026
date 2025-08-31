@@ -42,6 +42,7 @@ section .text use32
 	global tsQueue_isEmpty		;int tsQueue_isEmpty(tsQueue* pqueue)
 	
 	global tsQueue_size			;int tsQueue_size(tsQueue* pqueue)
+	global tsQueue_sizeNonBlocking	;int tsQueue_sizeNonBlocking(tsQueue* pqueue)
 	
 	;returns the index of the first matching element, otherwise -1 is returned
 	;the comparator must return 0 if a match is found
@@ -498,6 +499,20 @@ tsQueue_size:
 	
 	
 	mov eax, dword[ebp-4]
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+tsQueue_sizeNonBlocking:
+	push ebp
+	mov ebp, esp
+	
+	;get size
+	mov eax, dword[ebp+8]
+	mov eax, dword[eax+4]
+	mov eax, dword[eax+4]
 	
 	mov esp, ebp
 	pop ebp

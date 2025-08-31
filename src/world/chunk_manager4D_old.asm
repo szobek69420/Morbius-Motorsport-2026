@@ -474,17 +474,7 @@ chunkManager4d_render:
 	call vec3_normalize
 	add esp, 4
 	
-	;set renderable primitive
-	push dword[GL_POINTS]
-	call renderable_setPrimitive
-	add esp, 4
-
-	;bind block textures
-	push 0
-	mov eax, dword[ebp+16]
-	push dword[eax+120]
-	call textureHandler_bindArray
-	add esp, 8
+	
 	
 	;use shader
 	mov eax, dword[ebp+16]
@@ -492,16 +482,7 @@ chunkManager4d_render:
 	call renderable_useShader
 	add esp, 4
 	
-	;set sun direction uniform
-	push dword[ebp-32]
-	push dword[ebp-36]
-	push dword[ebp-40]
-	push dword[RENDERABLE_UNIFORM_VEC3]
-	push uniform_name_sunDirection
-	mov eax, dword[ebp+16]
-	push dword[eax+28]
-	call renderable_setUniform
-	add esp, 24
+	
 	
 	
 	;set hyperplane pos uniform

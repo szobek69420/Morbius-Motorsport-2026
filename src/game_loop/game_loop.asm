@@ -245,6 +245,8 @@ section .text use32
 	extern vector_init
 	extern vector_destroy
 	extern vector_clear
+	extern tsVector_sizeNonBlocking
+	extern tsQueue_sizeNonBlocking
 	
 	extern vec3_print
 	
@@ -321,6 +323,7 @@ section .text use32
 	extern chunkManager4d_processChangedBlocks
 	extern chunkManager4d_render
 	extern chunkManager4d_getHyperPlane
+	extern chunkManager4d_loadChunk_internal
 	
 	extern sun_init
 	extern sun_deinit
@@ -763,7 +766,7 @@ gameLoop_main:
 	
 	;destroy chunk manager
 	push dword[chunk_manager_4d]
-	call chunkManager4d_destroy
+	;call chunkManager4d_destroy
 	mov dword[chunk_manager_4d], 0
 	
 	;deinit sun
@@ -934,6 +937,12 @@ gameLoop_chunkLoader:
 			call chunkManager4d_processChangedBlocks
 			add esp, 4
 			
+			push 0
+			push 0
+			push 0
+			push dword[chunk_manager_4d]
+			call chunkManager4d_loadChunk_internal
+			add esp, 16
 		
 			;do chunk update things		
 			mov eax, dword[pplayer]
@@ -941,8 +950,8 @@ gameLoop_chunkLoader:
 			push dword[render_distance]
 			push eax
 			push dword[chunk_manager_4d]
-			call chunkManager4d_load
-			call chunkManager4d_unload
+			;call chunkManager4d_load
+			;call chunkManager4d_unload
 			add esp, 12
 			
 			
@@ -1482,7 +1491,7 @@ gameLoop_updateInfoCanvas:
 	
 	;hyperplane point
 	mov eax, dword[chunk_manager_4d]
-	add eax, 32
+	add eax, 100
 	push dword[eax+12]
 	push dword[eax+8]
 	push dword[eax+4]
@@ -1498,7 +1507,7 @@ gameLoop_updateInfoCanvas:
 	
 	;hyperplane vectors
 	mov eax, dword[chunk_manager_4d]
-	add eax, 48
+	add eax, 116
 	sub esp, 48
 	mov ecx, esp
 	push 48
@@ -1637,8 +1646,9 @@ gameLoop_updateInfoCanvas:
 	SET_TEXT TEXT_RENDER_DISTANCE
 	
 	;loaded chunks
-	mov eax, dword[chunk_manager_4d]
-	push dword[eax]
+	push dword[chunk_manager_4d]
+	call tsVector_sizeNonBlocking
+	mov dword[esp], eax
 	push print_loaded_chunk_count
 	lea eax, [ebp-100]
 	push eax
@@ -1648,7 +1658,10 @@ gameLoop_updateInfoCanvas:
 	
 	;fanthom chunks
 	mov eax, dword[chunk_manager_4d]
-	push dword[eax+140]
+	add eax, 28
+	push eax
+	call tsVector_sizeNonBlocking
+	mov dword[esp], eax
 	push print_fanthom_chunk_count
 	lea eax, [ebp-100]
 	push eax
@@ -1658,8 +1671,10 @@ gameLoop_updateInfoCanvas:
 	
 	;pending graphics updates
 	mov eax, dword[chunk_manager_4d]
-	mov eax, dword[eax+24]
-	push dword[eax+4]
+	add eax, 36
+	push eax
+	call tsQueue_sizeNonBlocking
+	mov dword[esp], eax
 	push print_pending_graphics_update_count
 	lea eax, [ebp-100]
 	push eax

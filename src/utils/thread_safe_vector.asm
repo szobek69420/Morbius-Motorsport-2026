@@ -25,7 +25,11 @@ section .text use32
 	;the comparator must return 0 if a match is found
 	global tsVector_search			;int tsVector_search(tsVector*, int (*comparator)(element*, void* searchKey), void* searchKey)
 	
-	global tsVector_elementSize	;int tsVector_elementSize(tsVector*)
+	global tsVector_forEach		;void tsVector_forEach(tsVector*, void (*function)(element*, void* param), void* param)
+	
+	global tsVector_size					;int tsVector_size(tsVector*)
+	global tsVector_sizeNonBlocking			;int tsVector_sizeNonBlocking(tsVector*)
+	global tsVector_elementSize				;int tsVector_elementSize(tsVector*)
 	
 	extern my_malloc
 	extern my_realloc
@@ -49,8 +53,10 @@ section .text use32
 	extern vector_remove_at
 	extern vector_remove
 	extern vector_removeCustom
+	extern vector_size
 	extern vector_element_size
 	extern vector_search
+	extern vector_for_each
 	
 tsVector_init:
 	push ebp
@@ -415,7 +421,34 @@ tsVector_search:
 	ret
 	
 	
-tsVector_elementSize:
+tsVector_forEach:
+	push ebp
+	mov ebp, esp
+	
+	;lock mutex
+	mov eax, dword[ebp+8]
+	push -1
+	push dword[eax]
+	call mutex_lock
+	
+	;call search
+	mov eax, dword[ebp+8]
+	push dword[ebp+16]
+	push dword[ebp+12]
+	push dword[eax+4]
+	call vector_for_each
+	mov dword[ebp-4], eax
+	
+	;unlock mutex
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	call mutex_unlock
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+tsVector_size:
 	push ebp
 	mov ebp, esp
 	
@@ -427,10 +460,10 @@ tsVector_elementSize:
 	push dword[eax]
 	call mutex_lock
 	
-	;get element size
+	;get size
 	mov eax, dword[ebp+8]
 	push dword[eax+4]
-	call vector_element_size
+	call vector_size
 	mov dword[ebp-4], eax
 	
 	;unlock mutex
@@ -440,6 +473,34 @@ tsVector_elementSize:
 	
 	;set return value
 	mov eax, dword[ebp-4]
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+tsVector_sizeNonBlocking:
+	push ebp
+	mov ebp, esp
+	
+	;get element size
+	mov eax, dword[ebp+8]
+	push dword[eax+4]
+	call vector_size
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+tsVector_elementSize:
+	push ebp
+	mov ebp, esp
+	
+	;get element size
+	;no need to lock mutex, element size should not be changed anyways
+	mov eax, dword[ebp+8]
+	push dword[eax+4]
+	call vector_element_size
 	
 	mov esp, ebp
 	pop ebp
