@@ -110,7 +110,7 @@ section .text use32
 	
 	global chunkManager4d_processChangedBlocks	;void chunkManager4d_processChangedBlocks(ChunkManager4D* cm)
 	
-	;global chunkManager4d_getHyperPlane			;HyperPlane* chunkManager4d_getHyperPlane(ChunkManager4D* cm)
+	global chunkManager4d_getHyperPlane			;HyperPlane* chunkManager4d_getHyperPlane(ChunkManager4D* cm)
 	global chunkManager4d_setHyperPlane			;void chunkManager4d_setHyperPlane(ChunkManager4D* cm, HyperPlane* ph)
 	
 	global chunkManager4d_getPlayerChunk4D			;void chunkManager4d_getPlayerChunk4D(ChunkManager4D* cm, vec3* playerPos3D, int* chunkX, int* chunkZ, int* chunkW)
@@ -261,6 +261,7 @@ chunkManager4d_create:
 	call hyperPlane_create
 	push dword[ebp-4]
 	call chunkManager4d_setHyperPlane
+	call chunkManager4d_applyHyperPlane_internal
 	
 	;create shader
 	push geometry_shader_path
