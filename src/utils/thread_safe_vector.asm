@@ -1,8 +1,8 @@
 [BITS 32]
 
 ;struct tsVector{
-;	Mutex* mutex;		0
-;	vector* vec;		4
+;	CriticalSection* sex;	0
+;	vector* vec;			4
 ;}	8 bytes overall
 
 section .text use32
@@ -43,10 +43,11 @@ section .text use32
 	extern my_memcpy
 	extern my_memcmp
 	
-	extern mutex_create
-	extern mutex_destroy
-	extern mutex_lock
-	extern mutex_unlock
+	extern criticalSection_create
+	extern criticalSection_destroy
+	extern criticalSection_lock
+	extern criticalSection_tryLock
+	extern criticalSection_unlock
 	
 	extern vector_init
 	extern vector_destroy
@@ -67,11 +68,11 @@ tsVector_init:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 4		;mutex		4
+	sub esp, 4		;cs			4
 	sub esp, 4		;vector		8
 	
-	;create mutex
-	call mutex_create
+	;create critical section
+	call criticalSection_create
 	mov dword[ebp-4], eax
 	
 	;create vector
@@ -101,9 +102,9 @@ tsVector_destroy:
 	
 	mov eax, dword[ebp+8]
 	push dword[eax+4]			;vector
-	push dword[eax]				;mutex
+	push dword[eax]				;cs
 	
-	call mutex_destroy
+	call criticalSection_destroy
 	add esp, 4
 	
 	call vector_destroy
@@ -118,21 +119,18 @@ tsVector_clear:
 	push ebp
 	mov ebp, esp
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsVector_lock
 	
 	;call clear
 	mov eax, dword[ebp+8]
 	push dword[eax+4]
 	call vector_clear
 	
-	;unlock mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
+	;unlock
+	push dword[ebp+8]
+	call tsVector_unlock
 	
 	mov esp, ebp
 	pop ebp
@@ -145,11 +143,9 @@ tsVector_at:
 	
 	sub esp, 4			;return value
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsVector_lock
 	
 	;call at
 	mov eax, dword[ebp+8]
@@ -158,10 +154,9 @@ tsVector_at:
 	call vector_at
 	mov dword[ebp-4], eax
 	
-	;unlock mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
+	;unlock
+	push dword[ebp+8]
+	call tsVector_unlock
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -175,11 +170,9 @@ tsVector_pushBack:
 	push ebp
 	mov ebp, esp
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsVector_lock
 	
 	;call pushBackBuffer
 	lea ecx, [ebp+12]
@@ -188,10 +181,9 @@ tsVector_pushBack:
 	push dword[eax+4]
 	call vector_push_back_buffer
 	
-	;unlock mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
+	;unlock
+	push dword[ebp+8]
+	call tsVector_unlock
 	
 	mov esp, ebp
 	pop ebp
@@ -202,11 +194,9 @@ tsVector_pushBackBuffer:
 	push ebp
 	mov ebp, esp
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsVector_lock
 	
 	;call pushBackBuffer
 	mov eax, dword[ebp+8]
@@ -214,10 +204,9 @@ tsVector_pushBackBuffer:
 	push dword[eax+4]
 	call vector_push_back_buffer
 	
-	;unlock mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
+	;unlock
+	push dword[ebp+8]
+	call tsVector_unlock
 	
 	mov esp, ebp
 	pop ebp
@@ -228,21 +217,18 @@ tsVector_popBack:
 	push ebp
 	mov ebp, esp
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsVector_lock
 	
 	;call pop back
 	mov eax, dword[ebp+8]
 	push dword[eax+4]
 	call vector_pop_back
 	
-	;unlock mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
+	;unlock
+	push dword[ebp+8]
+	call tsVector_unlock
 	
 	mov esp, ebp
 	pop ebp
@@ -253,11 +239,9 @@ tsVector_insert:
 	push ebp
 	mov ebp, esp
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsVector_lock
 	
 	;copy the element onto the stack
 	mov eax, dword[ebp+8]
@@ -279,10 +263,9 @@ tsVector_insert:
 	push dword[eax+4]			;vector
 	call vector_insert
 	
-	;unlock mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
+	;unlock
+	push dword[ebp+8]
+	call tsVector_unlock
 	
 	mov esp, ebp
 	pop ebp
@@ -293,11 +276,9 @@ tsVector_removeAt:
 	push ebp
 	mov ebp, esp
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsVector_lock
 	
 	;call remove at
 	mov eax, dword[ebp+8]
@@ -305,10 +286,9 @@ tsVector_removeAt:
 	push dword[eax+4]
 	call vector_remove_at
 	
-	;unlock mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
+	;unlock
+	push dword[ebp+8]
+	call tsVector_unlock
 	
 	mov esp, ebp
 	pop ebp
@@ -321,11 +301,9 @@ tsVector_remove:
 	
 	sub esp, 4			;return value
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsVector_lock
 	
 	;copy the element onto the stack
 	mov eax, dword[ebp+8]
@@ -347,10 +325,9 @@ tsVector_remove:
 	call vector_remove
 	mov dword[ebp-4], eax
 	
-	;unlock mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
+	;unlock
+	push dword[ebp+8]
+	call tsVector_unlock
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -366,11 +343,9 @@ tsVector_removeCustom:
 	
 	sub esp, 4			;return value
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsVector_lock
 	
 	;call removeCustom
 	mov eax, dword[ebp+8]
@@ -380,10 +355,9 @@ tsVector_removeCustom:
 	call vector_removeCustom
 	mov dword[ebp-4], eax
 	
-	;unlock mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
+	;unlock
+	push dword[ebp+8]
+	call tsVector_unlock
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -399,11 +373,9 @@ tsVector_search:
 	
 	sub esp, 4			;return value
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsVector_lock
 	
 	;call search
 	mov eax, dword[ebp+8]
@@ -413,10 +385,9 @@ tsVector_search:
 	call vector_search
 	mov dword[ebp-4], eax
 	
-	;unlock mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
+	;unlock
+	push dword[ebp+8]
+	call tsVector_unlock
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -430,11 +401,9 @@ tsVector_forEach:
 	push ebp
 	mov ebp, esp
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsVector_lock
 	
 	;call search
 	mov eax, dword[ebp+8]
@@ -444,10 +413,9 @@ tsVector_forEach:
 	call vector_for_each
 	mov dword[ebp-4], eax
 	
-	;unlock mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
+	;unlock
+	push dword[ebp+8]
+	call tsVector_unlock
 	
 	mov esp, ebp
 	pop ebp
@@ -459,11 +427,9 @@ tsVector_size:
 	
 	sub esp, 4		;return value		4
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsVector_lock
 	
 	;get size
 	mov eax, dword[ebp+8]
@@ -471,10 +437,9 @@ tsVector_size:
 	call vector_size
 	mov dword[ebp-4], eax
 	
-	;unlock mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
+	;unlock
+	push dword[ebp+8]
+	call tsVector_unlock
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -521,11 +486,17 @@ tsVector_lock:
 	push ebp
 	mov ebp, esp
 	
+	;tries to lock critical section non-blockingly (also enables repeated lock calls)
 	mov eax, dword[ebp+8]
-	push -1
 	push dword[eax]
-	call mutex_lock
+	call criticalSection_tryLock
+	test eax, eax
+	jnz tsVector_lock_end
 	
+	;waits for lock blockingly
+	call criticalSection_lock
+	
+	tsVector_lock_end:
 	mov esp, ebp
 	pop ebp
 	ret
@@ -537,7 +508,7 @@ tsVector_unlock:
 	
 	mov eax, dword[ebp+8]
 	push dword[eax]
-	call mutex_unlock
+	call criticalSection_unlock
 	
 	mov esp, ebp
 	pop ebp

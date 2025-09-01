@@ -15,6 +15,10 @@
 ;	void* semaphoreHandle;
 ;}		4 bytes overall
 
+;struct CriticalSection{
+;	40 bytes of idk;
+;}		40 bytes overall
+
 %macro dll_import 2
     import %2 %1
     extern %2
@@ -79,7 +83,20 @@ section .text use32
 	;returns 0 if there were no problems
 	global semaphore_unlock				;int semaphore_unlock(Semaphore* semaphore)
 	
-	
+	;the WinAPI docs say that this can not fail, which I would take as a challenge
+	;CriticalSection* criticalSection_create()
+	global criticalSection_create
+	;void criticalSection_destroy(CriticalSection*)
+	global criticalSection_destroy
+	;void criticalSection_lock(CriticalSection*)
+	global criticalSection_lock
+	;tries to enter a critical section without blocking
+	;returns non-zero, if the thread managed to get into the critical section or it already owned it
+	;returns zero on fail
+	;int criticalSection_tryLock(CriticalSection*)
+	global criticalSection_tryLock
+	;void criticalSection_unlock(CriticalSection*)
+	global criticalSection_unlock
 	
 	dll_import kernel32.dll, CreateThread
 	dll_import kernel32.dll, ResumeThread
@@ -93,6 +110,12 @@ section .text use32
 	
 	dll_import kernel32.dll, CreateSemaphoreA
 	dll_import kernel32.dll, ReleaseSemaphore
+	
+	dll_import kernel32.dll, InitializeCriticalSection
+	dll_import kernel32.dll, DeleteCriticalSection
+	dll_import kernel32.dll, EnterCriticalSection
+	dll_import kernel32.dll, TryEnterCriticalSection
+	dll_import kernel32.dll, LeaveCriticalSection
 	
 	extern my_malloc
 	extern my_free
@@ -491,6 +514,83 @@ semaphore_unlock:
 	xor eax, eax
 	
 	semaphore_unlock_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+	
+criticalSection_create:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4		;critical section		4
+	
+	;alloc space
+	push 40
+	call my_malloc
+	mov dword[ebp-4], eax
+	
+	;init critical section
+	push dword[ebp-4]
+	call [InitializeCriticalSection]
+	
+	;set return value
+	mov eax, dword[ebp-4]
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+criticalSection_destroy:
+	push ebp
+	mov ebp, esp
+	
+	;deinit critical section
+	push dword[ebp+8]
+	call [DeleteCriticalSection]
+	
+	;dealloc space
+	push dword[ebp+8]
+	call my_free
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+criticalSection_lock:
+	push ebp
+	mov ebp, esp
+	
+	push dword[ebp+8]
+	call [EnterCriticalSection]
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+criticalSection_tryLock:
+	push ebp
+	mov ebp, esp
+	
+	push dword[ebp+8]
+	call [TryEnterCriticalSection]
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+criticalSection_unlock:
+	push ebp
+	mov ebp, esp
+	
+	push dword[ebp+8]
+	call [LeaveCriticalSection]
+	
 	mov esp, ebp
 	pop ebp
 	ret
