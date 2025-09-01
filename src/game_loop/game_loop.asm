@@ -943,7 +943,7 @@ gameLoop_chunkLoader:
 			push eax
 			push dword[chunk_manager_4d]
 			call chunkManager4d_load
-			;call chunkManager4d_unload
+			call chunkManager4d_unload
 			add esp, 12
 			
 			

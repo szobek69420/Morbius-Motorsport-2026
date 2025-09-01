@@ -133,6 +133,7 @@ section .text use32
 	extern tsVector_removeCustom
 	extern tsVector_search
 	extern tsVector_forEach
+	extern tsVector_size
 	
 	extern queue_init
 	extern tsQueue_init
@@ -722,6 +723,116 @@ chunkManager4d_load:
 	pop esi
 	pop ebp
 	ret
+	
+	
+chunkManager4d_unload:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 4				;unloaded chunk w			4
+	sub esp, 4				;unloaded chunk z			8
+	sub esp, 4				;unloaded chunk x			12
+	sub esp, 4				;unloadable chunk			16
+	
+	sub esp, 4				;player chunk w				20
+	sub esp, 4				;player chunk z				24
+	sub esp, 4				;player chunk x				28
+	
+	mov dword[ebp-16], 0
+	
+	;calculate player chunk
+	lea eax, [ebp-20]
+	push eax
+	sub eax, 4
+	push eax
+	sub eax, 4
+	push eax
+	push dword[ebp+24]
+	push dword[ebp+20]
+	call chunkManager4d_getPlayerChunk
+	
+	;search for an unloadable chunk
+	push ebp
+	push chunkManager4d_unload_remove_comparator
+	push dword[ebp+20]
+	call tsVector_removeCustom
+	
+	test dword[ebp-16], 0xffffffff
+	jz chunkManager4d_unload_end
+		;unload the chunk
+		push 0				;destroy renderable
+		push dword[ebp-16]
+		push dword[ebp+20]
+		call chunkManager4d_unloadChunk_internal
+	
+	chunkManager4d_unload_end:
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	;int chunkManager4d_unload_remove_comparator(Chunk4D**, void* ebpOfUnload)
+	chunkManager4d_unload_remove_comparator:
+		push ebp
+		push ebx
+		mov ebp, esp
+		
+		sub esp, 4		;return value		4
+		mov dword[ebp-4], 69
+		
+		;check if the chunk is out of the render distance
+		mov ebx, dword[ebp+12]
+		mov ebx, dword[ebx]			;chunk in ebx
+		mov ecx, dword[ebp+16]
+		
+		mov eax, dword[ebx]
+		sub eax, dword[ecx-28]
+		test eax, 0x80000000
+		jz chunkManager4d_unload_remove_comparator_not_neg_x
+			neg eax
+		chunkManager4d_unload_remove_comparator_not_neg_x:
+			cmp eax, dword[ecx+28]
+			jg chunkManager4d_unload_remove_comparator_should_unload
+		mov eax, dword[ebx+4]
+		sub eax, dword[ecx-24]
+		test eax, 0x80000000
+		jz chunkManager4d_unload_remove_comparator_not_neg_z
+			neg eax
+		chunkManager4d_unload_remove_comparator_not_neg_z:
+			cmp eax, dword[ecx+28]
+			jg chunkManager4d_unload_remove_comparator_should_unload
+		mov eax, dword[ebx+8]
+		sub eax, dword[ecx-20]
+		test eax, 0x80000000
+		jz chunkManager4d_unload_remove_comparator_not_neg_w
+			neg eax
+		chunkManager4d_unload_remove_comparator_not_neg_w:
+			cmp eax, dword[ecx+28]
+			jg chunkManager4d_unload_remove_comparator_should_unload
+		jmp chunkManager4d_unload_remove_comparator_end
+		chunkManager4d_unload_remove_comparator_should_unload:
+			;save the chunk
+			mov dword[ebp-4], 0
+			
+			mov dword[ecx-16], ebx
+			
+			mov eax, dword[ebx]
+			mov dword[ecx-12], eax
+			mov eax, dword[ebx+4]
+			mov dword[ecx-8], eax
+			mov eax, dword[ebx+8]
+			mov dword[ecx-4], eax
+		chunkManager4d_unload_remove_comparator_end:
+		mov eax, dword[ebp-4]
+		
+		mov esp, ebp
+		pop ebx
+		pop ebp
+		ret
 	
 chunkManager4d_processGraphicsUpdate:
 	push ebp
