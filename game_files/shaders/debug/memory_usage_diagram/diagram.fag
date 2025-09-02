@@ -1,0 +1,32 @@
+#version 460 core
+layout (location=0) out vec4 fragmentColour;
+
+in vec2 uv;
+
+uniform float values[21];
+uniform float value_offsets[21];
+
+void main()
+{
+	float graphValue=0;
+	int index=0;
+
+	for(int i=0;i<20;i++)
+	{
+		if(uv.x>=value_offsets[i]&&uv.x<=value_offsets[i+1])
+		{
+			graphValue=mix(
+				values[i],
+				values[i+1],
+				(uv.x-value_offsets[i])/(value_offsets[i+1]-value_offsets[i])
+				);
+		}
+	}
+	
+	if(graphValue-0.04>uv.y)
+		fragmentColour=vec4(1,1,1,0.5);
+	else if(graphValue>uv.y)
+		fragmentColour=vec4(1,0,0,1);
+	else
+		fragmentColour=vec4(0,0,0,0);
+}

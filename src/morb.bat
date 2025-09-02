@@ -26,6 +26,7 @@ mkdir build
 ..\build_tools\nasm.exe -fobj physics/physics4D.asm -o build/physics4D.o
 ..\build_tools\nasm.exe -fobj physics/collider_group_4D.asm -o build/collider_group_4D.o
 ..\build_tools\nasm.exe -fobj physics/aabb4D.asm -o build/aabb4D.o
+..\build_tools\nasm.exe -fobj debug/memory_usage_diagram.asm -o build/memory_usage_diagram.o
 ..\build_tools\nasm.exe -fobj utils/perlin.asm -o build/perlin.o
 ..\build_tools\nasm.exe -fobj utils/math.asm -o build/math.o
 ..\build_tools\nasm.exe -fobj utils/qsort.asm -o build/qsort.o
@@ -99,6 +100,7 @@ build/mat3.o ^
 build/vec4.o ^
 build/vec3.o ^
 build/audio.o ^
+build/memory_usage_diagram.o ^
 build/perlin.o ^
 build/math.o ^
 build/qsort.o ^

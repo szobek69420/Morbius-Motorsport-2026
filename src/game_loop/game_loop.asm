@@ -121,6 +121,8 @@ section .data use32
 	delta_time_milliseconds_physics dd 0		;int (it is just for monitoring purposes)
 	delta_time_milliseconds_chunk_loader dd 0	;int (it is just for monitoring purposes)
 
+	milliseconds_since_last_memory_diagram_update dd 0
+
 	TIME_OF_DAY dd 0.0	;values are in [0;1], 0 and 1 are dawn
 	
 	SUN_DIRECTION_BUFFER dd 0.0, 1.0, 0.0, 0.0
@@ -148,6 +150,7 @@ section .data use32
 	TEXT_PHYSICS_DELTA dd 0
 	TEXT_CHUNK_LOADER_DELTA dd 0
 	TEXT_MEMORY_USAGE dd 0
+	IMAGE_MEMORY_USAGE dd 0
 	
 	TEXT_RENDER_DISTANCE dd 0
 	TEXT_LOADED_CHUNKS dd 0
@@ -353,6 +356,10 @@ section .text use32
 	extern uiElement_render
 	
 	extern meminfo_getMemoryUsage
+	extern memoryUsageDiagram_init
+	extern memoryUsageDiagram_deinit
+	extern memoryUsageDiagram_update
+	extern memoryUsageDiagram_getTexture
 	
 gameLoop_main:
 	push ebp
@@ -442,6 +449,9 @@ gameLoop_main:
 	
 	;init sun
 	call sun_init
+	
+	;init memory usage diagram
+	call memoryUsageDiagram_init
 	
 	;enable depth test and face cull
 	push dword[GL_DEPTH_TEST]
@@ -574,6 +584,14 @@ gameLoop_main:
 		call camera_viewProjection
 		add esp, 24
 		
+		;update memory diagram if necessary
+		mov eax, dword[delta_time_milliseconds]
+		add dword[milliseconds_since_last_memory_diagram_update], eax
+		cmp dword[milliseconds_since_last_memory_diagram_update], 500
+		jl gameLoop_main_loop_no_memory_diagram_update
+			call memoryUsageDiagram_update
+			sub dword[milliseconds_since_last_memory_diagram_update], 500
+		gameLoop_main_loop_no_memory_diagram_update:
 		
 		;do the deferred rendering things--------------------------
 		
@@ -592,10 +610,12 @@ gameLoop_main:
 		call framebuffer_bind
 		add esp, 4
 		
-		;enable depth test
+		;enable depth test and disable blending
 		push 69
 		call renderable_enableDepthTest
-		add esp, 4
+		push 0
+		call renderable_enableBlending
+		add esp, 8
 		
 		;render sun (this should be drawn first)
 		fld dword[TIME_OF_DAY]
@@ -770,6 +790,9 @@ gameLoop_main:
 	push dword[chunk_manager_4d]
 	;call chunkManager4d_destroy
 	mov dword[chunk_manager_4d], 0
+	
+	;deinit memory usage diagram
+	call memoryUsageDiagram_deinit
 	
 	;deinit sun
 	call sun_deinit
@@ -1218,6 +1241,7 @@ gameLoop_handleWindowResize:
 	extern uiElement_setPivot
 	extern uiElement_createProjection
 	extern uiImage_setTexture
+	extern uiImage_setTextureGL
 	extern uiText_setText
 	extern uiText_setColour
 	extern uiText_setFontSize
@@ -1421,7 +1445,7 @@ gameLoop_initInfoCanvas:
 	INIT_TEXT		TEXT_MEMORY_USAGE, CANVAS_INFO, 30, 105, UI_RIGHT, UI_TOP
 	FINE_TUNE_TEXT	TEXT_MEMORY_USAGE, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_TOP, 12, 16, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
 	
-	
+	INIT_IMAGE 		IMAGE_MEMORY_USAGE, CANVAS_INFO, 0, 30, 130, 200, 50, UI_RIGHT, UI_TOP, UI_RIGHT, UI_TOP
 	
 	
 	INIT_TEXT		TEXT_RENDER_DISTANCE, CANVAS_INFO, 30, 105, UI_RIGHT, UI_BOTTOM
@@ -1631,7 +1655,7 @@ gameLoop_updateInfoCanvas:
 	add esp, 12
 	SET_TEXT TEXT_CHUNK_LOADER_DELTA
 	
-	;chunk loader delta
+	;memory usage things
 	call meminfo_getMemoryUsage
 	shr eax, 20
 	push eax
@@ -1641,6 +1665,11 @@ gameLoop_updateInfoCanvas:
 	call my_sprintf
 	add esp, 12
 	SET_TEXT TEXT_MEMORY_USAGE
+	
+	call memoryUsageDiagram_getTexture
+	push eax
+	push dword[IMAGE_MEMORY_USAGE]
+	call uiImage_setTextureGL
 	
 	
 	;render distance
