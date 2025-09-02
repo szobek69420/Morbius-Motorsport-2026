@@ -38,6 +38,7 @@ mkdir build
 ..\build_tools\nasm.exe -fobj utils/vector.asm -o build/vector.o
 ..\build_tools\nasm.exe -fobj utils/string.asm -o build/string.o
 ..\build_tools\nasm.exe -fobj utils/console.asm -o build/console.o
+..\build_tools\nasm.exe -fobj utils/meminfo.asm -o build/meminfo.o
 ..\build_tools\nasm.exe -fobj utils/memory.asm -o build/memory.o
 ..\build_tools\nasm.exe -fobj utils/file.asm -o build/file.o
 ..\build_tools\nasm.exe -fobj utils/ctype.asm -o build/ctype.o
@@ -110,6 +111,7 @@ build/hashmap.o ^
 build/vector.o ^
 build/string.o ^
 build/console.o ^
+build/meminfo.o ^
 build/memory.o ^
 build/file.o ^
 build/ctype.o ^

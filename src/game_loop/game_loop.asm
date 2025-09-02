@@ -72,6 +72,7 @@ section .rodata use32
 	print_fps db "FPS: %d",0
 	print_physics_delta_time db "Physics: %d ms",0
 	print_chunk_loader_delta_time db "Chunk loader: %d ms",0
+	print_memory_usage db "Memory usage: %d MB",0
 	
 	print_raycast_hit_info db "Raycast hit: (%f; %f; %f; %f)",0
 	print_raycast_no_hit_info db "Raycast hit: nothing bozo",0
@@ -146,6 +147,7 @@ section .data use32
 	TEXT_FPS dd 0
 	TEXT_PHYSICS_DELTA dd 0
 	TEXT_CHUNK_LOADER_DELTA dd 0
+	TEXT_MEMORY_USAGE dd 0
 	
 	TEXT_RENDER_DISTANCE dd 0
 	TEXT_LOADED_CHUNKS dd 0
@@ -350,6 +352,7 @@ section .text use32
 	extern uiElement_processInput
 	extern uiElement_render
 	
+	extern meminfo_getMemoryUsage
 	
 gameLoop_main:
 	push ebp
@@ -1415,6 +1418,8 @@ gameLoop_initInfoCanvas:
 	INIT_TEXT		TEXT_CHUNK_LOADER_DELTA, CANVAS_INFO, 30, 80, UI_RIGHT, UI_TOP
 	FINE_TUNE_TEXT	TEXT_CHUNK_LOADER_DELTA, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_TOP, 12, 16, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
 	
+	INIT_TEXT		TEXT_MEMORY_USAGE, CANVAS_INFO, 30, 105, UI_RIGHT, UI_TOP
+	FINE_TUNE_TEXT	TEXT_MEMORY_USAGE, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_TOP, 12, 16, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
 	
 	
 	
@@ -1626,6 +1631,16 @@ gameLoop_updateInfoCanvas:
 	add esp, 12
 	SET_TEXT TEXT_CHUNK_LOADER_DELTA
 	
+	;chunk loader delta
+	call meminfo_getMemoryUsage
+	shr eax, 20
+	push eax
+	push print_memory_usage
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 12
+	SET_TEXT TEXT_MEMORY_USAGE
 	
 	
 	;render distance
