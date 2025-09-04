@@ -2,23 +2,15 @@
 
 section .rodata use32
 	vertex_vector:
-	dd 8
-	dd 8
+	dd 20
+	dd 20
 	dd 4
 	dd vertex_data
 	vertex_data:
-	dd 0.0, 0.0,
-	dd 0.0, 1.0,
-	dd 1.0, 0.0,
-	dd 1.0, 1.0
-	
-	index_vector:
-	dd 6
-	dd 6
-	dd 4
-	dd index_data
-	index_data:
-	dd 1,0,3,3,0,2
+	dd 0,1,2,3,4,
+	dd 5,6,7,8,9
+	dd 10,11,12,13,14
+	dd 15,16,17,18,19
 
 	DIAGRAM_WIDTH dd 512
 	DIAGRAM_HEIGHT dd 128
@@ -28,6 +20,8 @@ section .rodata use32
 	DIAGRAM_VALUE_COUNT dd 20
 	
 	vertex_shader_path db "shaders/debug/memory_usage_diagram/diagram.vag",0
+	geometry_shader_path_bg db "shaders/debug/memory_usage_diagram/diagram_background.gag",0
+	geometry_shader_path_line db "shaders/debug/memory_usage_diagram/diagram_line.gag",0
 	fragment_shader_path db "shaders/debug/memory_usage_diagram/diagram.fag",0
 	
 	uniform_name_values db "values",0
@@ -46,7 +40,8 @@ section .rodata use32
 
 section .data use32
 
-	shader dd 0
+	shader_bg dd 0
+	shader_line dd 0
 	renderable dd 0
 	framebuffer dd 0
 	
@@ -80,6 +75,8 @@ section .text use32
 	extern renderable_setUniform
 	extern renderable_enableDepthTest
 	extern renderable_enableBlending
+	extern renderable_setPrimitive
+	extern renderable_setLineWidth
 	extern RENDERABLE_UNIFORM_FLOAT_ARRAY
 	
 	extern framebuffer_create
@@ -93,6 +90,7 @@ section .text use32
 	extern glClearColor
 	extern glGetError
 	extern GL_COLOR_BUFFER_BIT
+	extern GL_POINTS
 	
 memoryUsageDiagram_init:
 	push ebp
@@ -118,12 +116,18 @@ memoryUsageDiagram_init:
 		cmp eax, 21
 		jl memoryUsageDiagram_init_value_loop_start
 	
-	;compile shader
-	push 0
+	;compile shaders
+	push geometry_shader_path_bg
 	push fragment_shader_path
 	push vertex_shader_path
 	call renderable_createShader
-	mov dword[shader], eax
+	mov dword[shader_bg], eax
+	
+	push geometry_shader_path_line
+	push fragment_shader_path
+	push vertex_shader_path
+	call renderable_createShader
+	mov dword[shader_line], eax
 	
 	;create framebuffer and texture
 	push dword[DIAGRAM_HEIGHT]
@@ -137,10 +141,10 @@ memoryUsageDiagram_init:
 	call framebuffer_colourAttachment
 	
 	;genesis of renderable
-	push 0
-	push 2
 	push 1
-	push index_vector
+	push 1
+	push 0
+	push 0
 	push vertex_vector
 	call renderable_createCustom
 	mov dword[renderable], eax
@@ -175,8 +179,10 @@ memoryUsageDiagram_deinit:
 	push dword[framebuffer]
 	call framebuffer_destroy
 	
-	;yeet the shader
-	push dword[shader]
+	;yeet the shaders
+	push dword[shader_bg]
+	call renderable_destroyShader
+	push dword[shader_line]
 	call renderable_destroyShader
 	
 	;unset the initialized flag
@@ -256,24 +262,10 @@ memoryUsageDiagram_update:
 	call renderable_enableDepthTest
 	push 69
 	call renderable_enableBlending
-	
-	;set values and offsets
-	push dword[shader]
-	call renderable_useShader
-	
-	push values_float
-	push 21
-	push dword[RENDERABLE_UNIFORM_FLOAT_ARRAY]
-	push uniform_name_values
-	push dword[shader]
-	call renderable_setUniform
-	
-	push value_offsets
-	push 21
-	push dword[RENDERABLE_UNIFORM_FLOAT_ARRAY]
-	push uniform_name_value_offsets
-	push dword[shader]
-	call renderable_setUniform
+	push dword[GL_POINTS]
+	call renderable_setPrimitive
+	push 0x40a00000
+	call renderable_setLineWidth
 	
 	;bind and clear framebuffer
 	push dword[framebuffer]
@@ -294,9 +286,50 @@ memoryUsageDiagram_update:
 	push dword[GL_COLOR_BUFFER_BIT]
 	call [glClear]
 	
-	;render
+	;render background
+	push dword[shader_bg]
+	call renderable_useShader
+	
+	push values_float
+	push 21
+	push dword[RENDERABLE_UNIFORM_FLOAT_ARRAY]
+	push uniform_name_values
+	push dword[shader_bg]
+	call renderable_setUniform
+	
+	push value_offsets
+	push 21
+	push dword[RENDERABLE_UNIFORM_FLOAT_ARRAY]
+	push uniform_name_value_offsets
+	push dword[shader_bg]
+	call renderable_setUniform
+	
 	push 69
-	push dword[shader]
+	push dword[shader_bg]
+	push dword[ebp+12]
+	push dword[renderable]
+	call renderable_renderCustom
+	
+	;render line
+	push dword[shader_line]
+	call renderable_useShader
+	
+	push values_float
+	push 21
+	push dword[RENDERABLE_UNIFORM_FLOAT_ARRAY]
+	push uniform_name_values
+	push dword[shader_line]
+	call renderable_setUniform
+	
+	push value_offsets
+	push 21
+	push dword[RENDERABLE_UNIFORM_FLOAT_ARRAY]
+	push uniform_name_value_offsets
+	push dword[shader_line]
+	call renderable_setUniform
+	
+	push 69
+	push dword[shader_line]
 	push dword[ebp+12]
 	push dword[renderable]
 	call renderable_renderCustom

@@ -139,6 +139,7 @@ section .text use32
 	extern tsQueue_init
 	extern tsQueue_push
 	extern tsQueue_pushFront
+	extern tsQueue_pushBuffer
 	extern tsQueue_pushArray
 	extern tsQueue_pop
 	extern tsQueue_search
@@ -1673,11 +1674,8 @@ chunkManager4d_unloadChunk_internal:
 			;create graphics update for the renderable
 			push 0			;not fantom
 			push dword[ebp-4]
-			push 0
-			mov eax, dword[ebp+20]
-			add eax, 36
-			push eax
-			call tsQueue_push
+			push dword[ebp+20]
+			call chunkManager4d_pushGraphicsUnloadUpdate_internal
 		
 	chunkManager4d_unloadChunk_internal_renderable_done:
 	
@@ -1697,6 +1695,159 @@ chunkManager4d_unloadChunk_internal:
 		jne chunkManager4d_unloadChunk_internal_remove_from_graphics_queue_lambda_end
 			mov dword[eax+4], 0
 		chunkManager4d_unloadChunk_internal_remove_from_graphics_queue_lambda_end:
+		ret
+
+;removes a chunk from the graphics update queue or the loaded chunks vector
+;if chunk is not present in either of them, the reload fails
+;unloads the chunk (with keeping the renderable as a fantom)
+;loads a new chunk in the same position
+;void chunkManager4d_reloadChunkByPosition_internal(ChunkManager4D* cm, ivec3 chunkPos)
+chunkManager4d_reloadChunkByPosition_internal:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 4			;chunk				4
+	sub esp, 12			;chunkPos			16
+	sub esp, 4			;renderable buffer	20
+	
+	mov dword[ebp-4], 0
+	
+	mov eax, dword[ebp+24]
+	mov dword[ebp-16], eax
+	mov ecx, dword[ebp+28]
+	mov dword[ebp-12], ecx
+	mov edx, dword[ebp+32]
+	mov dword[ebp-8], edx
+	
+	;remove the chunk from the graphics update queue
+	lea eax, [ebp-16]
+	mov ecx, dword[ebp+20]
+	add ecx, 36
+	push eax
+	push chunkManager4d_removeChunkByPosition_removeAndSaveFromGraphicsUpdateQueue
+	push ecx
+	call tsQueue_forEach
+	test dword[ebp-4], 0xffffffff
+	jnz chunkManager4d_reloadChunkByPosition_internal_removal_successful
+	
+		;remove the chunk from the loaded chunks vector
+		lea eax, [ebp-16]
+		mov ecx, dword[ebp+20]
+		push eax
+		push chunkManager4d_removeChunkByPosition_removeAndSaveFromLoadedChunks
+		push ecx
+		call tsVector_removeCustom
+		test dword[ebp-4], 0xffffffff
+		jnz chunkManager4d_reloadChunkByPosition_internal_removal_successful
+		
+			;chunk is not loaded, abort
+			jmp chunkManager4d_reloadChunkByPosition_internal_end
+	
+	chunkManager4d_reloadChunkByPosition_internal_removal_successful:
+	
+	;unload chunk
+	lea eax, [ebp-20]
+	push eax
+	push dword[ebp-4]
+	push dword[ebp+20]
+	call chunkManager4d_unloadChunk_internal
+	
+	;load chunk
+	push dword[ebp+32]
+	push dword[ebp+28]
+	push dword[ebp+24]
+	push dword[ebp+20]
+	call chunkManager4d_loadChunk_internal
+	
+	;create fantom update if necessary
+	test dword[ebp-20], 0xffffffff
+	jz chunkManager4d_reloadChunkByPosition_internal_no_fantom
+		push 69
+		push dword[ebp-20]
+		push dword[ebp+20]
+		call chunkManager4d_pushGraphicsUnloadUpdate_internal
+		
+	chunkManager4d_reloadChunkByPosition_internal_no_fantom:
+	
+	chunkManager4d_reloadChunkByPosition_internal_end:
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	;void chunkManager4d_removeChunkByPosition_removeAndSaveFromGraphicsUpdateQueue(GraphicsUpdate*, struct{ivec3 pos, Chunk4D* buffer}*)
+	chunkManager4d_removeChunkByPosition_removeAndSaveFromGraphicsUpdateQueue:
+		push ebp
+		push ebx
+		mov ebp, esp
+		
+		mov eax, dword[ebp+12]
+		test dword[eax], 0xffffffff
+		jz chunkManager4d_removeChunkByPosition_removeAndSaveFromGraphicsUpdateQueue_end	;not load update
+		
+		xor ebx, ebx
+		mov eax, dword[eax+4]
+		mov ecx, dword[ebp+16]
+		
+		mov edx, dword[eax]
+		sub edx, dword[ecx]
+		or ebx, edx
+		mov edx, dword[eax+4]
+		sub edx, dword[ecx+4]
+		or ebx, edx
+		mov edx, dword[eax+8]
+		sub edx, dword[ecx+8]
+		or ebx, edx
+		test ebx, ebx
+		jnz chunkManager4d_removeChunkByPosition_removeAndSaveFromGraphicsUpdateQueue_end	;not same chunk
+			;chunk found
+			mov dword[ecx+12], eax		;save chunk
+			
+			mov eax, dword[ebp+12]
+			mov dword[eax+4], 0			;ignore update
+		
+		chunkManager4d_removeChunkByPosition_removeAndSaveFromGraphicsUpdateQueue_end:
+		mov esp, ebp
+		pop ebx
+		pop ebp
+		ret
+	;void chunkManager4d_removeChunkByPosition_removeAndSaveFromLoadedChunks(Chunk4D**, struct{ivec3 pos, Chunk4D* buffer}*)
+	chunkManager4d_removeChunkByPosition_removeAndSaveFromLoadedChunks:
+		push ebp
+		push ebx
+		mov ebp, esp
+		
+		sub esp, 4		;return value		4
+		mov dword[ebp-4], 69
+		
+		mov eax, dword[ebp+12]
+		mov eax, dword[eax]
+		xor ebx, ebx
+		mov ecx, dword[ebp+16]
+		
+		mov edx, dword[eax]
+		sub edx, dword[ecx]
+		or ebx, edx
+		mov edx, dword[eax+4]
+		sub edx, dword[ecx+4]
+		or ebx, edx
+		mov edx, dword[eax+8]
+		sub edx, dword[ecx+8]
+		or ebx, edx
+		test ebx, ebx
+		jnz chunkManager4d_removeChunkByPosition_removeAndSaveFromLoadedChunks_end	;not same chunk
+			;chunk found
+			mov dword[ecx+12], eax		;save chunk
+			mov dword[ebp-4], 0
+		chunkManager4d_removeChunkByPosition_removeAndSaveFromLoadedChunks_end:
+		mov eax, dword[ebp-4]			;set return value
+		mov esp, ebp
+		pop ebx
+		pop ebp
 		ret
 
 ;returns true if the chunk is either in the loaded chunks vector or in the pending graphics updates queue (as a load update)
@@ -1805,3 +1956,51 @@ chunkManager4d_isChunkLoaded:
 		mov esp, ebp
 		pop ebp
 		ret
+		
+		
+;void chunkManager4d_pushGraphicsLoadUpdate_internal(ChunkManager4D* cm, Chunk4D* chunk)
+chunkManager4d_pushGraphicsLoadUpdate_internal:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 12		;update buffer		12
+	
+	mov dword[ebp-12], 69	;load update
+	mov eax, dword[ebp+12]
+	mov dword[ebp-8], eax	;data
+	
+	lea ecx, dword[ebp-12]
+	mov eax, dword[ebp+8]
+	add eax, 36
+	push ecx
+	push eax
+	call tsQueue_pushBuffer
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;void chunkManager4d_pushGraphicsUnloadUpdate_internal(ChunkManager4D* cm, Renderable* renderable, int isFantom)
+chunkManager4d_pushGraphicsUnloadUpdate_internal:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 12		;update buffer		12
+	
+	mov dword[ebp-12], 69	;load update
+	mov eax, dword[ebp+12]
+	mov dword[ebp-8], eax	;renderable
+	mov ecx, dword[ebp+16]
+	mov dword[ebp-4], ecx	;isFantom
+	
+	lea ecx, dword[ebp-12]
+	mov eax, dword[ebp+8]
+	add eax, 36
+	push ecx
+	push eax
+	call tsQueue_pushBuffer
+	
+	mov esp, ebp
+	pop ebp
+	ret

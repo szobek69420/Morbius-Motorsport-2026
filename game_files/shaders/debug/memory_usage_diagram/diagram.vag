@@ -1,10 +1,10 @@
 #version 460 core
-layout (location=0) in vec2 vertexData;
+layout (location=0) in uint vertexIndex;
 
-out vec2 uv;
+out uint index;
 
 void main()
 {
-	uv=vertexData;
-	gl_Position=vec4(2*vertexData-1, 0.0, 1.0);
+	index=vertexIndex;
+	gl_Position=vec4(1);
 }

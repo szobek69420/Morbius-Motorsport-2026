@@ -241,8 +241,10 @@ section .rodata use32
 	name_glGetShaderiv db "glGetShaderiv",0
 	name_glGetString db "glGetString",0
 	name_glGetUniformLocation db "glGetUniformLocation",0
+	name_glLineWidth db "glLineWidth",0
 	name_glLinkProgram db "glLinkProgram",0
 	name_glPixelStorei db "glPixelStorei",0
+	name_glPointSize db "glPointSize",0
 	name_glReadPixels db "glReadPixels",0
 	name_glRenderbufferStorage db "glRenderbufferStorage",0
 	name_glShaderSource db "glShaderSource",0
@@ -334,8 +336,10 @@ section .bss use32
 	glFunc glGetShaderiv
 	glFunc glGetString
 	glFunc glGetUniformLocation
+	glFunc glLineWidth
 	glFunc glLinkProgram
 	glFunc glPixelStorei
+	glFunc glPointSize
 	glFunc glReadPixels
 	glFunc glRenderbufferStorage
 	glFunc glShaderSource
@@ -435,8 +439,10 @@ load_gl_functions:
 	load dword[ebp+8], glGetShaderiv
 	load dword[ebp+8], glGetString
 	load dword[ebp+8], glGetUniformLocation
+	load dword[ebp+8], glLineWidth
 	load dword[ebp+8], glLinkProgram
 	load dword[ebp+8], glPixelStorei
+	load dword[ebp+8], glPointSize
 	load dword[ebp+8], glReadPixels
 	load dword[ebp+8], glRenderbufferStorage
 	load dword[ebp+8], glShaderSource

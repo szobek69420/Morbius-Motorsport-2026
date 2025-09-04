@@ -169,6 +169,12 @@ section .text use32
 	;enable should be 0, if the blending should be disabled
 	global renderable_enableBlending	;void renderable_enableBlending(int enable)
 	
+	;it is a system state setting function
+	;void renderable_setPointSize(float size)
+	global renderable_setPointSize
+	;it is a system state setting function
+	;void renderable_setLineWidth(float width)
+	global renderable_setLineWidth
 	
 	global renderable_calculateNormalMatrix	;void* renderable_calculateNormalMatrix(mat3* buffer, mat4* model_or_viewModel_matrix)
 	
@@ -226,6 +232,9 @@ section .text use32
 	extern GL_SRC_ALPHA
 	extern GL_ONE_MINUS_SRC_ALPHA
 	extern glBlendFunc
+	
+	extern glPointSize
+	extern glLineWidth
 	
 	extern glGetError
 	
@@ -1438,6 +1447,30 @@ renderable_enableBlending:
 		call [glDisable]
 	
 	renderable_enableBlending_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+renderable_setPointSize:
+	push ebp
+	mov ebp, esp
+	
+	push dword[ebp+8]
+	call [glPointSize]
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+renderable_setLineWidth:
+	push ebp
+	mov ebp, esp
+	
+	push dword[ebp+8]
+	call [glLineWidth]
+	
 	mov esp, ebp
 	pop ebp
 	ret
