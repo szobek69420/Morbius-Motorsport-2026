@@ -46,6 +46,7 @@ section .text use32
 		mov dword[ebp-4], eax
 	
 		finit
+
 		
 		start_loop_start:
 			mov eax, dword[ebp-4]

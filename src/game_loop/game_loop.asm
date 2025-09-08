@@ -35,7 +35,7 @@ section .rodata use32
 	PRETTY_YELLOW dd 1.0, 0.85, 0.0, 1.0
 	BLACK dd 0.0, 0.0, 0.0, 1.0
 	
-	test_text db "OTTO VON BISMARCK",0
+	test_text db "OTTO VON BISMARCK",10,0
 	test_text2 db "hello everybody my name is welcome",10,0
 	print_int_nl db "%d",10,0
 	print_two_ints_nl db "%d %d",10,0
@@ -907,12 +907,10 @@ gameLoop_physics:
 		mulss xmm0, xmm1
 		movss dword[ebp-12], xmm0
 		
-		
 		;call physics_update
 		push dword[ebp-12]
 		call physics4d_update
 		add esp, 4
-		
 		
 		;update player
 		push dword[ebp-12]

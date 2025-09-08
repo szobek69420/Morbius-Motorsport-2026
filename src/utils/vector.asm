@@ -497,7 +497,7 @@ vector_remove:		;int vector_remove(vector*, <element> element)
 	
 	
 	xor esi, esi
-	mov edi, dword[eax+12]	;data* in edi 
+	mov edi, dword[eax+12]		;data* in edi 
 	mov ebx, dword[eax+8]		;element size in ebx
 	
 	mov eax, dword[ebp+20]
@@ -513,8 +513,8 @@ vector_remove:		;int vector_remove(vector*, <element> element)
 		add esp, 12
 		
 		;check if element is found
-		cmp eax, 0
-		jne _remove_compare_loop_continue
+		test eax, eax
+		jnz _remove_compare_loop_continue
 			mov dword[ebp-8], 69			;set return value
 		
 			push esi
@@ -550,20 +550,15 @@ vector_removeCustom:	;int vector_remove(vector*, int (*comparator)(element*, voi
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 4				;vector*			4
-	sub esp, 4				;return value		8
+	sub esp, 4				;return value		4
+	
+	mov dword[ebp-4], 0
 	
 	mov eax, dword[ebp+20]
-	mov dword[ebp-4], eax
-	
-	mov dword[ebp-8], 0
-	
-	
 	xor esi, esi
 	mov edi, dword[eax+12]		;data* in edi 
 	mov ebx, dword[eax+8]		;element size in ebx
 	
-	mov eax, dword[ebp+20]
 	cmp dword[eax], 0
 	jle vector_removeCustom_compare_loop_end		;is the vector empty?
 	vector_removeCustom_compare_loop_start:
@@ -574,9 +569,9 @@ vector_removeCustom:	;int vector_remove(vector*, int (*comparator)(element*, voi
 		add esp, 8
 		
 		;check if element is found
-		cmp eax, 0
-		jne vector_removeCustom_compare_loop_continue
-			mov dword[ebp-8], 69			;set return value
+		test eax, eax
+		jnz vector_removeCustom_compare_loop_continue
+			mov dword[ebp-4], 69			;set return value
 		
 			push esi
 			push dword[ebp+20]
@@ -594,7 +589,7 @@ vector_removeCustom:	;int vector_remove(vector*, int (*comparator)(element*, voi
 	vector_removeCustom_compare_loop_end:
 	
 	
-	mov eax, dword[ebp-8]
+	mov eax, dword[ebp-4]
 	
 	mov esp, ebp
 	pop ebp

@@ -16,6 +16,7 @@ section .rodata use32
 	
 	print_int_nl db "%d",10,0
 	test_text db "holodomorbius",10,0
+	test_text2 db "szigmasodfoku gyamhatosag",10,0
 	
 section .data use32
 	is_initialized dd 0
@@ -205,7 +206,6 @@ physics4d_update:
 		jnz physics4d_update_apply_velocity_loop_start
 	physics4d_update_apply_velocity_loop_end:
 	
-	
 	;check for collisions
 	mov esi, dword[registered_nonkinematic]		;index in esi
 	mov edi, registered_nonkinematic
@@ -256,10 +256,9 @@ physics4d_processPendingRegisterOperations:
 		lea eax, [ebp-12]
 		push eax
 		push register_operation_buffer
-		call tsQueue_isEmpty
+		call tsQueue_pop
 		test eax, eax
 		jnz physics4d_ppro_loop_end
-		call tsQueue_pop
 		add esp, 8
 	
 		push dword[ebp-12]			;collider* or collider group*

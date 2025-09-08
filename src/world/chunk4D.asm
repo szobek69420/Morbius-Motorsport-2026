@@ -211,9 +211,12 @@ chunk4d_destroy:
 	
 	;yeet cg
 	mov eax, dword[ebp+8]
-	push 69						;should destroy
-	push dword[eax+16]
-	call physics4d_unregisterColliderGroup
+	test dword[eax+16], 0xffffffff
+	jz chunk4d_destroy_no_collider_group
+		push 69						;should destroy
+		push dword[eax+16]
+		call physics4d_unregisterColliderGroup
+	chunk4d_destroy_no_collider_group:
 	
 	;dealloc chunk
 	push dword[ebp+8]

@@ -77,6 +77,7 @@ section .rodata use32
 	print_two_ints_nl db "%d %d",10,0
 	print_three_ints_nl db "%d %d %d",10,0
 	print_four_ints_nl db "%d %d %d %d",10,0
+	print_five_ints_nl db "%d %d %d %d %d",10,0
 	print_float_nl db "%f",10,0
 	print_four_floats_nl db "%f %f %f %f",10,0
 
@@ -182,6 +183,7 @@ section .text use32
 	extern hyperPlane_create
 	extern hyperPlane_getNormal
 	extern hyperPlane_directionTo3d
+	extern hyperPlane_positionTo4d
 	
 	extern chunk4d_generate
 	extern chunk4d_destroy
@@ -531,7 +533,7 @@ chunkManager4d_render:
 		push 69					;use textures
 		mov ecx, dword[ebp-8]
 		push dword[ecx+200]		;shader
-		push dword[ebp-12]		;pv
+		push dword[ebp-12]			;pv
 		push dword[eax+12]
 		call renderable_renderCustom
 		add esp, 16
@@ -1258,61 +1260,15 @@ chunkManager4d_getPlayerChunk:
 	mov ebp, esp
 	
 	sub esp, 16				;player pos 4d				16
-	sub esp, 16				;helper vec4				32
-	
-	mov eax, dword[ebp+8]
 	
 	;calculate player pos 4d
-	mov ecx, dword[eax+100]
-	mov dword[ebp-16], ecx
-	mov ecx, dword[eax+104]
-	mov dword[ebp-12], ecx
-	mov ecx, dword[eax+108]
-	mov dword[ebp-8], ecx
-	mov ecx, dword[eax+112]
-	mov dword[ebp-4], ecx
-	
 	mov eax, dword[ebp+8]
-	mov ecx, dword[ebp+12]
-	push dword[ecx]
-	lea ecx, [eax+116]		;cm.hyperplane.dir1
-	push ecx
-	lea ecx, [ebp-32]
-	push ecx
-	call vec4_scale
+	add eax, 100
 	lea ecx, [ebp-16]
 	push ecx
-	push ecx
-	call vec4_add
-	add esp, 20
-	
-	mov eax, dword[ebp+8]
-	mov ecx, dword[ebp+12]
-	push dword[ecx+4]
-	lea ecx, [eax+132]		;cm.hyperplane.dir2
-	push ecx
-	lea ecx, [ebp-32]
-	push ecx
-	call vec4_scale
-	lea ecx, [ebp-16]
-	push ecx
-	push ecx
-	call vec4_add
-	add esp, 20
-	
-	mov eax, dword[ebp+8]
-	mov ecx, dword[ebp+12]
-	push dword[ecx+8]
-	lea ecx, [eax+148]		;cm.hyperplane.dir3
-	push ecx
-	lea ecx, [ebp-32]
-	push ecx
-	call vec4_scale
-	lea ecx, [ebp-16]
-	push ecx
-	push ecx
-	call vec4_add
-	add esp, 20
+	push dword[ebp+12]
+	push eax
+	call hyperPlane_positionTo4d
 	
 	;calculate the player chunk
 	mov eax, dword[ebp+16]
@@ -1335,7 +1291,6 @@ chunkManager4d_getPlayerChunk:
 	mov ecx, dword[eax]
 	sar ecx, 4
 	mov dword[eax], ecx
-	
 	
 	mov esp, ebp
 	pop ebp
@@ -1578,7 +1533,7 @@ chunkManager4d_loadChunk_internal:
 		call tsVector_pushBack
 	
 	chunkManager4d_loadChunk_internal_graphics_update_done:
-
+	
 	
 	chunkManager4d_loadChunk_internal_end:
 	mov eax, dword[ebp-4]
@@ -1632,6 +1587,9 @@ chunkManager4d_unloadChunk_internal:
 	mov ebp, esp
 	
 	sub esp, 4			;chunk renderable		4
+	sub esp, 4			;removals				8
+	
+	mov dword[ebp-8], 0
 	
 	;remove the chunk from the graphics update queue or the loaded chunks vector
 	push dword[ebp+24]
@@ -1645,17 +1603,13 @@ chunkManager4d_unloadChunk_internal:
 	push dword[ebp+20]
 	call tsVector_remove
 	
-	;yeet the unprocessed chunk graphics data if necessary
-	mov eax, dword[ebp+24]
-	push dword[eax+52]
-	call my_free
-	
 	;get the renderable
 	mov eax, dword[ebp+24]
-	mov eax, dword[eax+12]
-	mov dword[ebp-4], eax
+	mov ecx, dword[eax+12]
+	mov dword[ebp-4], ecx
+	mov dword[eax+12], 0
 	
-	;unload the chunk
+	;unload the chunk (also yeets the unprocessed graphics data if necessary)
 	push dword[ebp+24]
 	call chunk4d_destroy
 	
@@ -1988,7 +1942,7 @@ chunkManager4d_pushGraphicsUnloadUpdate_internal:
 	
 	sub esp, 12		;update buffer		12
 	
-	mov dword[ebp-12], 69	;load update
+	mov dword[ebp-12], 0	;unload update
 	mov eax, dword[ebp+12]
 	mov dword[ebp-8], eax	;renderable
 	mov ecx, dword[ebp+16]
