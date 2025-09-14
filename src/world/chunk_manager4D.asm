@@ -87,6 +87,9 @@ section .text use32
 	
 	global chunkManager4d_load						;void chunkManager4d_load(ChunkManager4D* manager, vec3* playerPos3D, int renderDistance)
 	global chunkManager4d_unload					;void chunkManager4d_unload(ChunkManager4D* manager, vec3* playerPos3D, int renderDistance)
+	;returns the number of reloaded chunks
+	;int chunkManager4d_processPendingChunkReloads(ChunkManager4D* cm, int maxReloads)
+	global chunkManager4d_processPendingChunkReloads
 	
 	global chunkManager4d_render					;void chunkManager4d_render(ChunkManager4D* manager, mat4* view, mat4* projection)
 	
@@ -132,11 +135,18 @@ section .text use32
 	extern tsVector_pushBack
 	extern tsVector_remove
 	extern tsVector_removeCustom
+	extern tsVector_at
 	extern tsVector_search
 	extern tsVector_forEach
 	extern tsVector_size
+	extern tsVector_lock
+	extern tsVector_unlock
 	
 	extern queue_init
+	extern queue_pushBuffer
+	extern queue_pop
+	extern queue_isEmpty
+	extern queue_search
 	extern tsQueue_init
 	extern tsQueue_push
 	extern tsQueue_pushFront
@@ -187,6 +197,8 @@ section .text use32
 	
 	extern chunk4d_generate
 	extern chunk4d_destroy
+	extern chunk4d_isProcessed
+	extern chunk4d_setProcessed
 	extern CHUNK_WIDTH
 	extern block_importTextures
 	
@@ -669,7 +681,7 @@ chunkManager4d_load:
 					push dword[ebp-36]
 					push dword[ebp-40]
 					push dword[ebp+20]
-					call chunkManager4d_isChunkLoaded
+					call chunkManager4d_getLoadedChunk
 					add esp, 16
 					test eax, eax
 					jnz chunkManager4d_load_w_loop_continue
@@ -837,12 +849,57 @@ chunkManager4d_unload:
 		pop ebp
 		ret
 	
+chunkManager4d_processPendingChunkReloads:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;reloaded chunk count		4
+	sub esp, 12			;chunk to reload			16
+	
+	mov dword[ebp-4], 0
+	
+	chunkManager4d_processPendingChunkReloads_loop_start:
+		;is maxReloadCount reached?
+		mov eax, dword[ebp-4]
+		cmp eax, dword[ebp+12]
+		jge chunkManager4d_processPendingChunkReloads_loop_end
+		
+		;are there more pending reloads?
+		mov eax, dword[ebp+8]
+		add eax, 52
+		lea ecx, [ebp-16]
+		push ecx
+		push eax
+		call queue_pop
+		add esp, 8
+		test eax, eax
+		jnz chunkManager4d_processPendingChunkReloads_loop_end
+		
+		push dword[ebp-8]
+		push dword[ebp-12]
+		push dword[ebp-16]
+		push dword[ebp+8]
+		call chunkManager4d_reloadChunkByPosition_internal
+		add esp, 16
+		
+		inc dword[ebp-4]
+		
+		jmp chunkManager4d_processPendingChunkReloads_loop_start
+		
+	chunkManager4d_processPendingChunkReloads_loop_end:
+	mov eax, dword[ebp-4]			;set return value
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
 chunkManager4d_processGraphicsUpdate:
 	push ebp
 	mov ebp, esp
 	
 	sub esp, 12			;graphics update buffer			12
-	sub esp, 4			;has processed updates			4
+	sub esp, 4			;has processed updates			16
 	sub esp, 16			;imitated vertex vector			32
 	sub esp, 4			;created renderable				36
 	
@@ -856,7 +913,15 @@ chunkManager4d_processGraphicsUpdate:
 	jnz chunkManager4d_processGraphicsUpdate_end		;problem
 	
 	test dword[ebp-8], 0xffffffff
+	jnz sugus3
+		push test_text
+		call my_printf
+		xor eax, eax
+		mov esp, ebp
+		pop ebp
+		ret
 	jz chunkManager4d_processGraphicsUpdate_end			;ignored update
+	sugus3:
 		mov dword[ebp-16], 69
 	
 	test dword[ebp-12], 0xffffffff
@@ -896,10 +961,10 @@ chunkManager4d_processGraphicsUpdate:
 		mov eax, dword[ebp-8]
 		mov dword[eax+12], ecx
 		
-		;add chunk to the loaded chunks vector
+		;set chunk as processed (no need for lock)
+		push 69
 		push dword[ebp-8]
-		push dword[ebp+8]
-		call tsVector_pushBack
+		call chunk4d_setProcessed
 		
 		jmp chunkManager4d_processGraphicsUpdate_end
 	
@@ -1056,10 +1121,16 @@ chunkManager4d_processChangedBlocks:
 	sub esp, 36			;pending changed block buffer	52
 	sub esp, 4			;vector<ChangedBlock>*			56
 	sub esp, 12			;ivec3 previousChunkPos			68
+	sub esp, 16			;vector<ivec3> changedChunks	84
 
-	;init vector
+	;init vectors
 	push 36
 	lea eax, [ebp-16]
+	push eax
+	call vector_init
+	
+	push 12
+	lea eax, [ebp-84]
 	push eax
 	call vector_init
 	
@@ -1187,13 +1258,49 @@ chunkManager4d_processChangedBlocks:
 				jne chunkManager4d_processChangedBlocks_register_inner_loop_end
 					jmp chunkManager4d_processChangedBlocks_register_inner_loop_start
 			chunkManager4d_processChangedBlocks_register_inner_loop_end:
+			
+			;add the chunk to the changed chunks viktor
+			lea eax, [esi-32]
+			push eax				;chunk pos
+			lea ecx, [ebp-84]
+			push ecx
+			call vector_push_back_buffer
+			add esp, 8
 	
 			cmp edi, 0
 			jg chunkManager4d_processChangedBlocks_register_outer_loop_start
 			
 	chunkManager4d_processChangedBlocks_end:
-	;delete vector
+	
+	;push reload updates for the changed chunks
+	mov esi, dword[ebp-72]		;current chunk pos in esi
+	mov edi, dword[ebp-84]		;index in edi
+	cmp edi, 0
+	jle	chunkManager4d_processChangedBlocks_reload_loop_end
+	chunkManager4d_processChangedBlocks_reload_loop_start:
+		;push esi
+		;push dword[ebp+20]
+		;call chunkManager4d_registerChunkReloadUpdate_internal
+		;add esp, 8
+	
+		push dword[esi+8]
+		push dword[esi+4]
+		push dword[esi]
+		push dword[ebp+20]
+		;call chunkManager4d_reloadChunkByPosition_internal
+		add esp, 16
+		
+		add esi, 12
+		dec edi
+		jnz chunkManager4d_processChangedBlocks_reload_loop_start
+	chunkManager4d_processChangedBlocks_reload_loop_end:
+	
+	;delete the viktors
 	lea eax, [ebp-16]
+	push eax
+	call vector_destroy
+	
+	lea eax, [ebp-84]
 	push eax
 	call vector_destroy
 	
@@ -1299,6 +1406,52 @@ chunkManager4d_getPlayerChunk:
 	
 ;internal functinos
 
+;void chunkManager4d_registerChunkReloadUpdate_internal(ChunkManager4D*, ivec3* chunkPos)
+chunkManager4d_registerChunkReloadUpdate_internal:
+	push ebp
+	mov ebp, esp
+	
+	;is the chunk already scheduled for reload?
+	push dword[ebp+12]
+	push chunkManager4d_registerChunkReloadUpdate_internal_search_comparator
+	mov eax, dword[ebp+8]
+	add eax, 52
+	push eax
+	call queue_search
+	cmp eax, -1
+	jne chunkManager4d_registerChunkReloadUpdate_internal_end
+		;register update
+		push dword[ebp+12]
+		mov eax, dword[ebp+8]
+		add eax, 52
+		push eax
+		call queue_pushBuffer
+	
+	chunkManager4d_registerChunkReloadUpdate_internal_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	;int chunkManager4d_registerChunkReloadUpdate_internal_search_comparator(ivec3*, ivec3*)
+	chunkManager4d_registerChunkReloadUpdate_internal_search_comparator:
+		push ebp
+		
+		xor ebp, ebp
+		mov eax, dword[esp+8]
+		mov ecx, dword[esp+12]
+		
+		mov edx, dword[eax]
+		sub edx, dword[ecx]
+		mov ebp, edx
+		mov edx, dword[eax+4]
+		sub edx, dword[ecx+4]
+		or ebp, edx
+		mov edx, dword[eax+8]
+		sub edx, dword[ecx+8]
+		or ebp, edx
+		
+		mov eax, ebp
+		pop ebp
+		ret
 
 ;if there is a hyperplane in the hyperplane buffer, the render hyperplane gets overriden by it
 ;void chunkManager4d_applyHyperPlane_internal(ChunkManager4D*)
@@ -1371,15 +1524,6 @@ chunkManager4d_loadChunk_internal:
 	
 	mov dword[ebp-4], 0
 	mov dword[ebp-8], 0
-	
-	;check if the chunk is already loaded
-	push dword[ebp+32]
-	push dword[ebp+28]
-	push dword[ebp+24]
-	push dword[ebp+20]
-	call chunkManager4d_isChunkLoaded
-	test eax, eax
-	jnz chunkManager4d_loadChunk_internal_end
 	
 	;get the changed blocks vector
 	mov eax, dword[ebp+20]
@@ -1514,7 +1658,16 @@ chunkManager4d_loadChunk_internal:
 	mov eax, dword[ebp-4]
 	test dword[eax+52], 0xffffffff
 	jz chunkManager4d_loadChunk_internal_graphics_update_no_update
-		;there is a graphics update
+		;there is graphics data, push graphics update and put the chunk into the loaded chunks vector as unprocessed
+		push 0
+		push dword[ebp-4]
+		call chunk4d_setProcessed
+		
+		push dword[ebp-4]
+		mov ecx, dword[ebp+20]
+		push ecx
+		call tsVector_pushBack
+		
 		push 0
 		push dword[ebp-4]
 		push 69
@@ -1526,7 +1679,11 @@ chunkManager4d_loadChunk_internal:
 		jmp chunkManager4d_loadChunk_internal_graphics_update_done
 	
 	chunkManager4d_loadChunk_internal_graphics_update_no_update:
-		;there is no graphics update, straight into the loaded chunks
+		;there is no graphics update, straight into the loaded chunks as processed
+		push 69
+		push dword[ebp-4]
+		call chunk4d_setProcessed
+		
 		push dword[ebp-4]
 		mov ecx, dword[ebp+20]
 		push ecx
@@ -1574,7 +1731,8 @@ chunkManager4d_loadChunk_internal:
 ;unregisters and destroys a chunk
 ;if nullableOutRenderable == NULL, a graphics unload update is pushed onto the graphics update queue (if there was a renderable)
 ;otherwise the renderable (or NULL if no renderable) is written into the location pointed by nullableOutRenderable
-;void chunkManager4d_unloadChunk_internal(
+;returns 0 if there were no problems during the unload
+;int chunkManager4d_unloadChunk_internal(
 ;	ChunkManager4D* cm,
 ;	Chunk4D* chunk,
 ;	Renderable** nullableOutRenderable
@@ -1586,18 +1744,35 @@ chunkManager4d_unloadChunk_internal:
 	push ebx
 	mov ebp, esp
 	
-	sub esp, 4			;chunk renderable		4
-	sub esp, 4			;removals				8
+	sub esp, 4			;chunk renderable				4
+	sub esp, 4			;removed from graphics queue	8
+	sub esp, 4			;chunk (helper)					12
+	sub esp, 16			;return value					16
 	
 	mov dword[ebp-8], 0
+	mov eax, dword[ebp+24]
+	mov dword[ebp-12], eax
+	mov dword[ebp-16], 0
 	
 	;remove the chunk from the graphics update queue or the loaded chunks vector
-	push dword[ebp+24]
+	lea ecx, [ebp-12]
+	push ecx
 	push chunkManager4d_unloadChunk_internal_remove_from_graphics_queue_lambda
 	mov eax, dword[ebp+20]
 	add eax, 36
 	push eax
 	call tsQueue_forEach
+	test dword[ebp-8], 0xffffffff
+	jnz chunkManager4d_unloadChunk_internal_graphics_update_removed
+		;if the chunk is not processed, but no graphics update is removed, that means that the chunk's graphics data is currently being loaded
+		push dword[ebp+24]
+		call chunk4d_isProcessed
+		test eax, eax
+		jnz chunkManager4d_unloadChunk_internal_graphics_update_removed
+			;problem, abort unload
+			mov dword[ebp-16], 69
+			jmp chunkManager4d_unloadChunk_internal_end
+	chunkManager4d_unloadChunk_internal_graphics_update_removed:
 	
 	push dword[ebp+24]
 	push dword[ebp+20]
@@ -1633,21 +1808,28 @@ chunkManager4d_unloadChunk_internal:
 		
 	chunkManager4d_unloadChunk_internal_renderable_done:
 	
+	chunkManager4d_unloadChunk_internal_end:
+	mov eax, dword[ebp-16]		;set return vale
+	
 	mov esp, ebp
 	pop ebx
 	pop edi
 	pop esi
 	pop ebp
 	ret
-	;void chunkManager4d_unloadChunk_internal_remove_from_graphics_queue_lambda(GraphicsUpdate*, Chunk4D*)
+	;void chunkManager4d_unloadChunk_internal_remove_from_graphics_queue_lambda(GraphicsUpdate*, struct{Chunk4D*, int removalTookPlace}*)
 	chunkManager4d_unloadChunk_internal_remove_from_graphics_queue_lambda:
 		mov eax, dword[esp+4]
 		test dword[eax], 0xffffffff
 		jz chunkManager4d_unloadChunk_internal_remove_from_graphics_queue_lambda_end	;not load update
 		mov ecx, dword[esp+8]
+		mov ecx, dword[ecx]
 		cmp ecx, dword[eax+4]
 		jne chunkManager4d_unloadChunk_internal_remove_from_graphics_queue_lambda_end
-			mov dword[eax+4], 0
+			mov dword[eax+4], 0		;update shall be ignored
+			
+			mov ecx, dword[esp+8]
+			mov dword[ecx+4], 69		;removal happened
 		chunkManager4d_unloadChunk_internal_remove_from_graphics_queue_lambda_end:
 		ret
 
@@ -1666,6 +1848,7 @@ chunkManager4d_reloadChunkByPosition_internal:
 	sub esp, 4			;chunk				4
 	sub esp, 12			;chunkPos			16
 	sub esp, 4			;renderable buffer	20
+	sub esp, 4			;debug helper		24
 	
 	mov dword[ebp-4], 0
 	
@@ -1676,32 +1859,36 @@ chunkManager4d_reloadChunkByPosition_internal:
 	mov edx, dword[ebp+32]
 	mov dword[ebp-8], edx
 	
+	mov dword[ebp-20], 0
+	mov dword[ebp-24], 0
+	
+	
 	;remove the chunk from the graphics update queue
 	lea eax, [ebp-16]
 	mov ecx, dword[ebp+20]
 	add ecx, 36
 	push eax
-	push chunkManager4d_removeChunkByPosition_removeAndSaveFromGraphicsUpdateQueue
+	push chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromGraphicsUpdateQueue
 	push ecx
 	call tsQueue_forEach
 	test dword[ebp-4], 0xffffffff
 	jnz chunkManager4d_reloadChunkByPosition_internal_removal_successful
-	
-		;remove the chunk from the loaded chunks vector
-		lea eax, [ebp-16]
-		mov ecx, dword[ebp+20]
-		push eax
-		push chunkManager4d_removeChunkByPosition_removeAndSaveFromLoadedChunks
-		push ecx
-		call tsVector_removeCustom
-		test dword[ebp-4], 0xffffffff
-		jnz chunkManager4d_reloadChunkByPosition_internal_removal_successful
+	mov dword[ebp-24], 69
+	;remove the chunk from the loaded chunks vector
+	lea eax, [ebp-16]
+	push eax
+	push chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromLoadedChunks
+	push dword[ebp+20]
+	call tsVector_removeCustom
+	test dword[ebp-4], 0xffffffff
+	jnz chunkManager4d_reloadChunkByPosition_internal_removal_successful 
+		;chunk is not loaded, abort
+		jmp chunkManager4d_reloadChunkByPosition_internal_end
 		
-			;chunk is not loaded, abort
-			jmp chunkManager4d_reloadChunkByPosition_internal_end
-	
 	chunkManager4d_reloadChunkByPosition_internal_removal_successful:
 	
+	test dword[ebp-24], 0xffffffff
+	jz chunkManager4d_reloadChunkByPosition_internal_end
 	;unload chunk
 	lea eax, [ebp-20]
 	push eax
@@ -1716,9 +1903,21 @@ chunkManager4d_reloadChunkByPosition_internal:
 	push dword[ebp+20]
 	call chunkManager4d_loadChunk_internal
 	
+	
 	;create fantom update if necessary
 	test dword[ebp-20], 0xffffffff
 	jz chunkManager4d_reloadChunkByPosition_internal_no_fantom
+		;push fantom chunk
+		push dword[ebp+32]
+		push dword[ebp+28]
+		push dword[ebp+24]
+		push dword[ebp-20]
+		mov ecx, dword[ebp+20]
+		add ecx, 28
+		push ecx
+		call tsVector_pushBack
+	
+		;create unload update
 		push 69
 		push dword[ebp-20]
 		push dword[ebp+20]
@@ -1727,21 +1926,22 @@ chunkManager4d_reloadChunkByPosition_internal:
 	chunkManager4d_reloadChunkByPosition_internal_no_fantom:
 	
 	chunkManager4d_reloadChunkByPosition_internal_end:
+	
 	mov esp, ebp
 	pop ebx
 	pop edi
 	pop esi
 	pop ebp
 	ret
-	;void chunkManager4d_removeChunkByPosition_removeAndSaveFromGraphicsUpdateQueue(GraphicsUpdate*, struct{ivec3 pos, Chunk4D* buffer}*)
-	chunkManager4d_removeChunkByPosition_removeAndSaveFromGraphicsUpdateQueue:
+	;void chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromGraphicsUpdateQueue(GraphicsUpdate*, struct{ivec3 pos, Chunk4D* buffer}*)
+	chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromGraphicsUpdateQueue:
 		push ebp
 		push ebx
 		mov ebp, esp
 		
 		mov eax, dword[ebp+12]
 		test dword[eax], 0xffffffff
-		jz chunkManager4d_removeChunkByPosition_removeAndSaveFromGraphicsUpdateQueue_end	;not load update
+		jz chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromGraphicsUpdateQueue_end	;not load update
 		
 		xor ebx, ebx
 		mov eax, dword[eax+4]
@@ -1757,20 +1957,20 @@ chunkManager4d_reloadChunkByPosition_internal:
 		sub edx, dword[ecx+8]
 		or ebx, edx
 		test ebx, ebx
-		jnz chunkManager4d_removeChunkByPosition_removeAndSaveFromGraphicsUpdateQueue_end	;not same chunk
+		jnz chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromGraphicsUpdateQueue_end	;not same chunk
 			;chunk found
 			mov dword[ecx+12], eax		;save chunk
 			
 			mov eax, dword[ebp+12]
-			mov dword[eax+4], 0			;ignore update
+			mov dword[eax+4], 0
 		
-		chunkManager4d_removeChunkByPosition_removeAndSaveFromGraphicsUpdateQueue_end:
+		chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromGraphicsUpdateQueue_end:
 		mov esp, ebp
 		pop ebx
 		pop ebp
 		ret
-	;void chunkManager4d_removeChunkByPosition_removeAndSaveFromLoadedChunks(Chunk4D**, struct{ivec3 pos, Chunk4D* buffer}*)
-	chunkManager4d_removeChunkByPosition_removeAndSaveFromLoadedChunks:
+	;void chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromLoadedChunks(Chunk4D**, struct{ivec3 pos, Chunk4D* buffer}*)
+	chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromLoadedChunks:
 		push ebp
 		push ebx
 		mov ebp, esp
@@ -1793,95 +1993,60 @@ chunkManager4d_reloadChunkByPosition_internal:
 		sub edx, dword[ecx+8]
 		or ebx, edx
 		test ebx, ebx
-		jnz chunkManager4d_removeChunkByPosition_removeAndSaveFromLoadedChunks_end	;not same chunk
+		jnz chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromLoadedChunks_end	;not same chunk
 			;chunk found
 			mov dword[ecx+12], eax		;save chunk
 			mov dword[ebp-4], 0
-		chunkManager4d_removeChunkByPosition_removeAndSaveFromLoadedChunks_end:
+		chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromLoadedChunks_end:
 		mov eax, dword[ebp-4]			;set return value
 		mov esp, ebp
 		pop ebx
 		pop ebp
 		ret
 
-;returns true if the chunk is either in the loaded chunks vector or in the pending graphics updates queue (as a load update)
-;int chunkManager4d_isChunkLoaded(ChunkManager4D* cm, ivec3 chunkPos)
-chunkManager4d_isChunkLoaded:
+;returns the first (and hopefully only) occurence of the chunk with matching position in the loaded chunks vector
+;returns NULL on gebasz
+;Chunk4D* chunkManager4d_getLoadedChunk(ChunkManager4D* cm, ivec3 chunkPos)
+chunkManager4d_getLoadedChunk:
 	push ebp
 	mov ebp, esp
 	
-	;check for the pending graphics updates
-	mov eax, dword[ebp+8]
-	add eax, 36
-	lea ecx, [ebp+12]
-	push ecx
-	push chunkManager4d_isChunkLoaded_graphics_update_comparator
-	push eax
-	call tsQueue_search
+	sub esp, 4		;return value			4
+	mov dword[ebp-4], 0
 	
-	mov ecx, eax
-	mov eax, 69
-	cmp ecx, -1
-	jne chunkManager4d_isChunkLoaded_end
-	
+	;lock the viktor
+	push dword[ebp+8]
+	call tsVector_lock
 	
 	;check for the loaded chunks
 	mov eax, dword[ebp+8]
 	lea ecx, [ebp+12]
 	push ecx
-	push chunkManager4d_isChunkLoaded_loaded_chunks_comparator
+	push chunkManager4d_getLoadedChunk_loaded_chunks_comparator
 	push eax
 	call tsVector_search
+	cmp eax, -1
+	je chunkManager4d_getLoadedChunk_end
+		;retrieve chunk
+		push eax
+		push dword[ebp+8]
+		call tsVector_at
+		mov eax, dword[eax]
+		mov dword[ebp-4], eax
 	
-	mov ecx, eax
-	mov eax, 69
-	cmp ecx, -1
-	jne chunkManager4d_isChunkLoaded_end
+	chunkManager4d_getLoadedChunk_end:	
 	
+	;unlock the viktor
+	push dword[ebp+8]
+	call tsVector_unlock
 	
-	xor eax, eax
+	mov eax, dword[ebp-4]	;set return value
 	
-	chunkManager4d_isChunkLoaded_end:	
 	mov esp, ebp
 	pop ebp
 	ret
-	;int chunkManager4d_isChunkLoaded_graphics_update_comparator(GraphicsUpdate* gu, ivec3* chunkPos)
-	chunkManager4d_isChunkLoaded_graphics_update_comparator:
-		push ebp
-		mov ebp, esp
-		
-		sub esp, 4			;return value	4
-		
-		mov dword[ebp-4], 69
-		
-		mov eax, dword[ebp+8]
-		test dword[eax], 0xffffffff
-		jz chunkManager4d_isChunkLoaded_graphics_update_comparator_end		;not load update
-		test dword[eax+4], 0xffffffff
-		jz chunkManager4d_isChunkLoaded_graphics_update_comparator_end		;ignorable update
-		mov eax, dword[eax+4]
-		mov ecx, dword[ebp+12]
-		
-		mov edx, dword[eax]
-		cmp edx, dword[ecx]
-		jne chunkManager4d_isChunkLoaded_graphics_update_comparator_end
-		mov edx, dword[eax+4]
-		cmp edx, dword[ecx+4]
-		jne chunkManager4d_isChunkLoaded_graphics_update_comparator_end
-		mov edx, dword[eax+8]
-		cmp edx, dword[ecx+8]
-		jne chunkManager4d_isChunkLoaded_graphics_update_comparator_end
-		
-		mov dword[ebp-4], 0
-		
-		chunkManager4d_isChunkLoaded_graphics_update_comparator_end:
-		mov eax, dword[ebp-4]
-		
-		mov esp, ebp
-		pop ebp
-		ret
-	;int chunkManager4d_isChunkLoaded_loaded_chunks_comparator(Chunk4D** gu, ivec3* chunkPos)
-	chunkManager4d_isChunkLoaded_loaded_chunks_comparator:
+	;int chunkManager4d_getLoadedChunk_loaded_chunks_comparator(Chunk4D** gu, ivec3* chunkPos)
+	chunkManager4d_getLoadedChunk_loaded_chunks_comparator:
 		push ebp
 		mov ebp, esp
 		
@@ -1894,23 +2059,22 @@ chunkManager4d_isChunkLoaded:
 		
 		mov edx, dword[eax]
 		cmp edx, dword[ecx]
-		jne chunkManager4d_isChunkLoaded_loaded_chunks_comparator_end
+		jne chunkManager4d_getLoadedChunk_loaded_chunks_comparator_end
 		mov edx, dword[eax+4]
 		cmp edx, dword[ecx+4]
-		jne chunkManager4d_isChunkLoaded_loaded_chunks_comparator_end
+		jne chunkManager4d_getLoadedChunk_loaded_chunks_comparator_end
 		mov edx, dword[eax+8]
 		cmp edx, dword[ecx+8]
-		jne chunkManager4d_isChunkLoaded_loaded_chunks_comparator_end
+		jne chunkManager4d_getLoadedChunk_loaded_chunks_comparator_end
 		
 		mov dword[ebp-4], 0
 		
-		chunkManager4d_isChunkLoaded_loaded_chunks_comparator_end:
+		chunkManager4d_getLoadedChunk_loaded_chunks_comparator_end:
 		mov eax, dword[ebp-4]
 		
 		mov esp, ebp
 		pop ebp
 		ret
-		
 		
 ;void chunkManager4d_pushGraphicsLoadUpdate_internal(ChunkManager4D* cm, Chunk4D* chunk)
 chunkManager4d_pushGraphicsLoadUpdate_internal:

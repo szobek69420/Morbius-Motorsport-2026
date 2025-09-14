@@ -326,6 +326,7 @@ section .text use32
 	extern chunkManager4d_processUpdate
 	extern chunkManager4d_processGraphicsUpdate
 	extern chunkManager4d_processChangedBlocks
+	extern chunkManager4d_processPendingChunkReloads
 	extern chunkManager4d_render
 	extern chunkManager4d_getHyperPlane
 	
@@ -363,12 +364,15 @@ section .text use32
 	
 gameLoop_main:
 	push ebp
+	push esi
+	push edi
+	push ebx
 	mov ebp, esp
 	
 	sub esp, 4		;return value helper		4
 	
 	;save pwindow
-	mov eax, dword[ebp+8]
+	mov eax, dword[ebp+20]
 	mov dword[current_window], eax
 	
 	;init return_value
@@ -465,7 +469,7 @@ gameLoop_main:
 	
 	;audio things
 	push music_path
-	call audio_loadSound
+	;call audio_loadSound
 	add esp, 4
 	
 	push 100000000
@@ -534,9 +538,17 @@ gameLoop_main:
 		call uiElement_processInput
 		
 		;process a chunk graphics update 4d
-		push dword[chunk_manager_4d]
-		call chunkManager4d_processGraphicsUpdate
-		add esp, 4
+		mov ebx, 5
+		gameLoop_main_graphics_update_loop_start:
+			push dword[chunk_manager_4d]
+			call chunkManager4d_processGraphicsUpdate
+			add esp, 4
+			
+			dec ebx
+			jz gameLoop_main_graphics_update_loop_end
+			test eax, eax
+			jnz gameLoop_main_graphics_update_loop_start
+		gameLoop_main_graphics_update_loop_end:
 		
 		;update time of day
 		movss xmm0, dword[delta_time_seconds]
@@ -863,6 +875,9 @@ gameLoop_main:
 	mov eax, dword[ebp-4]
 	
 	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
 	pop ebp
 	ret
 	
@@ -970,6 +985,10 @@ gameLoop_chunkLoader:
 			call chunkManager4d_unload
 			add esp, 12
 			
+			push 5
+			push dword[chunk_manager_4d]
+			call chunkManager4d_processPendingChunkReloads
+			add esp, 8
 			
 			;set the displayed delta time
 			call [GetTickCount]

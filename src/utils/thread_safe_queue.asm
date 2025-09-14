@@ -511,8 +511,6 @@ tsQueue_forEach:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 4					;return value
-	
 	;lock
 	push dword[ebp+8]
 	call tsQueue_lock
@@ -528,9 +526,6 @@ tsQueue_forEach:
 	;unlock
 	push dword[ebp+8]
 	call tsQueue_unlock
-	
-	;set return value
-	mov eax, dword[ebp-4]
 	
 	mov esp, ebp
 	pop ebp

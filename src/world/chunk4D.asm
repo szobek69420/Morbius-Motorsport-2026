@@ -8,7 +8,7 @@
 ;	ColliderGroup4D* cg;						;16
 ;	vec4 lowerBound, upperBound;				;20
 ;	void* vertices, int vertexFloatCount		;52			;temporary, deleted as soon as the renderable is constructed
-;	int chunkAlreadyProcessed;					;60			;it is an indicator for the chunkManager_unload if the chunk can be unloaded
+;	int chunkAlreadyProcessed;					;60			;is the chunk in its final state (in practice; is there a graphics load update waiting for the chunk)
 ;}		64 bytes overall
 
 SIDE_POS_X equ 0x00000000
@@ -64,6 +64,9 @@ section .text use32
 	global chunk4d_generate			;Chunk4D* chunk4d_generate(int chunkX, int chunkZ, int chunkW, const vector<ChangedBlock>* nullableChangedBlocks, vector<ChangedBlock>* firstGenChangedBlocks)
 	;the renderable is destroyed by the chunk manager
 	global chunk4d_destroy			;void chunk4d_destroy(Chunk4D* chunk)
+	
+	global chunk4d_isProcessed		;int chunkd4d_isProcessed(Chunk4D* chunk)
+	global chunk4d_setProcessed		;void chunk4d_setProcessed(Chunk4D*, int isProcessed)
 	
 	;converts a 4d position into a block position
 	;ivec3/ivec4 is just 3/4 ints
@@ -1014,6 +1017,18 @@ chunk4d_generate:
 	pop esi
 	pop ebx
 	pop ebp
+	ret
+	
+	
+chunk4d_isProcessed:
+	mov eax, dword[esp+4]
+	mov eax, dword[eax+60]
+	ret
+	
+chunk4d_setProcessed:
+	mov eax, dword[esp+4]
+	mov ecx, dword[esp+8]
+	mov dword[eax+60], ecx
 	ret
 	
 	
