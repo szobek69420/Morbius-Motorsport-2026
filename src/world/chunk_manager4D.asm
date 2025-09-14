@@ -913,15 +913,7 @@ chunkManager4d_processGraphicsUpdate:
 	jnz chunkManager4d_processGraphicsUpdate_end		;problem
 	
 	test dword[ebp-8], 0xffffffff
-	jnz sugus3
-		push test_text
-		call my_printf
-		xor eax, eax
-		mov esp, ebp
-		pop ebp
-		ret
 	jz chunkManager4d_processGraphicsUpdate_end			;ignored update
-	sugus3:
 		mov dword[ebp-16], 69
 	
 	test dword[ebp-12], 0xffffffff
@@ -1287,7 +1279,7 @@ chunkManager4d_processChangedBlocks:
 		push dword[esi+4]
 		push dword[esi]
 		push dword[ebp+20]
-		;call chunkManager4d_reloadChunkByPosition_internal
+		call chunkManager4d_reloadChunkByPosition_internal
 		add esp, 16
 		
 		add esi, 12
@@ -1747,7 +1739,7 @@ chunkManager4d_unloadChunk_internal:
 	sub esp, 4			;chunk renderable				4
 	sub esp, 4			;removed from graphics queue	8
 	sub esp, 4			;chunk (helper)					12
-	sub esp, 16			;return value					16
+	sub esp, 4			;return value					16
 	
 	mov dword[ebp-8], 0
 	mov eax, dword[ebp+24]
@@ -1846,55 +1838,31 @@ chunkManager4d_reloadChunkByPosition_internal:
 	mov ebp, esp
 	
 	sub esp, 4			;chunk				4
-	sub esp, 12			;chunkPos			16
+	sub esp, 12			;unused
 	sub esp, 4			;renderable buffer	20
-	sub esp, 4			;debug helper		24
 	
-	mov dword[ebp-4], 0
-	
-	mov eax, dword[ebp+24]
-	mov dword[ebp-16], eax
-	mov ecx, dword[ebp+28]
-	mov dword[ebp-12], ecx
-	mov edx, dword[ebp+32]
-	mov dword[ebp-8], edx
-	
+	mov dword[ebp-4], 0	
 	mov dword[ebp-20], 0
-	mov dword[ebp-24], 0
+
 	
-	
-	;remove the chunk from the graphics update queue
-	lea eax, [ebp-16]
-	mov ecx, dword[ebp+20]
-	add ecx, 36
-	push eax
-	push chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromGraphicsUpdateQueue
-	push ecx
-	call tsQueue_forEach
-	test dword[ebp-4], 0xffffffff
-	jnz chunkManager4d_reloadChunkByPosition_internal_removal_successful
-	mov dword[ebp-24], 69
-	;remove the chunk from the loaded chunks vector
-	lea eax, [ebp-16]
-	push eax
-	push chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromLoadedChunks
+	push dword[ebp+32]
+	push dword[ebp+28]
+	push dword[ebp+24]
 	push dword[ebp+20]
-	call tsVector_removeCustom
-	test dword[ebp-4], 0xffffffff
-	jnz chunkManager4d_reloadChunkByPosition_internal_removal_successful 
-		;chunk is not loaded, abort
-		jmp chunkManager4d_reloadChunkByPosition_internal_end
-		
-	chunkManager4d_reloadChunkByPosition_internal_removal_successful:
-	
-	test dword[ebp-24], 0xffffffff
+	call chunkManager4d_getLoadedChunk
+	mov dword[ebp-4], eax
+	test eax, eax
 	jz chunkManager4d_reloadChunkByPosition_internal_end
+	
 	;unload chunk
 	lea eax, [ebp-20]
 	push eax
 	push dword[ebp-4]
 	push dword[ebp+20]
 	call chunkManager4d_unloadChunk_internal
+	test eax, eax
+	jnz chunkManager4d_reloadChunkByPosition_internal_end		;problems
+	
 	
 	;load chunk
 	push dword[ebp+32]
@@ -1933,76 +1901,7 @@ chunkManager4d_reloadChunkByPosition_internal:
 	pop esi
 	pop ebp
 	ret
-	;void chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromGraphicsUpdateQueue(GraphicsUpdate*, struct{ivec3 pos, Chunk4D* buffer}*)
-	chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromGraphicsUpdateQueue:
-		push ebp
-		push ebx
-		mov ebp, esp
-		
-		mov eax, dword[ebp+12]
-		test dword[eax], 0xffffffff
-		jz chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromGraphicsUpdateQueue_end	;not load update
-		
-		xor ebx, ebx
-		mov eax, dword[eax+4]
-		mov ecx, dword[ebp+16]
-		
-		mov edx, dword[eax]
-		sub edx, dword[ecx]
-		or ebx, edx
-		mov edx, dword[eax+4]
-		sub edx, dword[ecx+4]
-		or ebx, edx
-		mov edx, dword[eax+8]
-		sub edx, dword[ecx+8]
-		or ebx, edx
-		test ebx, ebx
-		jnz chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromGraphicsUpdateQueue_end	;not same chunk
-			;chunk found
-			mov dword[ecx+12], eax		;save chunk
-			
-			mov eax, dword[ebp+12]
-			mov dword[eax+4], 0
-		
-		chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromGraphicsUpdateQueue_end:
-		mov esp, ebp
-		pop ebx
-		pop ebp
-		ret
-	;void chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromLoadedChunks(Chunk4D**, struct{ivec3 pos, Chunk4D* buffer}*)
-	chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromLoadedChunks:
-		push ebp
-		push ebx
-		mov ebp, esp
-		
-		sub esp, 4		;return value		4
-		mov dword[ebp-4], 69
-		
-		mov eax, dword[ebp+12]
-		mov eax, dword[eax]
-		xor ebx, ebx
-		mov ecx, dword[ebp+16]
-		
-		mov edx, dword[eax]
-		sub edx, dword[ecx]
-		or ebx, edx
-		mov edx, dword[eax+4]
-		sub edx, dword[ecx+4]
-		or ebx, edx
-		mov edx, dword[eax+8]
-		sub edx, dword[ecx+8]
-		or ebx, edx
-		test ebx, ebx
-		jnz chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromLoadedChunks_end	;not same chunk
-			;chunk found
-			mov dword[ecx+12], eax		;save chunk
-			mov dword[ebp-4], 0
-		chunkManager4d_reloadChunkByPosition_internal_removeAndSaveFromLoadedChunks_end:
-		mov eax, dword[ebp-4]			;set return value
-		mov esp, ebp
-		pop ebx
-		pop ebp
-		ret
+	
 
 ;returns the first (and hopefully only) occurence of the chunk with matching position in the loaded chunks vector
 ;returns NULL on gebasz
