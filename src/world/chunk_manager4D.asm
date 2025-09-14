@@ -211,6 +211,7 @@ chunkManager4d_create:
 	sub esp, 4			;chunk manager		4
 	sub esp, 64			;temp hyperplane	68
 	
+	
 	;alloc chunk manager
 	push 208
 	call my_malloc
@@ -274,6 +275,7 @@ chunkManager4d_create:
 	mov dword[ecx+188], eax		;mutex needs to be created before the setHyperPlane call
 	
 	lea eax, [ebp-68]
+	push eax
 	call hyperPlane_create
 	push dword[ebp-4]
 	call chunkManager4d_setHyperPlane
@@ -1270,16 +1272,16 @@ chunkManager4d_processChangedBlocks:
 	cmp edi, 0
 	jle	chunkManager4d_processChangedBlocks_reload_loop_end
 	chunkManager4d_processChangedBlocks_reload_loop_start:
-		;push esi
-		;push dword[ebp+20]
-		;call chunkManager4d_registerChunkReloadUpdate_internal
-		;add esp, 8
+		push esi
+		push dword[ebp+20]
+		call chunkManager4d_registerChunkReloadUpdate_internal
+		add esp, 8
 	
 		push dword[esi+8]
 		push dword[esi+4]
 		push dword[esi]
 		push dword[ebp+20]
-		call chunkManager4d_reloadChunkByPosition_internal
+		;call chunkManager4d_reloadChunkByPosition_internal
 		add esp, 16
 		
 		add esi, 12

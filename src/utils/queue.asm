@@ -67,6 +67,8 @@ section .text use32
 	
 	global queue_isEmpty		;int queue_isEmpty(queue* pqueue)
 	
+	global queue_size			;int queue_size(queue* pqueue)
+	
 	;returns the index of the first matching element, otherwise -1 is returned
 	;the comparator must return 0 if a match is found
 	global queue_search			;int queue_search(queue* pqueue, int (*comparator)(element*, void* searchKey), void* searchKey)
@@ -625,6 +627,11 @@ queue_isEmpty:
 	queue_isEmpty_end:
 	ret
 	
+	
+queue_size:
+	mov eax, dword[esp+4]
+	mov eax, dword[eax+4]
+	ret
 
 queue_search:
 	push ebp

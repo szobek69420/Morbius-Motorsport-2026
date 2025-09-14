@@ -67,6 +67,7 @@ section .text use32
 	extern queue_at
 	extern queue_clear
 	extern queue_isEmpty
+	extern queue_size
 	extern queue_search
 	extern queue_forEach
 	extern queue_printInfo
@@ -445,10 +446,10 @@ tsQueue_size:
 	push dword[ebp+8]
 	call tsQueue_lock
 	
-	;get size
+	;call size
 	mov eax, dword[ebp+8]
-	mov eax, dword[eax+4]
-	mov eax, dword[eax+4]
+	push dword[eax+4]
+	call queue_size
 	mov dword[ebp-4], eax
 	
 	;unlock

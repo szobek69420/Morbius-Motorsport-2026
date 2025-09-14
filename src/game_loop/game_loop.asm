@@ -39,6 +39,7 @@ section .rodata use32
 	test_text2 db "hello everybody my name is welcome",10,0
 	print_int_nl db "%d",10,0
 	print_two_ints_nl db "%d %d",10,0
+	print_three_ints_nl db "%d %d %d",10,0
 	print_float db "%f",0
 	print_float_nl db "%f",10,0
 	print_four_floats db "%f, %f, %f, %f",0
@@ -67,6 +68,7 @@ section .rodata use32
 	print_loaded_chunk_count db "Loaded chunks: %d",0
 	print_fanthom_chunk_count db "Fanthom chunks: %d",0
 	print_pending_graphics_update_count db "Pending graphics updates: %d",0
+	print_pending_chunk_reload_count db "Pending chunk reloads: %d",0
 	print_render_distance db "Render distance: %d",0
 	
 	print_fps db "FPS: %d",0
@@ -156,6 +158,7 @@ section .data use32
 	TEXT_LOADED_CHUNKS dd 0
 	TEXT_FANTHOM_CHUNKS dd 0
 	TEXT_PENDING_GRAPHICS_UPDATES dd 0
+	TEXT_PENDING_CHUNK_RELOADS dd 0
 	
 	TEXT_VERSION dd 0
 	TEXT_GPU dd 0
@@ -251,6 +254,7 @@ section .text use32
 	extern vector_destroy
 	extern vector_clear
 	extern tsVector_sizeNonBlocking
+	extern queue_size
 	extern tsQueue_sizeNonBlocking
 	
 	extern vec3_print
@@ -443,6 +447,11 @@ gameLoop_main:
 	;create chunk manager 4d
 	call chunkManager4d_create
 	mov dword[chunk_manager_4d], eax
+	push dword[eax+60]
+	push dword[eax+56]
+	;push dword[eax+52]
+	push print_three_ints_nl
+	call my_printf
 	
 	;create player
 	push dword[chunk_manager_4d]
@@ -1465,17 +1474,20 @@ gameLoop_initInfoCanvas:
 	INIT_IMAGE 		IMAGE_MEMORY_USAGE, CANVAS_INFO, 0, 30, 130, 200, 50, UI_RIGHT, UI_TOP, UI_RIGHT, UI_TOP
 	
 	
-	INIT_TEXT		TEXT_RENDER_DISTANCE, CANVAS_INFO, 30, 105, UI_RIGHT, UI_BOTTOM
+	INIT_TEXT		TEXT_RENDER_DISTANCE, CANVAS_INFO, 30, 130, UI_RIGHT, UI_BOTTOM
 	FINE_TUNE_TEXT	TEXT_RENDER_DISTANCE, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
 	
-	INIT_TEXT		TEXT_LOADED_CHUNKS, CANVAS_INFO, 30, 80, UI_RIGHT, UI_BOTTOM
+	INIT_TEXT		TEXT_LOADED_CHUNKS, CANVAS_INFO, 30, 105, UI_RIGHT, UI_BOTTOM
 	FINE_TUNE_TEXT	TEXT_LOADED_CHUNKS, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
 	
-	INIT_TEXT		TEXT_FANTHOM_CHUNKS, CANVAS_INFO, 30, 55, UI_RIGHT, UI_BOTTOM
+	INIT_TEXT		TEXT_FANTHOM_CHUNKS, CANVAS_INFO, 30, 80, UI_RIGHT, UI_BOTTOM
 	FINE_TUNE_TEXT	TEXT_FANTHOM_CHUNKS, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
 	
-	INIT_TEXT		TEXT_PENDING_GRAPHICS_UPDATES, CANVAS_INFO, 30, 30, UI_RIGHT, UI_BOTTOM
+	INIT_TEXT		TEXT_PENDING_GRAPHICS_UPDATES, CANVAS_INFO, 30, 55, UI_RIGHT, UI_BOTTOM
 	FINE_TUNE_TEXT	TEXT_PENDING_GRAPHICS_UPDATES, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	INIT_TEXT		TEXT_PENDING_CHUNK_RELOADS, CANVAS_INFO, 30, 30, UI_RIGHT, UI_BOTTOM
+	FINE_TUNE_TEXT	TEXT_PENDING_CHUNK_RELOADS, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
 	
 	
 	
@@ -1734,6 +1746,19 @@ gameLoop_updateInfoCanvas:
 	call my_sprintf
 	add esp, 12
 	SET_TEXT TEXT_PENDING_GRAPHICS_UPDATES
+	
+	;pending graphics updates
+	mov eax, dword[chunk_manager_4d]
+	add eax, 52
+	push eax
+	call queue_size
+	mov dword[esp], eax
+	push print_pending_chunk_reload_count
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 12
+	SET_TEXT TEXT_PENDING_CHUNK_RELOADS
 	
 	mov esp, ebp
 	pop ebp
