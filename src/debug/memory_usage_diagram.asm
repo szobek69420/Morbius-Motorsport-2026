@@ -37,6 +37,8 @@ section .rodata use32
 	print_nl db 10,0
 	print_int_nl db "%d",10,0
 	print_float_space db "%f ",0
+	
+	test_text db "Frederick Fitzgerald von Fazbearington",10,0
 
 section .data use32
 

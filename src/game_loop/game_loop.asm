@@ -105,6 +105,8 @@ section .bss use32
 	framebuffer_ssao resb 4
 	framebuffer_pp resb 4
 	
+	sound_music resb 4
+	
 section .data use32
 	render_distance dd 3
 
@@ -302,6 +304,7 @@ section .text use32
 	extern audio_loadSound
 	extern audio_unloadSound
 	extern audio_playSound
+	extern audio_stopSound
 	
 	extern framebuffer_create
 	extern framebuffer_destroy
@@ -414,7 +417,6 @@ gameLoop_main:
 	;init physics
 	call physics4d_init
 	
-	
 	;init camera
 	push camera
 	call camera_init
@@ -449,7 +451,7 @@ gameLoop_main:
 	mov dword[chunk_manager_4d], eax
 	push dword[eax+60]
 	push dword[eax+56]
-	;push dword[eax+52]
+	push dword[eax+52]
 	push print_three_ints_nl
 	call my_printf
 	
@@ -475,15 +477,15 @@ gameLoop_main:
 	push dword[GL_CULL_FACE]
 	call [glEnable]
 	
-	
 	;audio things
 	push music_path
-	;call audio_loadSound
+	call audio_loadSound
+	mov dword[sound_music], eax
 	add esp, 4
 	
 	push 100000000
 	push eax
-	;call audio_playSound
+	call audio_playSound
 	add esp, 8
 	
 	;init last frame time
@@ -806,6 +808,12 @@ gameLoop_main:
 	push dword[chunkLoader_thread]
 	call thread_join
 	add esp, 8
+	
+	;yeet sounds
+	push dword[sound_music]
+	call audio_stopSound
+	call audio_unloadSound
+	add esp, 4
 	
 	;destroy chunk manager
 	push dword[chunk_manager_4d]

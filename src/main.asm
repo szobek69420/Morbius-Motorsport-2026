@@ -2,6 +2,7 @@
 section .rodata use32
 	window_name db "Morbius Motorsport 2026",0
 	window_icon_path db "./sprites/window_icon.bmp",0
+	main_menu_music_path db "./sfx/main_menu_music.wav",0
 	test_text db "bingus my beloved",10,0
 	
 	message_current_game_state_init db "main: current game state: init",10,0
@@ -14,6 +15,10 @@ section .rodata use32
 	
 section .bss use32
 	pwindow resb 4		;GLFWwindow*
+
+section .data use32
+	main_menu dd 0		;is currently in main menu?
+	music dd 0			;main menu music
 
 section .text use32
 	
@@ -36,6 +41,8 @@ section .text use32
 	extern GAME_STATE_INIT
 	extern GAME_STATE_DEINIT
 	
+	extern gameState_isMainMenu
+	
 	..start:
 		push ebp
 		mov ebp, esp
@@ -49,6 +56,12 @@ section .text use32
 
 		
 		start_loop_start:
+			;check if a transition to/from the main menu happened
+			push dword[ebp-4]
+			call main_mainMenuHandler
+			add esp, 4
+			
+			;select menu stage routine
 			mov eax, dword[ebp-4]
 				cmp eax, dword[GAME_STATE_INIT]
 				je start_loop_init
@@ -185,7 +198,9 @@ main_init:
 	call window_setIcon
 	add esp, 8
 	
-	;initialize the input system
+	;initialize the global systems
+	
+	;input system
 	push dword[pwindow]
 	call main_initializeInput
 	add esp, 4
@@ -215,8 +230,58 @@ main_deinit:
 	mov esp, ebp
 	pop ebp
 	ret
+	
+extern audio_loadSound
+extern audio_unloadSound
+extern audio_playSound
+extern audio_stopSound
+extern audio_pauseSound
+	
+;void main_mainMenuHandler(int gameState)
+main_mainMenuHandler:
+	push ebp
+	mov ebp, esp
+	
+	test dword[main_menu], 0xffffffff
+	jnz main_mainMenuHandler_prev_main_menu
+		;wasn't in main menu
+		push dword[ebp+8]
+		call gameState_isMainMenu
+		test eax, eax
+		jz main_mainMenuHandler_end
+			;set flag
+			mov dword[main_menu], 69
+			
+			;load and play main menu music
+			push main_menu_music_path
+			call audio_loadSound
+			mov dword[music], eax
+			
+			push 10000000
+			push dword[music]
+			call audio_playSound
+			
+			jmp main_mainMenuHandler_end
+	main_mainMenuHandler_prev_main_menu:
+		;was in the main menu
+		push dword[ebp+8]
+		call gameState_isMainMenu
+		test eax, eax
+		jnz main_mainMenuHandler_end
+			;set flag
+			mov dword[main_menu], 0
+			
+			;stop and unload main menu music
+			push dword[music]
+			call audio_stopSound
+			call audio_unloadSound
 		
-		
+			jmp main_mainMenuHandler_end
+	
+	main_mainMenuHandler_end:
+	mov esp, ebp
+	pop ebp
+	ret
 		
 extern input_init
 extern input_keyCallback
