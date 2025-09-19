@@ -47,8 +47,8 @@ section .rodata use32
 	
 	image_path db "./sprites/morbussin.bmp",0
 	
-	sound_path db "./sfx/battlecry.wav",0
-	music_path db "./sfx/music.wav",0
+	sound_path db "./sfx/ingame/battlecry.wav",0
+	music_path db "./sfx/ingame/music.wav",0
 	
 	error_incomplete_framebuffer db "game_loop: L framebuffer uhuhu ahah",10,0
 	

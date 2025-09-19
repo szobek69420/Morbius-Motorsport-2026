@@ -2,7 +2,7 @@
 section .rodata use32
 	window_name db "Morbius Motorsport 2026",0
 	window_icon_path db "./sprites/window_icon.bmp",0
-	main_menu_music_path db "./sfx/main_menu_music.wav",0
+	main_menu_music_path db "./sfx/main_menu/main_menu_music.wav",0
 	test_text db "bingus my beloved",10,0
 	
 	message_current_game_state_init db "main: current game state: init",10,0

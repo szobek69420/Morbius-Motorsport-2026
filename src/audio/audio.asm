@@ -255,9 +255,12 @@ audio_unloadSound:
 	push ebp
 	mov ebp, esp
 	
+	test dword[ebp+8], 0xffffffff
+	jz audio_unloadSound_end
+	
 	;yeet header if necessary
 	push dword[ebp+8]
-	;call audio_removeCache
+	call audio_removeCache
 	
 	;destroy audio device
 	mov eax, dword[ebp+8]
@@ -276,15 +279,20 @@ audio_unloadSound:
 	call my_free
 	add esp, 4
 	
+	audio_unloadSound_end:
 	mov esp, ebp
 	pop ebp
 	ret
+	
 	
 audio_playSound:
 	push ebp
 	mov ebp, esp
 	
 	sub esp, 4	;WAVEHDR*			4
+	
+	test dword[ebp+8], 0xffffffff
+	jz audio_playSound_end
 	
 	;remove previous header if necessary
 	push dword[ebp+8]
@@ -367,10 +375,14 @@ audio_stopSound:
 	push ebp
 	mov ebp, esp
 	
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call [waveOutReset]
+	test dword[ebp+8], 0xffffffff
+	jz audio_stopSound_end
 	
+		mov eax, dword[ebp+8]
+		push dword[eax]
+		call [waveOutReset]
+	
+	audio_stopSound_end:
 	mov esp, ebp
 	pop ebp
 	ret
@@ -381,10 +393,14 @@ audio_pauseSound:
 	push ebp
 	mov ebp, esp
 	
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call [waveOutPause]
+	test dword[ebp+8], 0xffffffff
+	jz audio_pauseSound_end
 	
+		mov eax, dword[ebp+8]
+		push dword[eax]
+		call [waveOutPause]
+	
+	audio_pauseSound_end:
 	mov esp, ebp
 	pop ebp
 	ret
@@ -395,10 +411,14 @@ audio_resumeSound:
 	push ebp
 	mov ebp, esp
 	
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call [waveOutRestart]
+	test dword[ebp+8], 0xffffffff
+	jz audio_resumeSound_end
 	
+		mov eax, dword[ebp+8]
+		push dword[eax]
+		call [waveOutRestart]
+	
+	audio_resumeSound_end:
 	mov esp, ebp
 	pop ebp
 	ret
@@ -421,11 +441,10 @@ audio_removeCache:
 		call [waveOutUnprepareHeader]
 	
 		;free the memory
-		mov eax, dword[ebp+16]
+		mov eax, dword[ebp+8]
 		push dword[eax+20]
 		mov dword[eax+20], 0
 		call my_free
-		add esp, 4
 	
 	audio_removeCache_end:
 	mov esp, ebp

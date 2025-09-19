@@ -131,6 +131,7 @@ section .text use32
 	extern vector_push_back_buffer
 	extern vector_search
 	extern vector_clear
+	extern vector_at
 	extern tsVector_init
 	extern tsVector_pushBack
 	extern tsVector_remove
@@ -507,7 +508,14 @@ chunkManager4d_render:
 		mov edx, dword[ecx+4]
 		mov dword[ebp-12], edx
 		
+		;check if the chunk is ready
+		push dword[ebp-4]
+		call chunk4d_isProcessed
+		test eax, eax
+		jz chunkManager4d_render_render_loaded_function_end
+		
 		;check if there is a renderable for the current chunk
+		mov eax, dword[ebp-4]
 		cmp dword[eax+12], 0
 		je chunkManager4d_render_render_loaded_function_end
 		
@@ -1153,6 +1161,10 @@ chunkManager4d_processChangedBlocks:
 	;check if there are blocks
 	cmp dword[ebp-16], 0
 	jle chunkManager4d_processChangedBlocks_end
+		;duplicate blocks if they are on the edge of a chunk
+		lea eax, [ebp-16]
+		push eax
+		call chunkManager4d_processChangedBlocks_addDuplicateHelper_internal
 	
 		;sort the blocks in chunk order
 		push chunkManager4d_processChangedBlocks_qsort_comparator
@@ -1662,13 +1674,9 @@ chunkManager4d_loadChunk_internal:
 		push ecx
 		call tsVector_pushBack
 		
-		push 0
 		push dword[ebp-4]
-		push 69
-		mov ecx, dword[ebp+20]
-		lea ecx, [ecx+36]
-		push ecx
-		call tsQueue_push
+		push dword[ebp+20]
+		call chunkManager4d_pushGraphicsLoadUpdate_internal
 		
 		jmp chunkManager4d_loadChunk_internal_graphics_update_done
 	
@@ -1865,14 +1873,12 @@ chunkManager4d_reloadChunkByPosition_internal:
 	test eax, eax
 	jnz chunkManager4d_reloadChunkByPosition_internal_end		;problems
 	
-	
 	;load chunk
 	push dword[ebp+32]
 	push dword[ebp+28]
 	push dword[ebp+24]
 	push dword[ebp+20]
 	call chunkManager4d_loadChunk_internal
-	
 	
 	;create fantom update if necessary
 	test dword[ebp-20], 0xffffffff
@@ -2021,5 +2027,201 @@ chunkManager4d_pushGraphicsUnloadUpdate_internal:
 	call tsQueue_pushBuffer
 	
 	mov esp, ebp
+	pop ebp
+	ret
+	
+;if "changedBlocks" contains blocks on the edge of the chunk, they are duplicated so that the block is in the neighbouring chunk
+;void chunkManager4d_processChangedBlocks_addDuplicateHelper_internal(vector<PendingChangedBlock>* changedBlocks)
+chunkManager4d_processChangedBlocks_addDuplicateHelper_internal:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 16			;unused								16
+	sub esp, 36			;pending changed block buffer		52
+	
+	mov eax, dword[ebp+20]
+	mov ebx, dword[eax]			;index in ebx
+	chunkManager4d_processChangedBlocks_addDuplicateHelper_internal_loop_start:
+		;get current block
+		lea eax, [ebx-1]
+		push eax
+		push dword[ebp+20]
+		call vector_at
+		mov esi, eax
+		add esp, 8
+		
+		test dword[esi+16], 0xffffffff
+		jnz chunkManager4d_processChangedBlocks_addDuplicateHelper_internal_loop_not_neg_x
+			mov eax, dword[esi]
+			mov dword[ebp-52], eax
+			mov ecx, dword[esi+4]
+			dec ecx
+			mov dword[ebp-48], ecx
+			mov edx, dword[esi+8]
+			mov dword[ebp-44], edx
+			mov eax, dword[esi+12]
+			mov dword[ebp-40], eax
+			mov dword[ebp-36], 16
+			mov edx, dword[esi+20]
+			mov dword[ebp-32], edx
+			mov eax, dword[esi+24]
+			mov dword[ebp-28], eax
+			mov ecx, dword[esi+28]
+			mov dword[ebp-24], ecx
+			mov dword[ebp-20], 0		;not priority
+			
+			lea eax, [ebp-52]
+			push eax
+			push dword[ebp+20]
+			call vector_push_back_buffer
+			add esp, 8
+		chunkManager4d_processChangedBlocks_addDuplicateHelper_internal_loop_not_neg_x:
+		
+		cmp dword[esi+16], 15
+		jne chunkManager4d_processChangedBlocks_addDuplicateHelper_internal_loop_not_pos_x
+			mov eax, dword[esi]
+			mov dword[ebp-52], eax
+			mov ecx, dword[esi+4]
+			inc ecx
+			mov dword[ebp-48], ecx
+			mov edx, dword[esi+8]
+			mov dword[ebp-44], edx
+			mov eax, dword[esi+12]
+			mov dword[ebp-40], eax
+			mov dword[ebp-36], -1
+			mov edx, dword[esi+20]
+			mov dword[ebp-32], edx
+			mov eax, dword[esi+24]
+			mov dword[ebp-28], eax
+			mov ecx, dword[esi+28]
+			mov dword[ebp-24], ecx
+			mov dword[ebp-20], 0		;not priority
+			
+			lea eax, [ebp-52]
+			push eax
+			push dword[ebp+20]
+			call vector_push_back_buffer
+			add esp, 8
+		chunkManager4d_processChangedBlocks_addDuplicateHelper_internal_loop_not_pos_x:
+		
+		test dword[esi+24], 0xffffffff
+		jnz chunkManager4d_processChangedBlocks_addDuplicateHelper_internal_loop_not_neg_z
+			mov eax, dword[esi]
+			mov dword[ebp-52], eax
+			mov ecx, dword[esi+4]
+			mov dword[ebp-48], ecx
+			mov edx, dword[esi+8]
+			dec edx
+			mov dword[ebp-44], edx
+			mov eax, dword[esi+12]
+			mov dword[ebp-40], eax
+			mov ecx, dword[esi+16]
+			mov dword[ebp-36], ecx
+			mov edx, dword[esi+20]
+			mov dword[ebp-32], edx
+			mov dword[ebp-28], 16
+			mov ecx, dword[esi+28]
+			mov dword[ebp-24], ecx
+			mov dword[ebp-20], 0		;not priority
+			
+			lea eax, [ebp-52]
+			push eax
+			push dword[ebp+20]
+			call vector_push_back_buffer
+			add esp, 8
+		chunkManager4d_processChangedBlocks_addDuplicateHelper_internal_loop_not_neg_z:
+		
+		cmp dword[esi+24], 15
+		jne chunkManager4d_processChangedBlocks_addDuplicateHelper_internal_loop_not_pos_z
+			mov eax, dword[esi]
+			mov dword[ebp-52], eax
+			mov ecx, dword[esi+4]
+			mov dword[ebp-48], ecx
+			mov edx, dword[esi+8]
+			inc edx
+			mov dword[ebp-44], edx
+			mov eax, dword[esi+12]
+			mov dword[ebp-40], eax
+			mov ecx, dword[esi+16]
+			mov dword[ebp-36], ecx
+			mov edx, dword[esi+20]
+			mov dword[ebp-32], edx
+			mov dword[ebp-28], -1
+			mov ecx, dword[esi+28]
+			mov dword[ebp-24], ecx
+			mov dword[ebp-20], 0		;not priority
+			
+			lea eax, [ebp-52]
+			push eax
+			push dword[ebp+20]
+			call vector_push_back_buffer
+			add esp, 8
+		chunkManager4d_processChangedBlocks_addDuplicateHelper_internal_loop_not_pos_z:
+		
+		test dword[esi+28], 0xffffffff
+		jnz chunkManager4d_processChangedBlocks_addDuplicateHelper_internal_loop_not_neg_w
+			mov eax, dword[esi]
+			mov dword[ebp-52], eax
+			mov ecx, dword[esi+4]
+			mov dword[ebp-48], ecx
+			mov edx, dword[esi+8]
+			mov dword[ebp-44], edx
+			mov eax, dword[esi+12]
+			dec eax
+			mov dword[ebp-40], eax
+			mov ecx, dword[esi+16]
+			mov dword[ebp-36], ecx
+			mov edx, dword[esi+20]
+			mov dword[ebp-32], edx
+			mov eax, dword[esi+24]
+			mov dword[ebp-28], eax
+			mov dword[ebp-24], 16
+			mov dword[ebp-20], 0		;not priority
+			
+			lea eax, [ebp-52]
+			push eax
+			push dword[ebp+20]
+			call vector_push_back_buffer
+			add esp, 8
+		chunkManager4d_processChangedBlocks_addDuplicateHelper_internal_loop_not_neg_w:
+		
+		cmp dword[esi+28], 15
+		jne chunkManager4d_processChangedBlocks_addDuplicateHelper_internal_loop_not_pos_w
+			mov eax, dword[esi]
+			mov dword[ebp-52], eax
+			mov ecx, dword[esi+4]
+			mov dword[ebp-48], ecx
+			mov edx, dword[esi+8]
+			mov dword[ebp-44], edx
+			mov eax, dword[esi+12]
+			inc eax
+			mov dword[ebp-40], eax
+			mov ecx, dword[esi+16]
+			mov dword[ebp-36], ecx
+			mov edx, dword[esi+20]
+			mov dword[ebp-32], edx
+			mov eax, dword[esi+24]
+			mov dword[ebp-28], eax
+			mov dword[ebp-24], -1
+			mov dword[ebp-20], 0		;not priority
+			
+			lea eax, [ebp-52]
+			push eax
+			push dword[ebp+20]
+			call vector_push_back_buffer
+			add esp, 8
+		chunkManager4d_processChangedBlocks_addDuplicateHelper_internal_loop_not_pos_w:
+		
+		dec ebx
+		test ebx, ebx
+		jnz chunkManager4d_processChangedBlocks_addDuplicateHelper_internal_loop_start
+		
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
 	pop ebp
 	ret
