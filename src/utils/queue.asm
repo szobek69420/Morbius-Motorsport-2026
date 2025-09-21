@@ -496,7 +496,7 @@ queue_pop:
 	;check if the queue is not empty
 	mov eax, dword[ebp+8]
 	cmp dword[eax+4], 0
-	jne queue_pop_not_empty
+	jg queue_pop_not_empty
 		push error_queue_is_empty
 		;call my_printf
 		mov eax, 69

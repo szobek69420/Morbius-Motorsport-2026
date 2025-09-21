@@ -48,7 +48,7 @@ section .rodata use32
 	image_path db "./sprites/morbussin.bmp",0
 	
 	sound_path db "./sfx/ingame/battlecry.wav",0
-	music_path db "./sfx/ingame/music.wav",0
+	music_path db "./sfx/ingame/music.wavd",0
 	
 	error_incomplete_framebuffer db "game_loop: L framebuffer uhuhu ahah",10,0
 	
@@ -449,11 +449,6 @@ gameLoop_main:
 	;create chunk manager 4d
 	call chunkManager4d_create
 	mov dword[chunk_manager_4d], eax
-	push dword[eax+60]
-	push dword[eax+56]
-	push dword[eax+52]
-	push print_three_ints_nl
-	call my_printf
 	
 	;create player
 	push dword[chunk_manager_4d]
