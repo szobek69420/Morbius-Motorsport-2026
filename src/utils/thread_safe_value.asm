@@ -2,7 +2,7 @@
 
 ;layout
 ;struct ThreadSafeValue{
-;	Mutex* mutex;			;0
+;	CriticalSection* sex;	;0
 ;	int sizeOfValueInBytes	;4
 ;	<value_type> value;		;8
 ;}		//overall sizeof(<value_type>)+8 bytes
@@ -24,10 +24,11 @@ section .text use32
 	extern my_memcpy
 	extern my_memcmp
 	
-	extern mutex_create
-	extern mutex_destroy
-	extern mutex_lock
-	extern mutex_unlock
+	extern criticalSection_create
+	extern criticalSection_destroy
+	extern criticalSection_lock
+	extern criticalSection_tryLock
+	extern criticalSection_unlock
 	
 
 tsValue_create:
@@ -44,8 +45,8 @@ tsValue_create:
 	add esp, 4
 	mov dword[ebp-4], eax
 	
-	;create mutex
-	call mutex_create
+	;create cs
+	call criticalSection_create
 	mov ecx, dword[ebp-4]
 	mov dword[ecx], eax
 	
@@ -65,10 +66,10 @@ tsValue_destroy:
 	push ebp
 	mov ebp, esp
 	
-	;destroy mutex
+	;destroy cs
 	mov eax, dword[ebp+8]
 	push dword[eax]
-	call mutex_destroy
+	call criticalSection_destroy
 	
 	;dealloc tsValue
 	push dword[ebp+8]
@@ -83,11 +84,9 @@ tsValue_get:
 	push ebp
 	mov ebp, esp
 	
-	;lock mutex
-	push -1
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsValue_lock_internal
 	
 	;copy value
 	mov eax, dword[ebp+8]
@@ -97,10 +96,9 @@ tsValue_get:
 	push dword[ebp+12]
 	call my_memcpy
 	
-	;unlock mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
+	;unlock
+	push dword[ebp+8]
+	call tsValue_unlock_internal
 	
 	mov esp, ebp
 	pop ebp
@@ -111,11 +109,9 @@ tsValue_set:
 	push ebp
 	mov ebp, esp
 	
-	;lock mutex
-	push -1
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsValue_lock_internal
 	
 	;copy value
 	mov eax, dword[ebp+8]
@@ -126,10 +122,9 @@ tsValue_set:
 	push ecx
 	call my_memcpy
 	
-	;unlock mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
+	;unlock
+	push dword[ebp+8]
+	call tsValue_unlock_internal
 	
 	mov esp, ebp
 	pop ebp
@@ -140,11 +135,9 @@ tsValue_setBuffer:
 	push ebp
 	mov ebp, esp
 	
-	;lock mutex
-	push -1
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsValue_lock_internal
 	
 	;copy value
 	mov eax, dword[ebp+8]
@@ -154,10 +147,9 @@ tsValue_setBuffer:
 	push ecx
 	call my_memcpy
 	
-	;unlock mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
+	;unlock
+	push dword[ebp+8]
+	call tsValue_unlock_internal
 	
 	mov esp, ebp
 	pop ebp
@@ -170,11 +162,9 @@ tsValue_isEqual:
 	
 	sub esp, 4			;return value of memcmp
 	
-	;lock mutex
-	push -1
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsValue_lock_internal
 	
 	;copy value
 	mov eax, dword[ebp+8]
@@ -186,10 +176,9 @@ tsValue_isEqual:
 	call my_memcmp
 	mov dword[ebp-4], eax
 	
-	;unlock mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
+	;unlock
+	push dword[ebp+8]
+	call tsValue_unlock_internal
 	
 	xor eax, eax
 	cmp dword[ebp-4], 0
@@ -207,11 +196,9 @@ tsValue_isEqualBuffer:
 	
 	sub esp, 4			;return value of memcmp
 	
-	;lock mutex
-	push -1
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsValue_lock_internal
 	
 	;copy value
 	mov eax, dword[ebp+8]
@@ -222,16 +209,52 @@ tsValue_isEqualBuffer:
 	call my_memcmp
 	mov dword[ebp-4], eax
 	
-	;unlock mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
+	;unlock
+	push dword[ebp+8]
+	call tsValue_unlock_internal
 	
 	xor eax, eax
 	cmp dword[ebp-4], 0
 	jne tsValue_isEqualBuffer_end
 		mov eax, 69
 	tsValue_isEqualBuffer_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;internal functinos	--------------------------------
+
+;void tsValue_lock_internal(tsValue*)
+tsValue_lock_internal:
+	push ebp
+	mov ebp, esp
+	
+	;tries to lock critical section non-blockingly (also enables repeated lock calls)
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	call criticalSection_tryLock
+	test eax, eax
+	jnz tsValue_lock_internal_end
+	
+	;waits for lock blockingly
+	call criticalSection_lock
+	
+	tsValue_lock_internal_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;void tsValue_unlock_internal(tsValue*)
+tsValue_unlock_internal:
+	push ebp
+	mov ebp, esp
+	
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	call criticalSection_unlock
+	
 	mov esp, ebp
 	pop ebp
 	ret

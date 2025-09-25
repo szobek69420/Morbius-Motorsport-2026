@@ -26,9 +26,11 @@ mkdir build
 ..\build_tools\nasm.exe -fobj physics/physics4D.asm -o build/physics4D.o
 ..\build_tools\nasm.exe -fobj physics/collider_group_4D.asm -o build/collider_group_4D.o
 ..\build_tools\nasm.exe -fobj physics/aabb4D.asm -o build/aabb4D.o
+..\build_tools\nasm.exe -fobj debug/memory_usage_diagram.asm -o build/memory_usage_diagram.o
 ..\build_tools\nasm.exe -fobj utils/perlin.asm -o build/perlin.o
 ..\build_tools\nasm.exe -fobj utils/math.asm -o build/math.o
 ..\build_tools\nasm.exe -fobj utils/qsort.asm -o build/qsort.o
+..\build_tools\nasm.exe -fobj utils/thread_safe_vector.asm -o build/thread_safe_vector.o
 ..\build_tools\nasm.exe -fobj utils/thread_safe_queue.asm -o build/thread_safe_queue.o
 ..\build_tools\nasm.exe -fobj utils/thread_safe_value.asm -o build/thread_safe_value.o
 ..\build_tools\nasm.exe -fobj utils/multithreading.asm -o build/multithreading.o
@@ -37,6 +39,7 @@ mkdir build
 ..\build_tools\nasm.exe -fobj utils/vector.asm -o build/vector.o
 ..\build_tools\nasm.exe -fobj utils/string.asm -o build/string.o
 ..\build_tools\nasm.exe -fobj utils/console.asm -o build/console.o
+..\build_tools\nasm.exe -fobj utils/meminfo.asm -o build/meminfo.o
 ..\build_tools\nasm.exe -fobj utils/memory.asm -o build/memory.o
 ..\build_tools\nasm.exe -fobj utils/file.asm -o build/file.o
 ..\build_tools\nasm.exe -fobj utils/ctype.asm -o build/ctype.o
@@ -97,9 +100,11 @@ build/mat3.o ^
 build/vec4.o ^
 build/vec3.o ^
 build/audio.o ^
+build/memory_usage_diagram.o ^
 build/perlin.o ^
 build/math.o ^
 build/qsort.o ^
+build/thread_safe_vector.o ^
 build/thread_safe_queue.o ^
 build/thread_safe_value.o ^
 build/multithreading.o ^
@@ -108,6 +113,7 @@ build/hashmap.o ^
 build/vector.o ^
 build/string.o ^
 build/console.o ^
+build/meminfo.o ^
 build/memory.o ^
 build/file.o ^
 build/ctype.o ^

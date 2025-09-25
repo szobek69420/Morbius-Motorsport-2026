@@ -35,10 +35,11 @@ section .rodata use32
 	PRETTY_YELLOW dd 1.0, 0.85, 0.0, 1.0
 	BLACK dd 0.0, 0.0, 0.0, 1.0
 	
-	test_text db "OTTO VON BISMARCK",0
+	test_text db "OTTO VON BISMARCK",10,0
 	test_text2 db "hello everybody my name is welcome",10,0
 	print_int_nl db "%d",10,0
 	print_two_ints_nl db "%d %d",10,0
+	print_three_ints_nl db "%d %d %d",10,0
 	print_float db "%f",0
 	print_float_nl db "%f",10,0
 	print_four_floats db "%f, %f, %f, %f",0
@@ -46,8 +47,8 @@ section .rodata use32
 	
 	image_path db "./sprites/morbussin.bmp",0
 	
-	sound_path db "./sfx/battlecry.wav",0
-	music_path db "./sfx/music.wav",0
+	sound_path db "./sfx/ingame/battlecry.wav",0
+	music_path db "./sfx/ingame/music.wavd",0
 	
 	error_incomplete_framebuffer db "game_loop: L framebuffer uhuhu ahah",10,0
 	
@@ -67,11 +68,13 @@ section .rodata use32
 	print_loaded_chunk_count db "Loaded chunks: %d",0
 	print_fanthom_chunk_count db "Fanthom chunks: %d",0
 	print_pending_graphics_update_count db "Pending graphics updates: %d",0
+	print_pending_chunk_reload_count db "Pending chunk reloads: %d",0
 	print_render_distance db "Render distance: %d",0
 	
 	print_fps db "FPS: %d",0
 	print_physics_delta_time db "Physics: %d ms",0
 	print_chunk_loader_delta_time db "Chunk loader: %d ms",0
+	print_memory_usage db "Memory usage: %d MB",0
 	
 	print_raycast_hit_info db "Raycast hit: (%f; %f; %f; %f)",0
 	print_raycast_no_hit_info db "Raycast hit: nothing bozo",0
@@ -102,6 +105,8 @@ section .bss use32
 	framebuffer_ssao resb 4
 	framebuffer_pp resb 4
 	
+	sound_music resb 4
+	
 section .data use32
 	render_distance dd 3
 
@@ -119,6 +124,8 @@ section .data use32
 	
 	delta_time_milliseconds_physics dd 0		;int (it is just for monitoring purposes)
 	delta_time_milliseconds_chunk_loader dd 0	;int (it is just for monitoring purposes)
+
+	milliseconds_since_last_memory_diagram_update dd 0
 
 	TIME_OF_DAY dd 0.0	;values are in [0;1], 0 and 1 are dawn
 	
@@ -146,11 +153,14 @@ section .data use32
 	TEXT_FPS dd 0
 	TEXT_PHYSICS_DELTA dd 0
 	TEXT_CHUNK_LOADER_DELTA dd 0
+	TEXT_MEMORY_USAGE dd 0
+	IMAGE_MEMORY_USAGE dd 0
 	
 	TEXT_RENDER_DISTANCE dd 0
 	TEXT_LOADED_CHUNKS dd 0
 	TEXT_FANTHOM_CHUNKS dd 0
 	TEXT_PENDING_GRAPHICS_UPDATES dd 0
+	TEXT_PENDING_CHUNK_RELOADS dd 0
 	
 	TEXT_VERSION dd 0
 	TEXT_GPU dd 0
@@ -245,6 +255,9 @@ section .text use32
 	extern vector_init
 	extern vector_destroy
 	extern vector_clear
+	extern tsVector_sizeNonBlocking
+	extern queue_size
+	extern tsQueue_sizeNonBlocking
 	
 	extern vec3_print
 	
@@ -291,6 +304,7 @@ section .text use32
 	extern audio_loadSound
 	extern audio_unloadSound
 	extern audio_playSound
+	extern audio_stopSound
 	
 	extern framebuffer_create
 	extern framebuffer_destroy
@@ -319,6 +333,7 @@ section .text use32
 	extern chunkManager4d_processUpdate
 	extern chunkManager4d_processGraphicsUpdate
 	extern chunkManager4d_processChangedBlocks
+	extern chunkManager4d_processPendingChunkReloads
 	extern chunkManager4d_render
 	extern chunkManager4d_getHyperPlane
 	
@@ -348,15 +363,23 @@ section .text use32
 	extern uiElement_processInput
 	extern uiElement_render
 	
+	extern meminfo_getMemoryUsage
+	extern memoryUsageDiagram_init
+	extern memoryUsageDiagram_deinit
+	extern memoryUsageDiagram_update
+	extern memoryUsageDiagram_getTexture
 	
 gameLoop_main:
 	push ebp
+	push esi
+	push edi
+	push ebx
 	mov ebp, esp
 	
 	sub esp, 4		;return value helper		4
 	
 	;save pwindow
-	mov eax, dword[ebp+8]
+	mov eax, dword[ebp+20]
 	mov dword[current_window], eax
 	
 	;init return_value
@@ -393,7 +416,6 @@ gameLoop_main:
 	
 	;init physics
 	call physics4d_init
-	
 	
 	;init camera
 	push camera
@@ -438,6 +460,9 @@ gameLoop_main:
 	;init sun
 	call sun_init
 	
+	;init memory usage diagram
+	call memoryUsageDiagram_init
+	
 	;enable depth test and face cull
 	push dword[GL_DEPTH_TEST]
 	call [glEnable]
@@ -447,15 +472,15 @@ gameLoop_main:
 	push dword[GL_CULL_FACE]
 	call [glEnable]
 	
-	
 	;audio things
 	push music_path
 	call audio_loadSound
+	mov dword[sound_music], eax
 	add esp, 4
 	
 	push 100000000
 	push eax
-	;call audio_playSound
+	call audio_playSound
 	add esp, 8
 	
 	;init last frame time
@@ -519,9 +544,17 @@ gameLoop_main:
 		call uiElement_processInput
 		
 		;process a chunk graphics update 4d
-		push dword[chunk_manager_4d]
-		call chunkManager4d_processGraphicsUpdate
-		add esp, 4
+		mov ebx, 5
+		gameLoop_main_graphics_update_loop_start:
+			push dword[chunk_manager_4d]
+			call chunkManager4d_processGraphicsUpdate
+			add esp, 4
+			
+			dec ebx
+			jz gameLoop_main_graphics_update_loop_end
+			test eax, eax
+			jnz gameLoop_main_graphics_update_loop_start
+		gameLoop_main_graphics_update_loop_end:
 		
 		;update time of day
 		movss xmm0, dword[delta_time_seconds]
@@ -569,6 +602,14 @@ gameLoop_main:
 		call camera_viewProjection
 		add esp, 24
 		
+		;update memory diagram if necessary
+		mov eax, dword[delta_time_milliseconds]
+		add dword[milliseconds_since_last_memory_diagram_update], eax
+		cmp dword[milliseconds_since_last_memory_diagram_update], 500
+		jl gameLoop_main_loop_no_memory_diagram_update
+			call memoryUsageDiagram_update
+			sub dword[milliseconds_since_last_memory_diagram_update], 500
+		gameLoop_main_loop_no_memory_diagram_update:
 		
 		;do the deferred rendering things--------------------------
 		
@@ -587,10 +628,12 @@ gameLoop_main:
 		call framebuffer_bind
 		add esp, 4
 		
-		;enable depth test
+		;enable depth test and disable blending
 		push 69
 		call renderable_enableDepthTest
-		add esp, 4
+		push 0
+		call renderable_enableBlending
+		add esp, 8
 		
 		;render sun (this should be drawn first)
 		fld dword[TIME_OF_DAY]
@@ -761,10 +804,19 @@ gameLoop_main:
 	call thread_join
 	add esp, 8
 	
+	;yeet sounds
+	push dword[sound_music]
+	call audio_stopSound
+	call audio_unloadSound
+	add esp, 4
+	
 	;destroy chunk manager
 	push dword[chunk_manager_4d]
-	call chunkManager4d_destroy
+	;call chunkManager4d_destroy
 	mov dword[chunk_manager_4d], 0
+	
+	;deinit memory usage diagram
+	call memoryUsageDiagram_deinit
 	
 	;deinit sun
 	call sun_deinit
@@ -835,6 +887,9 @@ gameLoop_main:
 	mov eax, dword[ebp-4]
 	
 	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
 	pop ebp
 	ret
 	
@@ -879,12 +934,10 @@ gameLoop_physics:
 		mulss xmm0, xmm1
 		movss dword[ebp-12], xmm0
 		
-		
 		;call physics_update
 		push dword[ebp-12]
 		call physics4d_update
 		add esp, 4
-		
 		
 		;update player
 		push dword[ebp-12]
@@ -933,7 +986,6 @@ gameLoop_chunkLoader:
 			push dword[chunk_manager_4d]
 			call chunkManager4d_processChangedBlocks
 			add esp, 4
-			
 		
 			;do chunk update things		
 			mov eax, dword[pplayer]
@@ -945,6 +997,10 @@ gameLoop_chunkLoader:
 			call chunkManager4d_unload
 			add esp, 12
 			
+			push 5
+			push dword[chunk_manager_4d]
+			call chunkManager4d_processPendingChunkReloads
+			add esp, 8
 			
 			;set the displayed delta time
 			call [GetTickCount]
@@ -1214,6 +1270,7 @@ gameLoop_handleWindowResize:
 	extern uiElement_setPivot
 	extern uiElement_createProjection
 	extern uiImage_setTexture
+	extern uiImage_setTextureGL
 	extern uiText_setText
 	extern uiText_setColour
 	extern uiText_setFontSize
@@ -1414,21 +1471,26 @@ gameLoop_initInfoCanvas:
 	INIT_TEXT		TEXT_CHUNK_LOADER_DELTA, CANVAS_INFO, 30, 80, UI_RIGHT, UI_TOP
 	FINE_TUNE_TEXT	TEXT_CHUNK_LOADER_DELTA, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_TOP, 12, 16, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
 	
+	INIT_TEXT		TEXT_MEMORY_USAGE, CANVAS_INFO, 30, 105, UI_RIGHT, UI_TOP
+	FINE_TUNE_TEXT	TEXT_MEMORY_USAGE, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_TOP, 12, 16, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	INIT_IMAGE 		IMAGE_MEMORY_USAGE, CANVAS_INFO, 0, 30, 130, 200, 50, UI_RIGHT, UI_TOP, UI_RIGHT, UI_TOP
 	
 	
-	
-	
-	INIT_TEXT		TEXT_RENDER_DISTANCE, CANVAS_INFO, 30, 105, UI_RIGHT, UI_BOTTOM
+	INIT_TEXT		TEXT_RENDER_DISTANCE, CANVAS_INFO, 30, 130, UI_RIGHT, UI_BOTTOM
 	FINE_TUNE_TEXT	TEXT_RENDER_DISTANCE, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
 	
-	INIT_TEXT		TEXT_LOADED_CHUNKS, CANVAS_INFO, 30, 80, UI_RIGHT, UI_BOTTOM
+	INIT_TEXT		TEXT_LOADED_CHUNKS, CANVAS_INFO, 30, 105, UI_RIGHT, UI_BOTTOM
 	FINE_TUNE_TEXT	TEXT_LOADED_CHUNKS, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
 	
-	INIT_TEXT		TEXT_FANTHOM_CHUNKS, CANVAS_INFO, 30, 55, UI_RIGHT, UI_BOTTOM
+	INIT_TEXT		TEXT_FANTHOM_CHUNKS, CANVAS_INFO, 30, 80, UI_RIGHT, UI_BOTTOM
 	FINE_TUNE_TEXT	TEXT_FANTHOM_CHUNKS, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
 	
-	INIT_TEXT		TEXT_PENDING_GRAPHICS_UPDATES, CANVAS_INFO, 30, 30, UI_RIGHT, UI_BOTTOM
+	INIT_TEXT		TEXT_PENDING_GRAPHICS_UPDATES, CANVAS_INFO, 30, 55, UI_RIGHT, UI_BOTTOM
 	FINE_TUNE_TEXT	TEXT_PENDING_GRAPHICS_UPDATES, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	INIT_TEXT		TEXT_PENDING_CHUNK_RELOADS, CANVAS_INFO, 30, 30, UI_RIGHT, UI_BOTTOM
+	FINE_TUNE_TEXT	TEXT_PENDING_CHUNK_RELOADS, 0, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
 	
 	
 	
@@ -1482,7 +1544,7 @@ gameLoop_updateInfoCanvas:
 	
 	;hyperplane point
 	mov eax, dword[chunk_manager_4d]
-	add eax, 32
+	add eax, 100
 	push dword[eax+12]
 	push dword[eax+8]
 	push dword[eax+4]
@@ -1498,7 +1560,7 @@ gameLoop_updateInfoCanvas:
 	
 	;hyperplane vectors
 	mov eax, dword[chunk_manager_4d]
-	add eax, 48
+	add eax, 116
 	sub esp, 48
 	mov ecx, esp
 	push 48
@@ -1625,6 +1687,21 @@ gameLoop_updateInfoCanvas:
 	add esp, 12
 	SET_TEXT TEXT_CHUNK_LOADER_DELTA
 	
+	;memory usage things
+	call meminfo_getMemoryUsage
+	shr eax, 20
+	push eax
+	push print_memory_usage
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 12
+	SET_TEXT TEXT_MEMORY_USAGE
+	
+	call memoryUsageDiagram_getTexture
+	push eax
+	push dword[IMAGE_MEMORY_USAGE]
+	call uiImage_setTextureGL
 	
 	
 	;render distance
@@ -1637,8 +1714,9 @@ gameLoop_updateInfoCanvas:
 	SET_TEXT TEXT_RENDER_DISTANCE
 	
 	;loaded chunks
-	mov eax, dword[chunk_manager_4d]
-	push dword[eax]
+	push dword[chunk_manager_4d]
+	call tsVector_sizeNonBlocking
+	mov dword[esp], eax
 	push print_loaded_chunk_count
 	lea eax, [ebp-100]
 	push eax
@@ -1648,7 +1726,10 @@ gameLoop_updateInfoCanvas:
 	
 	;fanthom chunks
 	mov eax, dword[chunk_manager_4d]
-	push dword[eax+140]
+	add eax, 28
+	push eax
+	call tsVector_sizeNonBlocking
+	mov dword[esp], eax
 	push print_fanthom_chunk_count
 	lea eax, [ebp-100]
 	push eax
@@ -1658,14 +1739,29 @@ gameLoop_updateInfoCanvas:
 	
 	;pending graphics updates
 	mov eax, dword[chunk_manager_4d]
-	mov eax, dword[eax+24]
-	push dword[eax+4]
+	add eax, 36
+	push eax
+	call tsQueue_sizeNonBlocking
+	mov dword[esp], eax
 	push print_pending_graphics_update_count
 	lea eax, [ebp-100]
 	push eax
 	call my_sprintf
 	add esp, 12
 	SET_TEXT TEXT_PENDING_GRAPHICS_UPDATES
+	
+	;pending graphics updates
+	mov eax, dword[chunk_manager_4d]
+	add eax, 52
+	push eax
+	call queue_size
+	mov dword[esp], eax
+	push print_pending_chunk_reload_count
+	lea eax, [ebp-100]
+	push eax
+	call my_sprintf
+	add esp, 12
+	SET_TEXT TEXT_PENDING_CHUNK_RELOADS
 	
 	mov esp, ebp
 	pop ebp

@@ -255,6 +255,13 @@ audio_unloadSound:
 	push ebp
 	mov ebp, esp
 	
+	test dword[ebp+8], 0xffffffff
+	jz audio_unloadSound_end
+	
+	;yeet header if necessary
+	push dword[ebp+8]
+	call audio_removeCache
+	
 	;destroy audio device
 	mov eax, dword[ebp+8]
 	push dword[eax]		;HANDLE
@@ -272,15 +279,24 @@ audio_unloadSound:
 	call my_free
 	add esp, 4
 	
+	audio_unloadSound_end:
 	mov esp, ebp
 	pop ebp
 	ret
+	
 	
 audio_playSound:
 	push ebp
 	mov ebp, esp
 	
 	sub esp, 4	;WAVEHDR*			4
+	
+	test dword[ebp+8], 0xffffffff
+	jz audio_playSound_end
+	
+	;remove previous header if necessary
+	push dword[ebp+8]
+	call audio_removeCache
 	
 	;set loop count in the sound struct (unused)
 	mov eax, dword[ebp+8]
@@ -359,10 +375,14 @@ audio_stopSound:
 	push ebp
 	mov ebp, esp
 	
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call [waveOutReset]
+	test dword[ebp+8], 0xffffffff
+	jz audio_stopSound_end
 	
+		mov eax, dword[ebp+8]
+		push dword[eax]
+		call [waveOutReset]
+	
+	audio_stopSound_end:
 	mov esp, ebp
 	pop ebp
 	ret
@@ -373,10 +393,14 @@ audio_pauseSound:
 	push ebp
 	mov ebp, esp
 	
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call [waveOutPause]
+	test dword[ebp+8], 0xffffffff
+	jz audio_pauseSound_end
 	
+		mov eax, dword[ebp+8]
+		push dword[eax]
+		call [waveOutPause]
+	
+	audio_pauseSound_end:
 	mov esp, ebp
 	pop ebp
 	ret
@@ -387,14 +411,45 @@ audio_resumeSound:
 	push ebp
 	mov ebp, esp
 	
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call [waveOutRestart]
+	test dword[ebp+8], 0xffffffff
+	jz audio_resumeSound_end
 	
+		mov eax, dword[ebp+8]
+		push dword[eax]
+		call [waveOutRestart]
+	
+	audio_resumeSound_end:
 	mov esp, ebp
 	pop ebp
 	ret
 	
+;removes any left-over data from previous playbacks
+;void audio_removeCache(Sound*)
+audio_removeCache:
+	push ebp
+	mov ebp, esp
+	
+	;is there a freeable block?
+	mov eax, dword[ebp+8]
+	cmp dword[eax+20], 0
+	je audio_removeCache_end
+		;unprepare header
+		mov eax, dword[ebp+8]
+		push 32
+		push dword[eax+20]
+		push dword[eax]
+		call [waveOutUnprepareHeader]
+	
+		;free the memory
+		mov eax, dword[ebp+8]
+		push dword[eax+20]
+		mov dword[eax+20], 0
+		call my_free
+	
+	audio_removeCache_end:
+	mov esp, ebp
+	pop ebp
+	ret
 	
 ;void audio_callback(HANDLE hwo, uint32 uMsg, Sound* sound, int* dwParam1, int* dwParam2 );
 audio_callback:
@@ -417,24 +472,6 @@ audio_callback:
 		jmp audio_callback_end
 		
 	audio_callback_playback_ended:
-		;is there a freeable block?
-		mov eax, dword[ebp+16]
-		cmp dword[eax+20], 0
-		je audio_callback_end
-			;unprepare header
-			mov eax, dword[ebp+16]
-			push 32
-			push dword[eax+20]
-			push dword[eax]
-			call [waveOutUnprepareHeader]
-			
-			;free the memory
-			mov eax, dword[ebp+16]
-			push dword[eax+20]
-			mov dword[eax+20], 0
-			call my_free
-			add esp, 4
-			
 		jmp audio_callback_end
 	
 

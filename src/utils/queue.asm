@@ -67,6 +67,8 @@ section .text use32
 	
 	global queue_isEmpty		;int queue_isEmpty(queue* pqueue)
 	
+	global queue_size			;int queue_size(queue* pqueue)
+	
 	;returns the index of the first matching element, otherwise -1 is returned
 	;the comparator must return 0 if a match is found
 	global queue_search			;int queue_search(queue* pqueue, int (*comparator)(element*, void* searchKey), void* searchKey)
@@ -494,9 +496,9 @@ queue_pop:
 	;check if the queue is not empty
 	mov eax, dword[ebp+8]
 	cmp dword[eax+4], 0
-	jne queue_pop_not_empty
+	jg queue_pop_not_empty
 		push error_queue_is_empty
-		call my_printf
+		;call my_printf
 		mov eax, 69
 		jmp queue_pop_end
 	queue_pop_not_empty:
@@ -625,6 +627,11 @@ queue_isEmpty:
 	queue_isEmpty_end:
 	ret
 	
+	
+queue_size:
+	mov eax, dword[esp+4]
+	mov eax, dword[eax+4]
+	ret
 
 queue_search:
 	push ebp

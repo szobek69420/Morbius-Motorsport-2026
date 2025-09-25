@@ -2,7 +2,7 @@
 
 ;layout
 ;struct tsQueue{
-;	Mutex* mutex;			;0
+;	CriticalSection* sex;	;0
 ;	Queue* queue;			;4
 ;}		8 bytes overall
 
@@ -42,6 +42,7 @@ section .text use32
 	global tsQueue_isEmpty		;int tsQueue_isEmpty(tsQueue* pqueue)
 	
 	global tsQueue_size			;int tsQueue_size(tsQueue* pqueue)
+	global tsQueue_sizeNonBlocking	;int tsQueue_sizeNonBlocking(tsQueue* pqueue)
 	
 	;returns the index of the first matching element, otherwise -1 is returned
 	;the comparator must return 0 if a match is found
@@ -51,6 +52,9 @@ section .text use32
 	
 	global tsQueue_printInfo	;void tsQueue_printInfo(tsQueue* pqueue)
 	
+	global tsQueue_lock			;void tsQueue_lock(tsQueue* pqueue)
+	global tsQueue_unlock		;void tsQueue_unlock(tsQueue* pqueue)
+	global tsQueue_queue		;queue* tsQueue_queue(tsQueue* pqueue)
 	
 	extern queue_init
 	extern queue_destroy
@@ -63,14 +67,16 @@ section .text use32
 	extern queue_at
 	extern queue_clear
 	extern queue_isEmpty
+	extern queue_size
 	extern queue_search
 	extern queue_forEach
 	extern queue_printInfo
 	
-	extern mutex_create
-	extern mutex_destroy
-	extern mutex_lock
-	extern mutex_unlock
+	extern criticalSection_create
+	extern criticalSection_destroy
+	extern criticalSection_lock
+	extern criticalSection_tryLock
+	extern criticalSection_unlock
 	
 	extern my_malloc
 	extern my_free
@@ -79,8 +85,8 @@ tsQueue_init:
 	push ebp
 	mov ebp, esp
 	
-	;create mutex
-	call mutex_create
+	;create critical section
+	call criticalSection_create
 	mov ecx, dword[ebp+8]
 	mov dword[ecx], eax
 	
@@ -106,10 +112,10 @@ tsQueue_destroy:
 	push ebp
 	mov ebp, esp
 	
-	;destroy mutex
+	;destroy critical section
 	mov eax, dword[ebp+8]
 	push dword[eax]
-	call mutex_destroy
+	call criticalSection_destroy
 	
 	;destroy queue
 	mov eax, dword[ebp+8]
@@ -130,11 +136,9 @@ tsQueue_push:
 	
 	sub esp, 4			;return value
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsQueue_lock
 	
 	;call pushBuffer (it is simpler than calling push)
 	lea eax, [ebp+12]
@@ -144,11 +148,9 @@ tsQueue_push:
 	call queue_pushBuffer
 	mov dword[ebp-4], eax
 	
-	;release mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
-	
+	;unlock
+	push dword[ebp+8]
+	call tsQueue_unlock
 	
 	mov eax, dword[ebp-4]
 	
@@ -163,11 +165,9 @@ tsQueue_pushBuffer:
 	
 	sub esp, 4			;return value
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsQueue_lock
 	
 	;call pushBuffer
 	push dword[ebp+12]			;element*
@@ -176,11 +176,9 @@ tsQueue_pushBuffer:
 	call queue_pushBuffer
 	mov dword[ebp-4], eax
 	
-	;release mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
-	
+	;unlock
+	push dword[ebp+8]
+	call tsQueue_unlock
 	
 	mov eax, dword[ebp-4]
 	
@@ -194,11 +192,9 @@ tsQueue_pushArray:
 	
 	sub esp, 4			;return value
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsQueue_lock
 	
 	;call pushArray
 	push dword[ebp+16]			;length of array
@@ -208,11 +204,9 @@ tsQueue_pushArray:
 	call queue_pushArray
 	mov dword[ebp-4], eax
 	
-	;release mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
-	
+	;unlock
+	push dword[ebp+8]
+	call tsQueue_unlock
 	
 	mov eax, dword[ebp-4]
 	
@@ -226,11 +220,9 @@ tsQueue_pushFront:
 	
 	sub esp, 4			;return value
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsQueue_lock
 	
 	;call pushBufferFront (it is simpler than calling push)
 	lea eax, [ebp+12]
@@ -240,11 +232,9 @@ tsQueue_pushFront:
 	call queue_pushBufferFront
 	mov dword[ebp-4], eax
 	
-	;release mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
-	
+	;unlock
+	push dword[ebp+8]
+	call tsQueue_unlock
 	
 	mov eax, dword[ebp-4]
 	
@@ -259,11 +249,9 @@ tsQueue_pushBufferFront:
 	
 	sub esp, 4			;return value
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsQueue_lock
 	
 	;call pushBufferFront
 	push dword[ebp+12]			;element*
@@ -272,11 +260,9 @@ tsQueue_pushBufferFront:
 	call queue_pushBufferFront
 	mov dword[ebp-4], eax
 	
-	;release mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
-	
+	;unlock
+	push dword[ebp+8]
+	call tsQueue_unlock
 	
 	mov eax, dword[ebp-4]
 	
@@ -291,11 +277,9 @@ tsQueue_pushArrayFront:
 	
 	sub esp, 4			;return value
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsQueue_lock
 	
 	;call pushArrayFront
 	push dword[ebp+16]			;length of array
@@ -305,11 +289,9 @@ tsQueue_pushArrayFront:
 	call queue_pushArrayFront
 	mov dword[ebp-4], eax
 	
-	;release mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
-	
+	;unlock
+	push dword[ebp+8]
+	call tsQueue_unlock
 	
 	mov eax, dword[ebp-4]
 	
@@ -325,11 +307,9 @@ tsQueue_pop:
 	
 	sub esp, 4			;return value
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsQueue_lock
 	
 	;call pop
 	push dword[ebp+12]			;element*
@@ -338,11 +318,9 @@ tsQueue_pop:
 	call queue_pop
 	mov dword[ebp-4], eax
 	
-	;release mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
-	
+	;unlock
+	push dword[ebp+8]
+	call tsQueue_unlock
 	
 	mov eax, dword[ebp-4]
 	
@@ -357,11 +335,9 @@ tsQueue_peek:
 	
 	sub esp, 4			;return value
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsQueue_lock
 	
 	;call peek
 	push dword[ebp+12]			;element*
@@ -370,10 +346,9 @@ tsQueue_peek:
 	call queue_peek
 	mov dword[ebp-4], eax
 	
-	;release mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
+	;unlock
+	push dword[ebp+8]
+	call tsQueue_unlock
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -389,11 +364,9 @@ tsQueue_at:
 	
 	sub esp, 4			;return value
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsQueue_lock
 	
 	;call at
 	push dword[ebp+12]			;index
@@ -402,11 +375,9 @@ tsQueue_at:
 	call queue_at
 	mov dword[ebp-4], eax
 	
-	;release mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
-	
+	;unlock
+	push dword[ebp+8]
+	call tsQueue_unlock
 	
 	mov eax, dword[ebp-4]
 	
@@ -420,22 +391,18 @@ tsQueue_clear:
 	push ebp
 	mov ebp, esp
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsQueue_lock
 	
 	;call clear
 	mov eax, dword[ebp+8]
 	push dword[eax+4]			;queue*
 	call queue_clear
 	
-	;release mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
-	
+	;unlock
+	push dword[ebp+8]
+	call tsQueue_unlock
 	
 	mov esp, ebp
 	pop ebp
@@ -448,11 +415,9 @@ tsQueue_isEmpty:
 	
 	sub esp, 4				;return value
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsQueue_lock
 	
 	;call clear
 	mov eax, dword[ebp+8]
@@ -460,11 +425,9 @@ tsQueue_isEmpty:
 	call queue_isEmpty
 	mov dword[ebp-4], eax		;save return value
 	
-	;release mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
-	
+	;unlock
+	push dword[ebp+8]
+	call tsQueue_unlock
 	
 	mov eax, dword[ebp-4]
 	
@@ -479,25 +442,36 @@ tsQueue_size:
 	
 	sub esp, 4				;return value
 	
-	;lock mutex
+	;lock
+	push dword[ebp+8]
+	call tsQueue_lock
+	
+	;call size
 	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	push dword[eax+4]
+	call queue_size
+	mov dword[ebp-4], eax
+	
+	;unlock
+	push dword[ebp+8]
+	call tsQueue_unlock
+	
+	
+	mov eax, dword[ebp-4]
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+tsQueue_sizeNonBlocking:
+	push ebp
+	mov ebp, esp
 	
 	;get size
 	mov eax, dword[ebp+8]
 	mov eax, dword[eax+4]
 	mov eax, dword[eax+4]
-	mov dword[ebp-4], eax
-	
-	;release mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
-	
-	
-	mov eax, dword[ebp-4]
 	
 	mov esp, ebp
 	pop ebp
@@ -510,11 +484,9 @@ tsQueue_search:
 	
 	sub esp, 4					;return value
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsQueue_lock
 	
 	;call search
 	push dword[ebp+16]
@@ -524,10 +496,9 @@ tsQueue_search:
 	call queue_search
 	mov dword[ebp-4], eax
 	
-	;release mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
+	;unlock
+	push dword[ebp+8]
+	call tsQueue_unlock
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -541,13 +512,9 @@ tsQueue_forEach:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 4					;return value
-	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsQueue_lock
 	
 	;call forEach
 	push dword[ebp+16]
@@ -557,40 +524,70 @@ tsQueue_forEach:
 	call queue_forEach
 	mov dword[ebp-4], eax
 	
-	;release mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
-	
-	;set return value
-	mov eax, dword[ebp-4]
+	;unlock
+	push dword[ebp+8]
+	call tsQueue_unlock
 	
 	mov esp, ebp
 	pop ebp
 	ret
 	
 	
+tsQueue_lock:
+	push ebp
+	mov ebp, esp
+	
+	;tries to lock critical section non-blockingly (also enables repeated lock calls)
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	call criticalSection_tryLock
+	test eax, eax
+	jnz tsQueue_lock_end
+	
+	;waits for lock blockingly
+	call criticalSection_lock
+	
+	tsQueue_lock_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+tsQueue_unlock:
+	push ebp
+	mov ebp, esp
+	
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	call criticalSection_unlock
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+tsQueue_queue:
+	mov eax, dword[esp+4]
+	mov eax, dword[eax+4]
+	ret
+	
 	
 tsQueue_printInfo:
 	push ebp
 	mov ebp, esp
 	
-	;lock mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax]
-	call mutex_lock
+	;lock
+	push dword[ebp+8]
+	call tsQueue_lock
 	
 	;call printInfo
 	mov eax, dword[ebp+8]
 	push dword[eax+4]			;queue*
 	call queue_printInfo
 	
-	;release mutex
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call mutex_unlock
-	
+	;unlock
+	push dword[ebp+8]
+	call tsQueue_unlock
 	
 	mov esp, ebp
 	pop ebp

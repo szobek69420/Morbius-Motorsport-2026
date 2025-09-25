@@ -14,6 +14,8 @@ section .rodata use32
 	start_button_texture_path db "sprites/ui/menu/start_button.bmp",0
 	settings_button_texture_path db "sprites/ui/menu/settings_button.bmp",0
 	
+	click_sound_path db "./sfx/main_menu/click.wav",0
+	
 	print_two_ints_nl db "%d %d",10,0
 	
 	HALF dd 0.5
@@ -39,6 +41,8 @@ section .data use32
 	window dd 0					;GLFWwindow*
 	should_resize dd 0			;tsValue<int>*
 	return_value dd 0			;tsValue<int>*	;the default value is dword[GAME_STATE_MENU], some other state in order to break out of the loop
+	
+	sound_click dd 0
 	
 	;ui
 	CANVAS_MENU dd 0
@@ -71,6 +75,11 @@ section .text use32
 	extern tsValue_get
 	extern tsValue_set
 	extern tsValue_isEqual
+	
+	extern audio_loadSound
+	extern audio_unloadSound
+	extern audio_playSound
+	extern audio_stopSound
 	
 	extern renderable_init
 	extern renderable_deinit
@@ -181,6 +190,12 @@ menuLoop_main:
 	push dword[return_value]
 	call tsValue_set
 	add esp, 16
+	
+	;import sound
+	push click_sound_path
+	call audio_loadSound
+	mov dword[sound_click], eax
+	add esp, 4
 	
 	;set window resize callback
 	push menuLoop_windowResizeCallback
@@ -296,6 +311,11 @@ menuLoop_main:
 	call tsValue_get
 	add esp, 8
 	
+	;yeet audio
+	push dword[sound_click]
+	call audio_stopSound
+	call audio_unloadSound
+	mov dword[sound_click], 0
 	
 	;destroy thread safe values
 	push dword[should_resize]
@@ -474,6 +494,11 @@ menuLoop_initCanvas:
 	jmp menuLoop_initCanvas_startButtonCallback_skip
 	;void menuLoop_startButtonCallback(UIElement* element, tsValue<int>* returnValue)
 	menuLoop_initCanvas_startButtonCallback:
+		push dword[sound_click]
+		call audio_stopSound
+		call audio_playSound
+		add esp, 4
+	
 		mov eax, dword[esp+8]
 		push dword[GAME_STATE_INGAME]
 		push eax
@@ -540,6 +565,11 @@ menuLoop_initCanvas:
 	jmp menuLoop_initCanvas_settingsButtonCallback_skip
 	;void menuLoop_initCanvas_settingsButtonCallback(UIElement* element, tsValue<int>* returnValue)
 	menuLoop_initCanvas_settingsButtonCallback:
+		push dword[sound_click]
+		call audio_stopSound
+		call audio_playSound
+		add esp, 4
+	
 		mov eax, dword[esp+8]
 		push dword[GAME_STATE_SETTINGS]
 		push eax
@@ -601,6 +631,11 @@ menuLoop_initCanvas:
 	jmp menuLoop_initCanvas_exitButtonCallback_skip
 	;void menuLoop_initCanvas_exitButtonCallback(UIElement* element, tsValue<int>* returnValue)
 	menuLoop_initCanvas_exitButtonCallback:
+		push dword[sound_click]
+		call audio_stopSound
+		call audio_playSound
+		add esp, 4
+	
 		mov eax, dword[esp+8]
 		push dword[GAME_STATE_DEINIT]
 		push eax

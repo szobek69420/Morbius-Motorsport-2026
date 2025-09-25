@@ -1,0 +1,10 @@
+#version 460 core
+layout (location=0) in uint vertexIndex;
+
+out uint index;
+
+void main()
+{
+	index=vertexIndex;
+	gl_Position=vec4(1);
+}

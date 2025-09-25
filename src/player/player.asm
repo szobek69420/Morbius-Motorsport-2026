@@ -7,7 +7,7 @@
 ;	float pitch, yaw;				16
 ;	Aabb4D* collider;				24
 ;	ChunkManager* chunkManager;		28
-;	Mutex* hyperPlaneMutex;			32
+;	Mutex* hyperPlaneMutex;			32(unused)
 ;	vec4 previousColliderPos; 		36(unused)
 ;	Renderable* hypercube			52
 ;	Aabb4D* lastRaycastCollider		56 //zero if no hit
@@ -113,6 +113,7 @@ section .text use32
 	extern my_malloc
 	extern my_free
 	extern my_printf
+	extern my_memcpy
 	
 	extern math_clamp
 	extern math_repeat
@@ -178,6 +179,7 @@ section .text use32
 	extern BLOCK_STONE
 	extern chunk4d_vec4ToBlockPos
 	extern chunkManager4d_getHyperPlane
+	extern chunkManager4d_setHyperPlane
 	extern chunkManager4d_registerChangedBlock
 	
 	extern renderable_createCustom
@@ -258,10 +260,6 @@ player_init:
 	mov ecx, dword[ebp+12]
 	mov dword[eax+28], ecx			;ChunkManager*
 	
-	call mutex_create
-	mov ecx, dword[ebp-4]
-	mov dword[ecx+32], eax
-	
 	;set the aabb4d hyperplane
 	mov eax, dword[ebp-4]
 	push dword[eax+28]
@@ -315,11 +313,6 @@ player_init:
 player_destroy:
 	push ebp
 	mov ebp, esp
-	
-	;destroy mutex
-	mov eax, dword[ebp+8]
-	push dword[eax+32]
-	call mutex_destroy
 	
 	;unregister and destroy collider
 	push 69
@@ -928,10 +921,12 @@ player_rotatePlane:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 4			;delta scroll x
-	sub esp, 4			;delta scroll y
+	sub esp, 4			;delta scroll x			4
+	sub esp, 4			;delta scroll y			8
 	
-	sub esp, 4			;rotation angle
+	sub esp, 4			;rotation angle			12
+	
+	sub esp, 64			;hyperplane				76
 	
 	
 	;obtain scroll delta
@@ -951,13 +946,6 @@ player_rotatePlane:
 	fmulp
 	fstp dword[ebp-12]
 	
-	;lock hyperplane mutex
-	mov eax, dword[ebp+8]
-	push -1
-	push dword[eax+32]
-	call mutex_lock
-	add esp, 8
-	
 	;update the hyperplane point
 	;the hyperplane's new center is the players position in 4d, which is the players movement since the last rotation event
 	mov eax, dword[ebp+8]
@@ -968,8 +956,15 @@ player_rotatePlane:
 	mov ecx, dword[ebp+8]
 	push dword[ecx+28]
 	call chunkManager4d_getHyperPlane
-	add esp, 4
+	push 64
+	push eax
+	lea ecx, [ebp-76]
+	push ecx
+	call my_memcpy
+	add esp, 16
+	
 	pop ecx						;restore aabb.position
+	lea eax, [ebp-76]
 	
 	mov edx, dword[ecx]
 	mov dword[eax], edx
@@ -997,10 +992,7 @@ player_rotatePlane:
 	push dword[ebp-12]
 	push HYPERPLANE_ROTATION_VECTOR_2
 	push HYPERPLANE_ROTATION_VECTOR_1
-	mov eax, dword[ebp+8]
-	push dword[eax+28]
-	call chunkManager4d_getHyperPlane
-	add esp, 4
+	lea eax, [ebp-76]
 	push eax
 	call hyperPlane_rotate
 	pop eax					;restore hyperplane
@@ -1011,12 +1003,13 @@ player_rotatePlane:
 	call aabb4d_setHyperPlane
 	add esp, 4
 	
-	
-	;unlock hyperplane mutex
+	;set the chunk manager's hyperplane
 	mov eax, dword[ebp+8]
-	push dword[eax+32]
-	call mutex_unlock
-	add esp, 4
+	mov eax, dword[eax+28]
+	lea ecx, [ebp-76]
+	push ecx
+	push eax
+	call chunkManager4d_setHyperPlane
 	
 	player_rotatePlane_end:
 	mov esp, ebp

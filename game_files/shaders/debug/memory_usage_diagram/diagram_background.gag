@@ -1,0 +1,26 @@
+#version 460 core
+layout (points) in;
+layout (triangle_strip, max_vertices = 4) out;
+
+in uint index[1];
+
+out vec4 colour;
+
+uniform float values[21];
+uniform float value_offsets[21];
+
+void main()
+{
+	colour=vec4(1,1,1,0.5);
+
+	gl_Position=vec4(2*vec2(value_offsets[index[0]], values[index[0]])-1, 0, 1);
+	EmitVertex();
+	gl_Position=vec4(2*vec2(value_offsets[index[0]], 0)-1, 0, 1);
+	EmitVertex();
+	gl_Position=vec4(2*vec2(value_offsets[index[0]+1], values[index[0]+1])-1, 0, 1);
+	EmitVertex();
+	gl_Position=vec4(2*vec2(value_offsets[index[0]+1], 0)-1, 0, 1);
+	EmitVertex();
+	
+	EndPrimitive();
+}

@@ -13,6 +13,8 @@ section .data use32
 	pop_error_message db "vector is empty bozo",10,0
 	at_error_message db "vector_at: %d is out of bounds",10,0
 	remove_at_error_message db "vector_remove_at: %d is out of bounds",10,0
+	
+	test_text db "aludj el szepen kicks balazs",10,0
 
 section .text use32
 	extern my_malloc
@@ -32,10 +34,18 @@ section .text use32
 	global vector_insert		;void vector_insert(vector*, int index, <element> element)
 	global vector_remove_at		;void vector_remove_at(vector*, int index)
 	global vector_remove		;int vector_remove(vector*, <element> element)	removes the first matching element. returns 0 if no removal took place, 69 else
+	;removes the first matching element. returns 0 if no removal took place, 69 else
+	;the comparator must return 0 if a match is found
+	global vector_removeCustom	;int vector_removeCustom(vector*, int (*comparator)(element*, void* searchKey), void* searchKey)
 	
 	;returns the index of the first matching element, otherwise -1 is returned
 	;the comparator must return 0 if a match is found
 	global vector_search		;int vector_search(vector*, int (*comparator)(element*, void* searchKey), void* searchKey)
+
+	global vector_for_each		;void vector_for_each(vector*, void (*function)(element*, void* param), void* param)
+
+	global vector_size			;int vector_size(vector*)
+	global vector_element_size	;int vector_element_size(vector*)
 
 vector_init: ;vector vector_init(element_size)
 	push ebp
@@ -487,7 +497,7 @@ vector_remove:		;int vector_remove(vector*, <element> element)
 	
 	
 	xor esi, esi
-	mov edi, dword[eax+12]	;data* in edi 
+	mov edi, dword[eax+12]		;data* in edi 
 	mov ebx, dword[eax+8]		;element size in ebx
 	
 	mov eax, dword[ebp+20]
@@ -503,8 +513,8 @@ vector_remove:		;int vector_remove(vector*, <element> element)
 		add esp, 12
 		
 		;check if element is found
-		cmp eax, 0
-		jne _remove_compare_loop_continue
+		test eax, eax
+		jnz _remove_compare_loop_continue
 			mov dword[ebp-8], 69			;set return value
 		
 			push esi
@@ -524,6 +534,62 @@ vector_remove:		;int vector_remove(vector*, <element> element)
 	
 	
 	mov eax, dword[ebp-8]
+	
+	mov esp, ebp
+	pop ebp
+	pop ebx
+	pop edi
+	pop esi
+	ret
+	
+	
+vector_removeCustom:	;int vector_remove(vector*, int (*comparator)(element*, void*), void*)
+	push esi
+	push edi
+	push ebx
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4				;return value		4
+	
+	mov dword[ebp-4], 0
+	
+	mov eax, dword[ebp+20]
+	xor esi, esi
+	mov edi, dword[eax+12]		;data* in edi 
+	mov ebx, dword[eax+8]		;element size in ebx
+	
+	cmp dword[eax], 0
+	jle vector_removeCustom_compare_loop_end		;is the vector empty?
+	vector_removeCustom_compare_loop_start:
+		
+		push dword[ebp+28]
+		push edi
+		call dword[ebp+24]
+		add esp, 8
+		
+		;check if element is found
+		test eax, eax
+		jnz vector_removeCustom_compare_loop_continue
+			mov dword[ebp-4], 69			;set return value
+		
+			push esi
+			push dword[ebp+20]
+			call vector_remove_at
+			add esp, 8
+			jmp vector_removeCustom_compare_loop_end
+		
+		
+		vector_removeCustom_compare_loop_continue:
+		add edi, ebx
+		inc esi
+		mov eax, dword[ebp+20]
+		cmp esi, dword[eax]
+		jl vector_removeCustom_compare_loop_start
+	vector_removeCustom_compare_loop_end:
+	
+	
+	mov eax, dword[ebp-4]
 	
 	mov esp, ebp
 	pop ebp
@@ -578,4 +644,47 @@ vector_search:
 	pop edi
 	pop esi
 	pop ebp
+	ret
+	
+	
+vector_for_each:	
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	mov eax, dword[ebp+20]
+	mov esi, dword[eax+12]		;current element in esi
+	mov edi, dword[eax]			;index in edi
+	mov ebx, dword[eax+8]		;element size in ebx
+	cmp edi, 0
+	jle vector_for_each_loop_end
+	vector_for_each_loop_start:
+		push dword[ebp+28]
+		push esi
+		call dword[ebp+24]
+		add esp, 8
+		
+		add esi, ebx
+		dec edi
+		jnz vector_for_each_loop_start
+	vector_for_each_loop_end:
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+vector_size:
+	mov eax, dword[esp+4]
+	mov eax, dword[eax]
+	ret
+	
+vector_element_size:
+	mov eax, dword[esp+4]
+	mov eax, dword[eax+8]
 	ret

@@ -3,13 +3,14 @@
 ;layout
 ;struct UIImage{
 ;	<UIElement>
-;	GLuint texture;			192	//0 means default
-;	float colourR;			196
-;	float colourG;			200
-;	float colourB;			204
-;	float colourA;			208
-;	float cornerRadius		212
-;}	216 bytes
+;	GLuint texture;				192	//0 means default
+;	float colourR;				196
+;	float colourG;				200
+;	float colourB;				204
+;	float colourA;				208
+;	float cornerRadius			212
+;	int shouldDeleteTexture;	216
+;}	220 bytes
 
 section .rodata use32
 	vertex_vector:
@@ -69,6 +70,9 @@ section .text use32
 	;path==NULL means default texture
 	;UIImage* uiImage_setTexture(UIImage* image, const char* nullableTexturePath)
 	global uiImage_setTexture
+	;a texture set this way won't get automatically deleted
+	;UIImage* uiImage_setTexture(UIImage* image, GLuint texture)
+	global uiImage_setTextureGL
 	global uiImage_setColour	;void uiImage_setColour(UIImage* image, float r, float g, float b, float a)
 	global uiImage_setCornerRadius	;void uiImage_setCornerRadius(UIImage* image, float cornerRadius)
 	
@@ -202,7 +206,7 @@ uiImage_create:
 	sub esp, 4			;image		4
 	
 	;alloc space
-	push 216
+	push 220
 	call my_malloc
 	mov dword[ebp-4], eax
 	
@@ -220,6 +224,7 @@ uiImage_create:
 	
 	;init values
 	mov dword[eax+192], 0
+	mov dword[eax+216], 69
 	
 	mov ecx, dword[ONE]
 	mov dword[eax+196], ecx
@@ -251,6 +256,8 @@ uiImage_setTexture:
 	mov eax, dword[ebp+8]
 	test dword[eax+192], 0xffffffff
 	jz uiImage_setTexture_no_previous_texture
+	test dword[eax+216], 0xffffffff		;shouldn't delete texture
+	jz uiImage_setTexture_no_previous_texture
 		push dword[eax+192]
 		call textureHandler_unload
 		
@@ -271,6 +278,27 @@ uiImage_setTexture:
 	mov eax, dword[ebp+8]
 	mov ecx, dword[ebp-4]
 	mov dword[eax+192], ecx
+	mov dword[eax+216], 69		;should delete
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+uiImage_setTextureGL:
+	push ebp
+	mov ebp, esp
+	
+	;delete previous texture if necessary
+	push 0
+	push dword[ebp+8]
+	call uiImage_setTexture
+	
+	;set new texture
+	mov eax, dword[ebp+8]
+	mov ecx, dword[ebp+12]
+	mov dword[eax+192], ecx
+	mov dword[eax+216], 0			;shouldn't delete
 	
 	mov esp, ebp
 	pop ebp
