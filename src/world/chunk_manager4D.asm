@@ -740,11 +740,6 @@ chunkManager4d_load:
 		push dword[ebp-16]			;chunkx
 		push dword[ebp+20]
 		call chunkManager4d_loadChunk_internal
-		test dword[eax+52], 0xffffffff
-		jz chunkManager4d_load_end
-			push eax
-			push dword[ebp+20]
-			call chunkManager4d_pushGraphicsLoadUpdate_internal
 		add esp, 16
 	
 	chunkManager4d_load_end:
@@ -1683,7 +1678,7 @@ chunkManager4d_loadChunk_internal:
 		
 		push dword[ebp-4]
 		push dword[ebp+20]
-		;call chunkManager4d_pushGraphicsLoadUpdate_internal
+		call chunkManager4d_pushGraphicsLoadUpdate_internal
 		
 		jmp chunkManager4d_loadChunk_internal_graphics_update_done
 	
@@ -1878,37 +1873,8 @@ chunkManager4d_reloadChunkByPosition_internal:
 	test eax, eax
 	jnz chunkManager4d_reloadChunkByPosition_internal_end		;problems
 	
-	;load chunk
-	push dword[ebp+32]
-	push dword[ebp+28]
-	push dword[ebp+24]
-	push dword[ebp+20]
-	call chunkManager4d_loadChunk_internal
-	mov dword[ebp-4], eax
-	
-	mov eax, dword[ebp-4]
-	test dword[eax+52], 0xffffffff
-	jz nigga
-		push eax
-		push dword[ebp+20]
-		call chunkManager4d_pushGraphicsLoadUpdate_internal
-	nigga:
-	
-	jmp chunkManager4d_reloadChunkByPosition_internal_end
-	
 	;create fantom update if necessary
 	test dword[ebp-20], 0xffffffff
-	jz chunkManager4d_reloadChunkByPosition_internal_no_fantom2
-		;create unload update
-		;push 69
-		push 0
-		push dword[ebp-20]
-		push dword[ebp+20]
-		call chunkManager4d_pushGraphicsUnloadUpdate_internal
-	chunkManager4d_reloadChunkByPosition_internal_no_fantom2:
-	
-	test dword[ebp-20], 0xffffffff
-	jmp chunkManager4d_reloadChunkByPosition_internal_no_fantom
 	jz chunkManager4d_reloadChunkByPosition_internal_no_fantom
 		;push fantom chunk
 		push dword[ebp+32]
@@ -1919,29 +1885,22 @@ chunkManager4d_reloadChunkByPosition_internal:
 		add ecx, 28
 		push ecx
 		call tsVector_pushBack
+	
+		;create unload update
+		push 69
+		push dword[ebp-20]
+		push dword[ebp+20]
+		call chunkManager4d_pushGraphicsUnloadUpdate_internal
 		
 	chunkManager4d_reloadChunkByPosition_internal_no_fantom:
 	
-	;create fantom update if necessary
-	;test dword[ebp-20], 0xffffffff
-	;jz chunkManager4d_reloadChunkByPosition_internal_no_fantom
-		;push fantom chunk
-	;	push dword[ebp+32]
-	;	push dword[ebp+28]
-	;	push dword[ebp+24]
-	;	push dword[ebp-20]
-	;	mov ecx, dword[ebp+20]
-	;	add ecx, 28
-	;	push ecx
-	;	call tsVector_pushBack
+	;load chunk
+	push dword[ebp+32]
+	push dword[ebp+28]
+	push dword[ebp+24]
+	push dword[ebp+20]
+	call chunkManager4d_loadChunk_internal
 	
-		;create unload update
-	;	push 69
-	;	push dword[ebp-20]
-	;	push dword[ebp+20]
-	;	call chunkManager4d_pushGraphicsUnloadUpdate_internal
-		
-	;chunkManager4d_reloadChunkByPosition_internal_no_fantom:
 	
 	chunkManager4d_reloadChunkByPosition_internal_end:
 	mov esp, ebp
