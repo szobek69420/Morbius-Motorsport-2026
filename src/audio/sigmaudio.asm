@@ -42,9 +42,10 @@
 ;}	12 bytes overall
 
 ;struct Playback{
-;	Sound* sound;					;0
-;	int loopsLeft;					;4
-;	int currentPosition;			;8	as in sample
+;	int id;							;0
+;	Sound* sound;					;4
+;	int loopsLeft;					;8
+;	int currentPosition;			;12	as in sample
 ;}
 
 section .rodata use32
@@ -100,14 +101,16 @@ section .data use32
 	prepared_block_count dd 0	;Semaphore*
 	playbacks dd 0,0,0,0		;vector<Playback>
 	
-	should_stop dd 0			;tsValue<int>*
+	should_exit dd 0			;tsValue<int>*
 	
 section .bss use32
 	system_waveformatex resb 18	;the WAVEFORMATEX structure generated from the system values
 	
 section .text use32	
 
+	;bitsPerSample needs to be positive and divisible by 8
 	global sigmaudio_init				;void sigmaudio_init(int sampleRate, int numChannels, int bitsPerSample)
+	global sigmaudio_deinit				;void sigmaudio_deinit()
 
 	extern my_printf
 	extern my_fopen
@@ -178,14 +181,14 @@ sigmaudio_init:
 	mov dword[prepared_block_count], eax
 	
 	;create playback vector
-	push 12
+	push 16
 	push playbacks
 	call vector_init
 	
 	;create and set should_stop
 	push 4
 	call tsValue_create
-	mov dword[should_stop], eax
+	mov dword[should_exit], eax
 	push 0
 	push eax
 	call tsValue_set
@@ -222,6 +225,64 @@ sigmaudio_init:
 	mov dword[initialized], 69
 	
 	sigmaudio_init_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+sigmaudio_deinit:
+	push ebp
+	mov ebp, esp
+	
+	;is initialized
+	test dword[initialized], 0xffffffff
+	jnz sigmaudio_deinit_initialized
+		push sigmaudio_deinit_error_not_initialized
+		call my_printf
+		jmp sigmaudio_deinit_end
+		
+		sigmaudio_deinit_error_not_initialized db "sigmaudio_deinit: The system is not initialized",10,0
+	sigmaudio_deinit_initialized:
+	
+	;stop all playbacks
+	amogus
+	
+	;yeet the audio thread
+	push 69
+	push dword[should_exit]
+	call tsValue_set
+	
+	push -1
+	push dword[audio_thread]
+	call thread_join
+	test eax, eax
+	jz sigmaudio_deinit_thread_has_been_yeeten
+		push sigmaudio_deinit_error_yeetus_fehlgeschlagen
+		call my_printf
+		jmp sigmaudio_deinit_end
+		
+		sigmaudio_deinit_error_yeetus_fehlgeschlagen db "sigmaudio_deinit: Somting wong nig",10,0
+	sigmaudio_deinit_thread_has_been_yeeten:
+	
+	;destroy audio device
+	push dword[audio_device]
+	call [waveOutClose]
+	
+	;delete the playback vector
+	push playbacks
+	call vector_destroy
+	
+	;destroy prepared block count
+	push dword[prepared_block_count]
+	call semaphore_destroy
+	
+	;destroy should_exit
+	push dword[should_exit]
+	call tsValue_destroy
+	
+	;unset initialized flag
+	mov dword[initialized], 0
+	
+	sigmaudio_deinit_end:
 	mov esp, ebp
 	pop ebp
 	ret
