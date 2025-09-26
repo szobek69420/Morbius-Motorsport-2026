@@ -92,18 +92,18 @@ sigmaudio_changeNumChannels:
 		mov ebx, dword[ebp-16]		;index in ebx
 		mov eax, dword[ebp-12]		;helper in eax
 		cmp ebx, 0
-		jle sigmaudio_changeNumChannels_1to2_outer_loop_end
-		sigmaudio_changeNumChannels_1to2_outer_loop_start:
+		jle sigmaudio_changeNumChannels_2to1_outer_loop_end
+		sigmaudio_changeNumChannels_2to1_outer_loop_start:
 			cld
 			mov ecx, eax			;index in ecx
-			sigmaudio_changeNumChannels_1to2_inner_loop_start:
+			sigmaudio_changeNumChannels_2to1_inner_loop_start:
 				movsb
 				dec ecx
-				jnz sigmaudio_changeNumChannels_1to2_inner_loop_start
+				jnz sigmaudio_changeNumChannels_2to1_inner_loop_start
 			add esi, eax
 			dec ebx
-			jnz sigmaudio_changeNumChannels_1to2_outer_loop_start
-		sigmaudio_changeNumChannels_1to2_outer_loop_end:
+			jnz sigmaudio_changeNumChannels_2to1_outer_loop_start
+		sigmaudio_changeNumChannels_2to1_outer_loop_end:
 		
 		;delete the old data
 		mov eax, dword[ebp+20]
@@ -124,6 +124,62 @@ sigmaudio_changeNumChannels:
 		
 	sigmaudio_changeNumChannels_1to2:
 		;mono -> stereo
+		
+		;alloc the space for the new audio data
+		mov eax, dword[ebp+20]
+		mov eax, dword[eax]
+		shl eax, 1
+		mov dword[ebp-20], eax		;new data size
+		push eax
+		call my_malloc
+		mov dword[ebp-8], eax
+		
+		;create the new data
+		mov esi, dword[ebp+20]
+		mov esi, dword[esi+4]		;original data in esi
+		mov edi, dword[ebp-8]		;new data in edi
+		mov ebx, dword[ebp-16]		;index in ebx
+		mov eax, dword[ebp-12]		;helper in eax
+		cmp ebx, 0
+		jle sigmaudio_changeNumChannels_1to2_outer_loop_end
+		sigmaudio_changeNumChannels_1to2_outer_loop_start:
+			;copy first channel
+			cld
+			mov ecx, eax			;index in ecx
+			sigmaudio_changeNumChannels_1to2_inner_loop1_start:
+				movsb
+				dec ecx
+				jnz sigmaudio_changeNumChannels_1to2_inner_loop1_start
+				
+			;copy second channel
+			sub esi, eax
+			cld
+			mov ecx, eax			;index in ecx
+			sigmaudio_changeNumChannels_1to2_inner_loop2_start:
+				movsb
+				dec ecx
+				jnz sigmaudio_changeNumChannels_1to2_inner_loop2_start
+
+			dec ebx
+			jnz sigmaudio_changeNumChannels_1to2_outer_loop_start
+		sigmaudio_changeNumChannels_1to2_outer_loop_end:
+		
+		;delete the old data
+		mov eax, dword[ebp+20]
+		push dword[eax+4]
+		call my_free
+		
+		;update the values in the sound
+		mov eax, dword[ebp+20]
+		mov ecx, dword[ebp-8]
+		mov dword[eax+4], ecx		;data
+		mov edx, dword[ebp-20]
+		mov dword[eax], edx			;data length
+		
+		mov eax, dword[ebp-4]
+		mov word[eax+2], 2			;numChannels
+		
+		jmp sigmaudio_changeNumChannels_end
 	
 	jmp sigmaudio_changeNumChannels_end
 	
