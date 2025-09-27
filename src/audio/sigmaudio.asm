@@ -108,7 +108,7 @@ section .bss use32
 	
 section .text use32	
 
-	;bitsPerSample needs to be positive and divisible by 8
+	;bitsPerSample needs to be in {8,16,24,32}
 	global sigmaudio_init				;void sigmaudio_init(int sampleRate, int numChannels, int bitsPerSample)
 	global sigmaudio_deinit				;void sigmaudio_deinit()
 
