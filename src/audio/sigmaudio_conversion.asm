@@ -16,7 +16,197 @@
 ;	uint16 cbSize;				;16
 ;}	18 bytes overall
 
+section .rodata use32
+
+	ONE dd 1.0
+
 section .text use32
+
+;new and original bitsPerSample should be in {8,16,24,32}
+;blockSize: the number of samples with which the 
+;void sigmaudio_changeSamplesPerSec(Sound* sound, int samplesPerSec, int blockSize)
+sigmaudio_changeSamplesPerSec:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 4		;new data					4
+	sub esp, 4		;new data size				8
+	sub esp, 4		;waveformatex				12
+	sub esp, 4		;old sample count			16	;data size in bytes / (wBitsPerSample/8 * nChannels)
+	sub esp, 4		;new sample count			20	;data size in bytes / (wBitsPerSample/8 * nChannels)
+	sub esp, 4		;padded new sample count	24
+	sub esp, 4		;bitsPerSample				28
+	sub esp, 4		;numChannels				32
+	sub esp, 4		;nBlockAlign/8				36
+	
+	sub esp, 4		;(float)(oldSampleRate-1)/newSampleRate	40	//-1 is only there to ensure no overflow
+	
+	;get waveformatex, bitsPerSample, channel count and nBlockAlign
+	mov eax, dword[ebp+20]
+	mov eax, dword[eax+8]
+	mov dword[ebp-12], eax
+	
+	xor ecx, ecx
+	mov cx, word[eax+14]
+	mov dword[ebp-28], ecx		;bitsPerSample
+	mov cx, word[eax+2]
+	mov dword[ebp-32], ecx		;nChannels
+	mov cx, word[eax+12]
+	shr cx, 3
+	mov dword[ebp-36], ecx		;nBlockAlign
+	
+	;check if the new and old samplesPerSec are same
+	mov eax, dword[ebp-12]
+	mov eax, dword[eax+8]
+	cmp eax, dword[ebp+24]
+	je sigmaudio_changeSamplesPerSec_end
+	
+	;calculate the old sample count
+	mov eax, dword[ebp+20]
+	mov eax, dword[eax]
+	mov edx, dword[ebp-12]
+	mov ecx, dword[ebp-36]
+	xor edx, edx
+	idiv ecx
+	mov dword[ebp-16], eax
+	
+	;calculate the new sample count and the padded new sample count
+	mov eax, dword[ebp-16]
+	xor edx, edx
+	imul dword[ebp+24]
+	mov ecx, dword[ebp-12]
+	idiv dword[ecx+4]
+	mov dword[ebp-20], eax
+	
+	xor edx, edx
+	idiv dword[ebp+28]
+	mov eax, dword[ebp+28]
+	sub eax, edx
+	add eax, dword[ebp-20]
+	mov dword[ebp-24], eax
+	
+	
+	;calculate the size of the new data and alloc it
+	mov eax ,dword[ebp-28]
+	imul eax ,dword[ebp-36]
+	mov dword[ebp-8], eax
+	push eax
+	call my_malloc
+	mov dword[ebp-4], eax
+	
+	;calculate loop helper variables and initialize helper registers
+	mov eax, dword[ebp-12]
+	mov eax, dword[eax+4]
+	dec eax
+	cvtsi2ss xmm0, eax
+	cvtsi2ss xmm1, dword[ebp+24]
+	divss xmm0, xmm1
+	movss dword[ebp-40], xmm0
+	
+	mov esi, dword[ebp+20]
+	mov esi, dword[esi+4]			;source data in esi
+	mov edi, dword[ebp-4]			;target data in edi
+	mov ebx, dword[ebp-20]			;index in ebx
+	movss xmm0, dword[ebp-40]		;delta in xmm0
+	movss xmm1, 0					;interpolator in xmm1
+	movss xmm2, dword[ONE]			;1-interpolator in xmm2
+	cmp ebx, 0
+	jle sigmaudio_changeSamplesPerSec_end
+	
+	;sample loops
+	cmp dword[ebp-28], 8
+	je sigmaudio_changeSamplesPerSec_8bit_loop_start
+	cmp dword[ebp-28], 16
+	je sigmaudio_changeSamplesPerSec_16bit_loop_start
+	cmp dword[ebp-28], 24
+	je sigmaudio_changeSamplesPerSec_24bit_loop_start
+	cmp dword[ebp-28], 32
+	je sigmaudio_changeSamplesPerSec_32bit_loop_start
+		;unsupported sample size
+		push dword[ebp-28]
+		push sigmaudio_changeSamplesPerSec_error_unsupported_sample_size
+		call my_printf
+		jmp sigmaudio_changeSamplesPerSec_end
+		sigmaudio_changeSamplesPerSec_error_unsupported_sample_size db "sigmaudio_changeSamplesPerSec: %d bits per sample is not supported",10,0
+	sigmaudio_changeSamplesPerSec_8bit_loop_start:
+	sigmaudio_changeSamplesPerSec_16bit_loop_start:
+	sigmaudio_changeSamplesPerSec_24bit_loop_start:
+	sigmaudio_changeSamplesPerSec_32bit_loop_start:
+		;interpolate values
+		mov edx, dword[ebp-32]
+		dec edx
+		shl edx, 2				;offset=(numChannels-1)*4 bytes
+		mov ecx, dword[ebp-36]
+		add ecx, edx			;edx+nBlockAlign/8 in ecx (offset for next sample)
+		sigmaudio_changeSamplesPerSec_32bit_interpol_loop_start:
+			cvtsi2ss xmm3, dword[esi+edx]
+			cvtsi2ss xmm4, dword[esi+ecx]
+			mulss xmm3, xmm1
+			mulss xmm4, xmm2
+			addss xmm3, xmm4
+			cvtss2si eax, xmm3
+			mov dword[edi+edx]
+			
+			sub ecx, 4
+			sub edx, 4
+			test edx, 0x80000000
+			jz sigmaudio_changeSamplesPerSec_32bit_interpol_loop_start
+		
+		;continue
+		addss xmm1, xmm0
+		subss xmm2, xmm0
+		ucomiss xmm1, dword[ONE]
+		jb sigmaudio_changeSamplesPerSec_32bit_loop_no_overflow
+			subss xmm1, dword[ONE]
+			addss xmm2, dword[ONE]
+			add esi, dword[ebp-36]		;step the source data
+		sigmaudio_changeSamplesPerSec_32bit_loop_no_overflow:
+		add edi, dword[ebp-36]
+		dec ebx
+		jnz sigmaudio_changeSamplesPerSec_32bit_loop_start
+		jmp sigmaudio_changeSamplesPerSec_loops_done
+	
+	sigmaudio_changeSamplesPerSec_loops_done:
+	
+	;zero out the padding part
+	mov eax, dword[ebp-24]
+	imul eax, dword[ebp-36]
+	mov ecx, dword[ebp-20]
+	imul ecx, dword[ebp-36]
+	sub eax, ecx
+	add ecx, dword[ebp-4]
+	push eax
+	push 0
+	push ecx
+	call my_memset
+	
+	;delete the old data and set the new one
+	mov eax, dword[ebp+20]
+	push dword[eax+4]
+	call my_free
+	mov eax, dword[ebp+20]
+	mov ecx, dword[ebp-8]
+	mov edx, dword[ebp-4]
+	mov dword[eax], ecx
+	mov dword[eax+4], edx
+	
+	;update the waveformatex
+	mov eax, dword[ebp-12]
+	mov ecx, dword[ebp+24]
+	mov dword[eax+4], ecx
+	imul ecx, dword[ebp-36]
+	mov dword[eax+8], ecx
+	
+	sigmaudio_changeSamplesPerSec_end:
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
 
 ;new and original bitsPerSample should be in {8,16,24,32}
 ;void sigmaudio_changeBitsPerSample(Sound* sound, int bitsPerSample)
@@ -33,6 +223,7 @@ sigmaudio_changeBitsPerSample:
 	sub esp, 4			;shift left		16
 	sub esp, 4			;sample count	20	(numChannels is also included in the calculation)
 	sub esp, 4			;source bitsPerSampel	24
+	sub esp, 4			;new data size	28
 	
 	;obtain waveformatex and source bitsPerSample
 	mov eax, dword[ebp+20]
@@ -108,8 +299,9 @@ sigmaudio_changeBitsPerSample:
 	shr ecx, 3
 	imul eax, ecx
 	push eax
+	mov dword[ebp-28], eax		;new data size
 	call my_malloc
-	mov dword[ebp-4], eax
+	mov dword[ebp-4], eax		;new data
 	
 	;convert the data
 	mov esi, dword[ebp+20]
@@ -191,6 +383,31 @@ sigmaudio_changeBitsPerSample:
 		dec ebx
 		jnz sigmaudio_changeBitsPerSample_loop_start
 	sigmaudio_changeBitsPerSample_loop_end:
+	
+	;delete the old data
+	mov eax, dword[ebp+20]
+	push dword[ebp+4]
+	call my_free
+	
+	;set new data and data size
+	mov eax, dword[ebp+20]
+	
+	mov ecx, dword[ebp-4]
+	mov edx, dword[ebp-28]
+	mov dword[eax+4], ecx		;data
+	mov dword[eax], edx			;data size
+	
+	;recalculate the waveformatex
+	mov eax, dword[ebp-8]
+	
+	mov cx, word[eax+14]
+	shr cx, 3					;bits->bytes
+	imul cx, word[eax+2]
+	mov word[eax+12], cx		;nBlockAlign
+	and ecx, 0x0000ffff
+	imul ecx, dword[eax+4]
+	mov dword[eax+8], ecx		;nAvgBytesPerSec
+	
 	
 	sigmaudio_changeBitsPerSample_end:
 	mov esp, ebp
@@ -299,7 +516,10 @@ sigmaudio_changeNumChannels:
 		mov dword[eax], edx
 		
 		mov eax, dword[ebp-4]
-		mov word[eax+2], 1
+		mov word[eax+2], 1			;numChannels
+		shr word[eax+12], 1			;nBlockAlign
+		shr dword[eax+8], 1		;avgBytesPerSec
+		
 		
 		jmp sigmaudio_changeNumChannels_end
 		
@@ -359,6 +579,8 @@ sigmaudio_changeNumChannels:
 		
 		mov eax, dword[ebp-4]
 		mov word[eax+2], 2			;numChannels
+		shl word[eax+12], 1			;nBlockAlign
+		shl dword[eax+8], 1		;avgBytesPerSec
 		
 		jmp sigmaudio_changeNumChannels_end
 	
