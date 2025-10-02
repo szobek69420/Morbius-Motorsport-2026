@@ -131,9 +131,126 @@ sigmaudio_changeSamplesPerSec:
 		call my_printf
 		jmp sigmaudio_changeSamplesPerSec_end
 		sigmaudio_changeSamplesPerSec_error_unsupported_sample_size db "sigmaudio_changeSamplesPerSec: %d bits per sample is not supported",10,0
+	
 	sigmaudio_changeSamplesPerSec_8bit_loop_start:
+		;interpolate values
+		mov edx, dword[ebp-32]
+		dec edx					;offset=(numChannels-1)*4 bytes
+		mov ecx, dword[ebp-36]
+		add ecx, edx			;edx+nBlockAlign/8 in ecx (offset for next sample)
+		sigmaudio_changeSamplesPerSec_8bit_interpol_loop_start:
+			xor eax, eax
+			mov al, byte[esi+edx]
+			cvtsi2ss xmm3, eax
+			mov al, byte[esi+ecx]
+			cvtsi2ss xmm4, eax
+			mulss xmm3, xmm1
+			mulss xmm4, xmm2
+			addss xmm3, xmm4
+			cvtss2si eax, xmm3
+			mov byte[edi+edx], al
+			
+			dec ecx
+			dec edx
+			test edx, 0x80000000
+			jz sigmaudio_changeSamplesPerSec_8bit_interpol_loop_start
+		
+		;continue
+		addss xmm1, xmm0
+		subss xmm2, xmm0
+		ucomiss xmm1, dword[ONE]
+		jb sigmaudio_changeSamplesPerSec_8bit_loop_no_overflow
+			subss xmm1, dword[ONE]
+			addss xmm2, dword[ONE]
+			add esi, dword[ebp-36]		;step the source data
+		sigmaudio_changeSamplesPerSec_8bit_loop_no_overflow:
+		add edi, dword[ebp-36]
+		dec ebx
+		jnz sigmaudio_changeSamplesPerSec_8bit_loop_start
+		jmp sigmaudio_changeSamplesPerSec_loops_done
+		
 	sigmaudio_changeSamplesPerSec_16bit_loop_start:
+		;interpolate values
+		mov edx, dword[ebp-32]
+		dec edx
+		shl edx, 1				;offset=(numChannels-1)*2 bytes
+		mov ecx, dword[ebp-36]
+		add ecx, edx			;edx+nBlockAlign/8 in ecx (offset for next sample)
+		sigmaudio_changeSamplesPerSec_16bit_interpol_loop_start:
+			xor eax, eax
+			mov ax, word[esi+edx]
+			cvtsi2ss xmm3, eax
+			mov ax, word[esi+ecx]
+			cvtsi2ss xmm4, eax
+			mulss xmm3, xmm1
+			mulss xmm4, xmm2
+			addss xmm3, xmm4
+			cvtss2si eax, xmm3
+			mov word[edi+edx], eax
+			
+			sub ecx, 2
+			sub edx, 2
+			test edx, 0x80000000
+			jz sigmaudio_changeSamplesPerSec_16bit_interpol_loop_start
+		
+		;continue
+		addss xmm1, xmm0
+		subss xmm2, xmm0
+		ucomiss xmm1, dword[ONE]
+		jb sigmaudio_changeSamplesPerSec_16bit_loop_no_overflow
+			subss xmm1, dword[ONE]
+			addss xmm2, dword[ONE]
+			add esi, dword[ebp-36]		;step the source data
+		sigmaudio_changeSamplesPerSec_16bit_loop_no_overflow:
+		add edi, dword[ebp-36]
+		dec ebx
+		jnz sigmaudio_changeSamplesPerSec_16bit_loop_start
+		jmp sigmaudio_changeSamplesPerSec_loops_done
+		
 	sigmaudio_changeSamplesPerSec_24bit_loop_start:
+		;interpolate values
+		mov edx, dword[ebp-32]
+		dec edx
+		imul edx, 3				;offset=(numChannels-1)*3 bytes
+		mov ecx, dword[ebp-36]
+		add ecx, edx			;edx+nBlockAlign/8 in ecx (offset for next sample)
+		sigmaudio_changeSamplesPerSec_24bit_interpol_loop_start:
+			xor eax, eax
+			mov ax, word[esi+edx+1]
+			shl eax, 8
+			mov al, byte[esi+edx]
+			cvtsi2ss xmm3, eax
+			mov ax, word[esi+ecx+1]
+			shl eax, 8
+			mov al, byte[esi+ecx]
+			cvtsi2ss xmm4, eax
+			mulss xmm3, xmm1
+			mulss xmm4, xmm2
+			addss xmm3, xmm4
+			cvtss2si eax, xmm3
+			mov byte[edi+edx], al
+			shr eax, 8
+			mov word[edi+edx+1], ax
+			
+			sub ecx, 3
+			sub edx, 3
+			test edx, 0x80000000
+			jz sigmaudio_changeSamplesPerSec_24bit_interpol_loop_start
+		
+		;continue
+		addss xmm1, xmm0
+		subss xmm2, xmm0
+		ucomiss xmm1, dword[ONE]
+		jb sigmaudio_changeSamplesPerSec_24bit_loop_no_overflow
+			subss xmm1, dword[ONE]
+			addss xmm2, dword[ONE]
+			add esi, dword[ebp-36]		;step the source data
+		sigmaudio_changeSamplesPerSec_24bit_loop_no_overflow:
+		add edi, dword[ebp-36]
+		dec ebx
+		jnz sigmaudio_changeSamplesPerSec_24bit_loop_start
+		jmp sigmaudio_changeSamplesPerSec_loops_done
+	
 	sigmaudio_changeSamplesPerSec_32bit_loop_start:
 		;interpolate values
 		mov edx, dword[ebp-32]
@@ -148,7 +265,7 @@ sigmaudio_changeSamplesPerSec:
 			mulss xmm4, xmm2
 			addss xmm3, xmm4
 			cvtss2si eax, xmm3
-			mov dword[edi+edx]
+			mov dword[edi+edx], eax
 			
 			sub ecx, 4
 			sub edx, 4
