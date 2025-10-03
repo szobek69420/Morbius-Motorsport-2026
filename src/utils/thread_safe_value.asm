@@ -19,6 +19,10 @@ section .text use32
 	global tsValue_isEqual		;int tsValue_isEqual(tsValue* value, <value_type> data)
 	global tsValue_isEqualBuffer;int tsValue_isEqualBuffer(tsValue* value, <value_type>* pdata)
 	
+	global tsValue_lock			;void tsValue_lock(tsValue* value)
+	global tsValue_tryLock		;int tsValue_tryLock(tsValue* value)	//returns non-zero on success
+	global tsValue_unlock		;void tsValue_unlock(tsValue* value)
+	
 	extern my_malloc
 	extern my_free
 	extern my_memcpy
@@ -86,7 +90,7 @@ tsValue_get:
 	
 	;lock
 	push dword[ebp+8]
-	call tsValue_lock_internal
+	call tsValue_lock
 	
 	;copy value
 	mov eax, dword[ebp+8]
@@ -98,7 +102,7 @@ tsValue_get:
 	
 	;unlock
 	push dword[ebp+8]
-	call tsValue_unlock_internal
+	call tsValue_unlock
 	
 	mov esp, ebp
 	pop ebp
@@ -111,7 +115,7 @@ tsValue_set:
 	
 	;lock
 	push dword[ebp+8]
-	call tsValue_lock_internal
+	call tsValue_lock
 	
 	;copy value
 	mov eax, dword[ebp+8]
@@ -124,7 +128,7 @@ tsValue_set:
 	
 	;unlock
 	push dword[ebp+8]
-	call tsValue_unlock_internal
+	call tsValue_unlock
 	
 	mov esp, ebp
 	pop ebp
@@ -137,7 +141,7 @@ tsValue_setBuffer:
 	
 	;lock
 	push dword[ebp+8]
-	call tsValue_lock_internal
+	call tsValue_lock
 	
 	;copy value
 	mov eax, dword[ebp+8]
@@ -149,7 +153,7 @@ tsValue_setBuffer:
 	
 	;unlock
 	push dword[ebp+8]
-	call tsValue_unlock_internal
+	call tsValue_unlock
 	
 	mov esp, ebp
 	pop ebp
@@ -164,7 +168,7 @@ tsValue_isEqual:
 	
 	;lock
 	push dword[ebp+8]
-	call tsValue_lock_internal
+	call tsValue_lock
 	
 	;copy value
 	mov eax, dword[ebp+8]
@@ -178,7 +182,7 @@ tsValue_isEqual:
 	
 	;unlock
 	push dword[ebp+8]
-	call tsValue_unlock_internal
+	call tsValue_unlock
 	
 	xor eax, eax
 	cmp dword[ebp-4], 0
@@ -198,7 +202,7 @@ tsValue_isEqualBuffer:
 	
 	;lock
 	push dword[ebp+8]
-	call tsValue_lock_internal
+	call tsValue_lock
 	
 	;copy value
 	mov eax, dword[ebp+8]
@@ -211,7 +215,7 @@ tsValue_isEqualBuffer:
 	
 	;unlock
 	push dword[ebp+8]
-	call tsValue_unlock_internal
+	call tsValue_unlock
 	
 	xor eax, eax
 	cmp dword[ebp-4], 0
@@ -223,31 +227,39 @@ tsValue_isEqualBuffer:
 	ret
 	
 	
-;internal functinos	--------------------------------
-
-;void tsValue_lock_internal(tsValue*)
-tsValue_lock_internal:
+tsValue_tryLock:
 	push ebp
 	mov ebp, esp
 	
-	;tries to lock critical section non-blockingly (also enables repeated lock calls)
 	mov eax, dword[ebp+8]
 	push dword[eax]
 	call criticalSection_tryLock
-	test eax, eax
-	jnz tsValue_lock_internal_end
-	
-	;waits for lock blockingly
-	call criticalSection_lock
-	
-	tsValue_lock_internal_end:
+
 	mov esp, ebp
 	pop ebp
 	ret
 	
 	
-;void tsValue_unlock_internal(tsValue*)
-tsValue_unlock_internal:
+tsValue_lock:
+	push ebp
+	mov ebp, esp
+	
+	;tries to lock critical section non-blockingly (also enables repeated lock calls)
+	push dword[ebp+8]
+	call tsValue_tryLock
+	test eax, eax
+	jnz tsValue_lock_end
+	
+	;waits for lock blockingly
+	call criticalSection_lock
+	
+	tsValue_lock_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+tsValue_unlock:
 	push ebp
 	mov ebp, esp
 	

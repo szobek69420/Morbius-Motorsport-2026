@@ -4,7 +4,8 @@
 ;	int dataSizeInBytes;			;0
 ;	char* data;						;4
 ;	WAVEFORMATEX* formatDescriptor;	;8
-;	uint64 id						;12
+;	char* filePath					;12
+;	int id;							;16
 ;}	20 bytes overall
 
 ;struct WAVEFORMATEX{

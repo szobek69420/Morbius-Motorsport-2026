@@ -39,7 +39,8 @@
 ;	int dataSizeInBytes;			;0
 ;	char* data;						;4
 ;	WAVEFORMATEX* formatDescriptor;	;8
-;	uint64 id;						;12
+;	char* filePath;					;12
+;	int id;							;16		//for internal use
 ;}	20 bytes overall
 
 ;struct Playback{
@@ -48,6 +49,13 @@
 ;	int loopsLeft;					;8
 ;	int currentPosition;			;12	as in sample
 ;}
+
+;struct PlaybackCommand{
+;	int isStopCommand;				0
+;	union{
+;		struct PlayCommand{ Sound* sound; int loopCount; int playbackId; } playCommand;
+;		struct StopCommand{ int playbackId; } stopCommand;
+;}	16 bytes overall
 
 section .rodata use32
 
@@ -97,14 +105,18 @@ section .data use32
 	bits_per_sample dd 16		;bits per sample per channel
 	block_length dd 100			;number of samples per prepared block
 	
-	imported_sounds dd 16		;vector<Sound>
+	imported_sounds dd 0,0		;tsVector<Sound>
 	
 	audio_device dd 0			;waveOut device handle
 	audio_thread dd 0			;Thread*
 	prepared_block_count dd 0	;Semaphore*
 	playbacks dd 0,0,0,0		;vector<Playback>
+	command_queue dd 0,0		;tsQueue<PlaybackCommand>
 	
 	should_exit dd 0			;tsValue<int>*
+	
+	current_sound_id dd 69420
+	current_playback_id dd 42069
 	
 section .bss use32
 	system_waveformatex resb 18	;the WAVEFORMATEX structure generated from the system values
@@ -116,6 +128,12 @@ section .text use32
 	global sigmaudio_deinit				;void sigmaudio_deinit()
 
 	global sigmaudio_import				;int sigmaudio_import(const char* soundPath)	//returns zero if no error occured
+	global sigmaudio_deport				;void sigmaudio_deport(const char* soundPath)
+	
+	;returns the id of the playback if gg, else 0
+	;int sigmaudio_play(const char* soundPath, int loopCount)
+	global sigmaudio_play
+	global sigmaudio_stop				;void sigmaudio_stop(int playbackId)
 
 	extern my_printf
 	extern my_fopen
@@ -185,7 +203,7 @@ sigmaudio_init:
 	;create imported sounds vector
 	push 20
 	push imported_sounds
-	call vector_init
+	call tsVector_init
 	
 	;create prepared block count
 	push dword[MAX_PREPARED_BLOCKS]
@@ -196,6 +214,12 @@ sigmaudio_init:
 	push 16
 	push playbacks
 	call vector_init
+	
+	;create command queue
+	push 64
+	push 16
+	push command_queue
+	call tsQueue_init
 	
 	;create and set should_stop
 	push 4
@@ -272,12 +296,16 @@ sigmaudio_deinit:
 		call my_printf
 		jmp sigmaudio_deinit_end
 		
-		sigmaudio_deinit_error_yeetus_fehlgeschlagen db "sigmaudio_deinit: Somting wong nig",10,0
+		sigmaudio_deinit_error_yeetus_fehlgeschlagen db "sigmaudio_deinit: Sumting wong nig",10,0
 	sigmaudio_deinit_thread_has_been_yeeten:
 	
 	;destroy audio device
 	push dword[audio_device]
 	call [waveOutClose]
+	
+	;destroy command queue
+	push command_queue
+	call tsQueue_destroy
 	
 	;delete the playback vector
 	push playbacks
@@ -285,7 +313,7 @@ sigmaudio_deinit:
 	
 	;delete the imported sounds vector
 	push imported_sounds
-	call vector_destroy
+	call tsVector_destroy
 	
 	;destroy prepared block count
 	push dword[prepared_block_count]
@@ -362,7 +390,8 @@ sigmaudio_import:
 	sub esp, 4	;data size				24
 	sub esp, 36	;header					60
 	sub esp, 4	;temp file				64
-	sub esp, 8	;file id				72
+	sub esp, 4	;copied file path		68
+	sub esp, 4	;unused
 	sub esp, 4	;return value			76
 	
 	mov dword[ebp-4], 0
@@ -424,12 +453,6 @@ sigmaudio_import:
 	call my_fclose
 	add esp, 4
 	
-	;get file id
-	lea eax, [ebp-72]
-	push eax
-	push dword[ebp+8]
-	call file_getId
-	
 	;get the WAVEFORMATEX
 	push 18
 	call my_malloc
@@ -441,6 +464,17 @@ sigmaudio_import:
 	push dword[ebp-12]
 	call sigmaudio_getWAVEFORMATEX
 	add esp, 8
+	
+	;copy the file path
+	push dword[ebp+8]
+	call my_strlen
+	inc eax
+	mov dword[esp], eax
+	call my_malloc
+	mov dword[ebp-68], eax
+	push dword[ebp+8]
+	push eax
+	call my_strcpy
 	
 	;alloc the Sound struct
 	push 20
@@ -457,17 +491,19 @@ sigmaudio_import:
 	mov dword[eax+4], ecx	;data
 	mov ecx, dword[ebp-12]
 	mov dword[eax+8], ecx	;WAVEFORMATEX*
-	mov edx, dword[ebp-72]
-	mov dword[eax+12], edx
-	mov edx, dword[ebp-68]
-	mov dword[eax+16], edx	;id
+	mov ecx, dword[ebp-68]
+	mov dword[eax+12], ecx	;path
+	inc dword[current_sound_id]
+	mov ecx, dword[current_sound_id]
+	mov dword[eax+16], ecx
 	
 	;TODO: convert format to internal representation
+	amogus
 	
 	;add sound to imported sounds and delete buffer
 	push dword[ebp-4]
 	push imported_sounds
-	call vector_push_back_buffer
+	call tsVector_pushBackBuffer
 	
 	push dword[ebp-4]
 	call my_free
@@ -478,6 +514,35 @@ sigmaudio_import:
 	mov esp, ebp
 	pop ebp
 	ret
+	
+	
+sigmaudio_deport:
+	push ebp
+	mov ebp, esp
+	
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+sigmaudio_play:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4		;playback id			4
+	sub esp, 4		;loop count				8
+	sub esp, 4		;sound					12
+	sub esp, 4		;isStopCommand			16
+	
+	;check if the command is in the imported 
+	
+	mov dword[ebp-16], 0		;play command
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
 
 ;dataStart: how long is the header in bytes
 ;dataLength: how much raw audio data is there in bytes
