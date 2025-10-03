@@ -4,7 +4,8 @@
 ;	int dataSizeInBytes;			;0
 ;	char* data;						;4
 ;	WAVEFORMATEX* formatDescriptor;	;8
-;}	12 bytes overall
+;	uint64 id						;12
+;}	20 bytes overall
 
 ;struct WAVEFORMATEX{
 ;	uint16 wFormatTag;			;0

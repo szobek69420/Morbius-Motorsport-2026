@@ -39,7 +39,8 @@
 ;	int dataSizeInBytes;			;0
 ;	char* data;						;4
 ;	WAVEFORMATEX* formatDescriptor;	;8
-;}	12 bytes overall
+;	uint64 id;						;12
+;}	20 bytes overall
 
 ;struct Playback{
 ;	int id;							;0
@@ -96,6 +97,8 @@ section .data use32
 	bits_per_sample dd 16		;bits per sample per channel
 	block_length dd 100			;number of samples per prepared block
 	
+	imported_sounds dd 16		;vector<Sound>
+	
 	audio_device dd 0			;waveOut device handle
 	audio_thread dd 0			;Thread*
 	prepared_block_count dd 0	;Semaphore*
@@ -112,16 +115,20 @@ section .text use32
 	global sigmaudio_init				;void sigmaudio_init(int sampleRate, int numChannels, int bitsPerSample)
 	global sigmaudio_deinit				;void sigmaudio_deinit()
 
+	global sigmaudio_import				;int sigmaudio_import(const char* soundPath)	//returns zero if no error occured
+
 	extern my_printf
 	extern my_fopen
 	extern my_fclose
 	extern my_fjmp
 	extern my_fread
+	extern file_getId
 	extern my_memcmp
 	extern my_memcpy
 	
 	extern vector_init
 	extern vector_destroy
+	extern vector_push_back_buffer
 	
 	extern thread_create
 	extern thread_join
@@ -174,6 +181,11 @@ sigmaudio_init:
 	imul eax, dword[sample_rate]
 	mov dword[ebx+8], eax			;nAvgBytesPerSec
 	mov word[ebx+16], 0				;cbSize
+	
+	;create imported sounds vector
+	push 20
+	push imported_sounds
+	call vector_init
 	
 	;create prepared block count
 	push dword[MAX_PREPARED_BLOCKS]
@@ -271,6 +283,10 @@ sigmaudio_deinit:
 	push playbacks
 	call vector_destroy
 	
+	;delete the imported sounds vector
+	push imported_sounds
+	call vector_destroy
+	
 	;destroy prepared block count
 	push dword[prepared_block_count]
 	call semaphore_destroy
@@ -302,7 +318,8 @@ sigmaudio_mainLoop:
 	pop esi
 	pop ebp
 	ret
-
+	
+	
 ;void sigmaudio_callback(HANDLE hwo, uint32 uMsg, Sound* sound, int* dwParam1, int* dwParam2 );
 sigmaudio_callback:
 	push ebp
@@ -328,6 +345,136 @@ sigmaudio_callback:
 	
 
 	sigmaudio_callback_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+sigmaudio_import:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4	;Sound*					4
+	sub esp, 4	;HANDLE					8
+	sub esp, 4	;WAVEFORMATEX*			12
+	sub esp, 4	;data (char*)			16
+	sub esp, 4	;header length			20
+	sub esp, 4	;data size				24
+	sub esp, 36	;header					60
+	sub esp, 4	;temp file				64
+	sub esp, 8	;file id				72
+	sub esp, 4	;return value			76
+	
+	mov dword[ebp-4], 0
+	mov dword[ebp-76], 0
+	
+	;read the header
+	lea eax, [ebp-24]
+	push eax
+	lea eax, [ebp-20]
+	push eax
+	lea eax, [ebp-60]
+	push eax
+	push dword[ebp+8]
+	call sigmaudio_readWaveHeader
+	add esp, 16
+	
+	;check if the read was successful
+	test eax, eax
+	jz sigmaudio_loadSound_no_error
+		;set return value
+		mov dword[ebp-76], 69
+		
+		;print error and yeet
+		push dword[ebp+8]
+		push sigmaudio_loadSound_error_could_not_read_header
+		call my_printf
+		jmp sigmaudio_loadSound_end
+		
+		sigmaudio_loadSound_error_could_not_read_header db "sigmaudio_loadSound: Couldn't read header of %s",10,0
+	sigmaudio_loadSound_no_error:
+	
+	;alloc space for the data
+	push dword[ebp-24]
+	call my_malloc
+	mov dword[ebp-16], eax
+	add esp, 4
+	
+	;read the audio data from the file
+	push file_open_mode
+	push dword[ebp+8]
+	call my_fopen
+	mov dword[ebp-64], eax
+	add esp, 8
+	
+	push 0		;not from current
+	push dword[ebp-20]
+	push dword[ebp-64]
+	call my_fjmp
+	add esp, 12
+	
+	push dword[ebp-64]
+	push 1
+	push dword[ebp-24]
+	push dword[ebp-16]
+	call my_fread
+	add esp, 16
+	
+	push dword[ebp-64]
+	call my_fclose
+	add esp, 4
+	
+	;get file id
+	lea eax, [ebp-72]
+	push eax
+	push dword[ebp+8]
+	call file_getId
+	
+	;get the WAVEFORMATEX
+	push 18
+	call my_malloc
+	mov dword[ebp-12], eax
+	add esp, 4
+	
+	lea eax, [ebp-60]
+	push eax
+	push dword[ebp-12]
+	call sigmaudio_getWAVEFORMATEX
+	add esp, 8
+	
+	;alloc the Sound struct
+	push 20
+	call my_malloc
+	mov dword[ebp-4], eax
+	add esp, 4
+	
+	;init the Sound struct
+	mov eax, dword[ebp-4]
+	
+	mov ecx, dword[ebp-24]
+	mov dword[eax], ecx		;data size
+	mov ecx, dword[ebp-16]
+	mov dword[eax+4], ecx	;data
+	mov ecx, dword[ebp-12]
+	mov dword[eax+8], ecx	;WAVEFORMATEX*
+	mov edx, dword[ebp-72]
+	mov dword[eax+12], edx
+	mov edx, dword[ebp-68]
+	mov dword[eax+16], edx	;id
+	
+	;TODO: convert format to internal representation
+	
+	;add sound to imported sounds and delete buffer
+	push dword[ebp-4]
+	push imported_sounds
+	call vector_push_back_buffer
+	
+	push dword[ebp-4]
+	call my_free
+	
+	sigmaudio_loadSound_end:
+	mov eax, dword[ebp-76]		;set return value
+	
 	mov esp, ebp
 	pop ebp
 	ret

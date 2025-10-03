@@ -5,6 +5,19 @@
     extern %2
 %endmacro
 
+;struct BY_HANDLE_FILE_INFORMATION {
+;  DWORD    dwFileAttributes;			0
+;  FILETIME ftCreationTime;				4
+;  FILETIME ftLastAccessTime;			12
+;  FILETIME ftLastWriteTime;			20
+;  DWORD    dwVolumeSerialNumber;		28
+;  DWORD    nFileSizeHigh;				32
+;  DWORD    nFileSizeLow;				36
+;  DWORD    nNumberOfLinks;				40
+;  DWORD    nFileIndexHigh;				44
+;  DWORD    nFileIndexLow;				48
+;}		52 bytes
+
 section .rodata use32
 	my_fopen_mode_read db "r",0
 	my_fopen_mode_write db "w",0
@@ -47,6 +60,8 @@ section .text use32
 	;if fromCurrent is zero, the new position of the file pointer will be numBytes, otherwise it will be the current position of the file pointer + numBytes
 	global my_fjmp			;void my_fjmp(FILE* file, int numBytes, int fromCurrent)
 	
+	global file_getId		;void file_getId(const char* path, uint64* buffer)
+	
 	dll_import kernel32.dll, GetFileAttributesA
 	dll_import kernel32.dll, CreateFileA
 	dll_import kernel32.dll, CreateDirectoryA
@@ -56,6 +71,8 @@ section .text use32
 	dll_import kernel32.dll, WriteFile
 	
 	dll_import kernel32.dll, SetFilePointer
+	
+	dll_import kernel32.dll, GetFileInformationByHandle
 	
 	dll_import kernel32.dll, GetLastError
 	
@@ -754,3 +771,62 @@ file_separateRelativeFilePath_internal:
 	pop esi
 	pop ebp
 	ret
+
+
+file_getId:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;handle								4
+	sub esp, 52			;BY_HANDLE_FILE_INFORMATION buffer	56
+	
+	;create handle
+	push 0
+	push 0x80			;FILE_ATTRIBUTE_NORMAL
+	push 3				;OPEN_EXISTING
+	push 0
+	push 0b1			;FILE_SHADER_READ
+	push 0				;minimal desired access
+	push dword[ebp+8]
+	call [CreateFileA]
+	mov dword[ebp-4], eax
+	cmp eax, dword[INVALID_HANDLE_VALUE]
+	je file_getId_error
+	
+	;get file info
+	lea eax, [ebp-56]
+	push eax
+	push dword[ebp-4]
+	call [GetFileInformationByHandle]
+	test eax, eax
+	jz file_getId_error
+	
+	;extract id from the buffer
+	mov eax, dword[ebp+12]
+	mov ecx, dword[ebp-12]
+	mov edx, dword[ebp-8]
+	mov dword[eax], ecx
+	mov dword[eax+4], edx
+	
+	;close handle
+	push dword[ebp-4]
+	call [CloseHandle]
+	
+	file_getId_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	file_getId_error:
+		;zero out return buffer
+		mov eax, dword[ebp+12]
+		mov dword[eax], 0
+		mov dword[eax+4], 0
+		
+		;print error message
+		call [GetLastError]
+		push eax
+		push file_getId_error_something_went_wong
+		call my_printf
+		
+		jmp file_getId_end
+		file_getId_error_something_went_wong db "file_getId: i sense some skill issue with the error code of %d",10,0
