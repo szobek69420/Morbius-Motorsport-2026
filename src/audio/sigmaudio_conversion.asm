@@ -22,6 +22,8 @@ section .rodata use32
 
 	ZERO dd 0.0
 	ONE dd 1.0
+	
+	test_text db "nagyarnyu dzsida",10,0
 
 section .text use32
 
@@ -654,7 +656,6 @@ sigmaudio_changeNumChannels:
 		mov word[eax+2], 1			;numChannels
 		shr word[eax+12], 1			;nBlockAlign
 		shr dword[eax+8], 1		;avgBytesPerSec
-		
 		
 		jmp sigmaudio_changeNumChannels_end
 		

@@ -48,7 +48,7 @@ section .rodata use32
 	image_path db "./sprites/morbussin.bmp",0
 	
 	sound_path db "./sfx/ingame/battlecry.wav",0
-	music_path db "./sfx/ingame/music.wavd",0
+	music_path db "./sfx/ingame/music.wav",0
 	
 	error_incomplete_framebuffer db "game_loop: L framebuffer uhuhu ahah",10,0
 	
@@ -305,6 +305,7 @@ section .text use32
 	extern audio_unloadSound
 	extern audio_playSound
 	extern audio_stopSound
+	extern sigmaudio_changeNumChannels
 	
 	extern framebuffer_create
 	extern framebuffer_destroy
@@ -478,8 +479,23 @@ gameLoop_main:
 	mov dword[sound_music], eax
 	add esp, 4
 	
+	push dword[eax+12]
+	push dword[eax+8]
+	push dword[eax+4]
+	mov ecx, esp
+	push 1
+	push ecx
+	call sigmaudio_changeNumChannels
+	add esp, 8
+	
+	mov eax, dword[sound_music]
+	mov ecx, dword[esp]
+	mov dword[eax+4], ecx
+	mov ecx, dword[esp+4]
+	mov dword[eax+8], ecx
+	
 	push 100000000
-	push eax
+	push dword[sound_music]
 	call audio_playSound
 	add esp, 8
 	
