@@ -60,6 +60,11 @@
 ;	}
 ;}	16 bytes overall
 
+%macro dll_import 2
+	import %2 %1
+	extern %2
+%endmacro
+
 section .rodata use32
 
 	MAX_PREPARED_BLOCKS dd 5		;the maximum number of prepared blocks waiting to play
@@ -143,7 +148,18 @@ section .text use32
 	global sigmaudio_play
 	global sigmaudio_stop				;void sigmaudio_stop(int playbackId)
 
+	dll_import winmm.dll, waveOutOpen				;creates an audio device
+	dll_import winmm.dll, waveOutClose				;destroys an audio device
+	dll_import winmm.dll, waveOutWrite				;writes (plays) a playback block into an audio device
+	dll_import winmm.dll, waveOutReset				;stops the currently playing sound on the given audio device
+	dll_import winmm.dll, waveOutPause				;pauses the currently playing sound on the given audio device
+	dll_import winmm.dll, waveOutRestart			;resumes the currently playing sound on the given audio device
+	dll_import winmm.dll, waveOutPrepareHeader		;prepares a playback block to be played
+	dll_import winmm.dll, waveOutUnprepareHeader	;undoes the PrepareHeader func
+
 	extern my_printf
+	extern my_malloc
+	extern my_free
 	extern my_fopen
 	extern my_fclose
 	extern my_fjmp
@@ -151,6 +167,9 @@ section .text use32
 	extern file_getId
 	extern my_memcmp
 	extern my_memcpy
+	extern my_strcmp
+	extern my_strcpy
+	extern my_strlen
 	
 	extern vector_init
 	extern vector_destroy
@@ -319,8 +338,19 @@ sigmaudio_deinit:
 		sigmaudio_deinit_error_not_initialized db "sigmaudio_deinit: The system is not initialized",10,0
 	sigmaudio_deinit_initialized:
 	
-	;stop all playbacks
-	amogus
+	;deport all remaining sounds
+	push 0
+	push sigmaudio_deinit_deporter
+	push imported_sounds
+	call tsVector_forEach
+	jmp sigmaudio_deinit_deported
+		sigmaudio_deinit_deporter:		;void deporter(Sound*, void* unused)
+			mov eax, dword[esp+4]
+			push dword[eax+12]
+			call sigmaudio_deport
+			add esp, 4
+			ret
+	sigmaudio_deinit_deported:
 	
 	;yeet the audio thread
 	push 69
@@ -406,7 +436,7 @@ sigmaudio_callback:
 	je sigmaudio_callback_device_closed
 	cmp eax, dword[WOM_DONE]
 	je sigmaudio_callback_playback_ended
-	jmp audio_callback_end
+	jmp sigmaudio_callback_end
 	
 	sigmaudio_callback_device_opened:
 		jmp sigmaudio_callback_end
@@ -555,7 +585,6 @@ sigmaudio_import:
 	mov dword[eax+16], ecx
 	
 	;TODO: convert format to internal representation
-	amogus
 	
 	;add sound to imported sounds and delete buffer
 	push dword[ebp-4]
@@ -837,7 +866,7 @@ sigmaudio_readWaveHeader:
 			;set the data size
 			mov eax, dword[ebp-56]
 			mov dword[ebp-52], eax
-			jmp audio_readWaveHeader_parseChunks_loop_end
+			jmp sigmaudio_readWaveHeader_parseChunks_loop_end
 		
 		sigmaudio_readWaveHeader_parseChunks_loop_continue:
 		;add chunk size to the header size

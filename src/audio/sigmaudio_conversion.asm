@@ -20,13 +20,30 @@
 
 section .rodata use32
 
+	ZERO dd 0.0
 	ONE dd 1.0
 
 section .text use32
 
-;new and original bitsPerSample should be in {8,16,24,32}
-;blockSize: the number of samples with which the 
-;void sigmaudio_changeSamplesPerSec(Sound* sound, int samplesPerSec, int blockSize)
+	;new and original bitsPerSample should be in {8,16,24,32}
+	;blockSize: the number of samples with which the 
+	;void sigmaudio_changeSamplesPerSec(Sound* sound, int samplesPerSec, int blockSize)
+	global sigmaudio_changeSamplesPerSec
+
+	;new and original bitsPerSample should be in {8,16,24,32}
+	;void sigmaudio_changeBitsPerSample(Sound* sound, int bitsPerSample)
+	global sigmaudio_changeBitsPerSample
+	
+	;new and original numChannels should be in {1,2}
+	;void sigmaudio_changeNumChannels(Sound* sound, int newNumChannels)
+	global sigmaudio_changeNumChannels
+	
+	
+	extern my_printf
+	extern my_malloc
+	extern my_free
+	extern my_memset
+
 sigmaudio_changeSamplesPerSec:
 	push ebp
 	push esi
@@ -113,7 +130,7 @@ sigmaudio_changeSamplesPerSec:
 	mov edi, dword[ebp-4]			;target data in edi
 	mov ebx, dword[ebp-20]			;index in ebx
 	movss xmm0, dword[ebp-40]		;delta in xmm0
-	movss xmm1, 0					;interpolator in xmm1
+	movss xmm1, dword[ZERO]		;interpolator in xmm1
 	movss xmm2, dword[ONE]			;1-interpolator in xmm2
 	cmp ebx, 0
 	jle sigmaudio_changeSamplesPerSec_end
@@ -188,7 +205,7 @@ sigmaudio_changeSamplesPerSec:
 			mulss xmm4, xmm2
 			addss xmm3, xmm4
 			cvtss2si eax, xmm3
-			mov word[edi+edx], eax
+			mov word[edi+edx], ax
 			
 			sub ecx, 2
 			sub edx, 2
@@ -327,8 +344,7 @@ sigmaudio_changeSamplesPerSec:
 	pop ebp
 	ret
 
-;new and original bitsPerSample should be in {8,16,24,32}
-;void sigmaudio_changeBitsPerSample(Sound* sound, int bitsPerSample)
+
 sigmaudio_changeBitsPerSample:
 	push ebp
 	push esi
