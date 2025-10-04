@@ -51,15 +51,23 @@
 ;}
 
 ;struct PlaybackCommand{
-;	int isStopCommand;				0
+;	enum{ PLAY=0, STOP=69, UNLOAD=420 } commandType;
+;
 ;	union{
 ;		struct PlayCommand{ Sound* sound; int loopCount; int playbackId; } playCommand;
 ;		struct StopCommand{ int playbackId; } stopCommand;
+;		struct UnloadCommand{ int soundId; } unloadCommand;
+;	}
 ;}	16 bytes overall
 
 section .rodata use32
 
 	MAX_PREPARED_BLOCKS dd 5		;the maximum number of prepared blocks waiting to play
+	
+	PLAYBACK_COMMAND_PLAY equ 0
+	PLAYBACK_COMMAND_STOP equ 69
+	PLAYBACK_COMMAND_UNLOAD equ 420
+	
 
 	MMSYSERR_NOERROR dd 0
 
@@ -110,7 +118,7 @@ section .data use32
 	audio_device dd 0			;waveOut device handle
 	audio_thread dd 0			;Thread*
 	prepared_block_count dd 0	;Semaphore*
-	playbacks dd 0,0,0,0		;vector<Playback>
+	playbacks dd 0,0			;tsVector<Playback>
 	command_queue dd 0,0		;tsQueue<PlaybackCommand>
 	
 	should_exit dd 0			;tsValue<int>*
@@ -154,6 +162,7 @@ section .text use32
 	extern tsVector_pushBackBuffer
 	extern tsVector_popBack
 	extern tsVector_search
+	extern tsVector_forEach
 	extern tsVector_at
 	extern tsVector_lock
 	extern tsVector_unlock
@@ -230,7 +239,7 @@ sigmaudio_init:
 	;create playback vector
 	push 16
 	push playbacks
-	call vector_init
+	call tsVector_init
 	
 	;create command queue
 	push 64
@@ -340,7 +349,7 @@ sigmaudio_deinit:
 	
 	;delete the playback vector
 	push playbacks
-	call vector_destroy
+	call tsVector_destroy
 	
 	;delete the imported sounds vector
 	push imported_sounds
@@ -568,10 +577,86 @@ sigmaudio_deport:
 	push ebp
 	mov ebp, esp
 	
+	sub esp, 16			;command buffer		16
+	sub esp, 4			;search resutl		20
+	sub esp, 4			;psound				24
 	
+	;get the sound
+	push imported_sounds
+	call tsVector_lock
+	
+	push dword[ebp+8]
+	push sigmaudio_deport_search_comparator
+	push imported_sounds
+	call tsVector_search
+	mov dword[ebp-20], eax
+	cmp eax, -1
+	jne sigmaudio_deport_sound_imported
+		;unlock critical sex
+		push imported_sounds
+		call tsVector_unlock
+		
+		;print error message
+		push dword[ebp+8]
+		push sigmaudio_deport_error_sound_not_imported
+		call my_printf
+		
+		jmp sigmaudio_deport_end
+		sigmaudio_deport_error_sound_not_imported db "sigmaudio_deport: %s is not imported",10,0
+	sigmaudio_deport_sound_imported:
+	
+	push dword[ebp-20]
+	push imported_sounds
+	call tsVector_at
+	mov dword[ebp-24], eax		;sound
+	
+	push imported_sounds
+	call tsVector_unlock
+	
+	;register stop commands for the playbacks gehöring to this sound
+	;NOTE: if there is a deadlock, it might be here due to locking the command queue under the lock of playbacks
+	mov eax, dword[ebp-24]
+	push dword[eax+16]
+	push sigmaudio_deport_register_stop_command
+	push playbacks
+	call tsVector_forEach
+	
+	;register unload command
+	mov dword[ebp-16], PLAYBACK_COMMAND_UNLOAD
+	mov eax, dword[ebp-24]
+	mov eax, dword[eax+16]
+	mov dword[ebp-12], eax		;sound id
+	
+	lea eax, [ebp-16]
+	push eax
+	push command_queue
+	call tsQueue_pushBuffer
+	
+	
+	sigmaudio_deport_end:
 	mov esp, ebp
 	pop ebp
 	ret
+	sigmaudio_deport_search_comparator:		;int comparator(Sound*, const char* path)
+		mov eax, dword[esp+4]
+		mov ecx, dword[esp+8]
+		push ecx
+		push dword[eax+12]
+		call my_strcmp
+		add esp, 8
+		ret
+	sigmaudio_deport_register_stop_command: ;void thisnigga(Playback*, int soundId)
+		mov eax, dword[esp+4]
+		mov ecx, dword[eax+4]
+		mov ecx, dword[ecx+16]
+		cmp ecx, dword[esp+8]
+		je sigmaudio_deport_register_stop_command_match
+			ret
+		sigmaudio_deport_register_stop_command_match:
+		push dword[eax]
+		call sigmaudio_stop
+		add esp, 4
+		ret
 	
 	
 sigmaudio_play:
@@ -618,7 +703,7 @@ sigmaudio_play:
 	call tsVector_unlock
 	
 	;prepare command buffer
-	mov dword[ebp-16], 0		;play command
+	mov dword[ebp-16], PLAYBACK_COMMAND_PLAY		;play command
 	mov eax, dword[ebp+12]
 	mov dword[ebp-8], eax		;loop count
 	
@@ -666,7 +751,7 @@ sigmaudio_stop:
 	sub esp, 16		;command buffer		16
 	
 	;set values in the buffer
-	mov dword[ebp-16], 69			;stop command
+	mov dword[ebp-16], PLAYBACK_COMMAND_STOP			;stop command
 	mov eax, dword[ebp+8]
 	mov dword[ebp-12], eax			;playback id
 	
