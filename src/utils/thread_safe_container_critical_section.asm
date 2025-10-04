@@ -36,6 +36,7 @@ section .text use32
 	global containerCriticalSection_specialLock			;void ccs_specialLock(ContainerCriticalSection* sex)
 	global containerCriticalSection_specialUnlock		;int ccs_specialUnlock(ContainerCriticalSection* sex)			//will also succeed on non-special block, returns 0 on success
 	
+	extern my_printf
 	extern my_malloc
 	extern my_free
 	
@@ -113,10 +114,10 @@ containerCriticalSection_lock:
 	test eax, eax
 	jnz containerCriticalSection_lock_end
 	
-	;lock
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call criticalSection_lock
+		;lock
+		mov eax, dword[ebp+8]
+		push dword[eax]
+		call criticalSection_lock
 	
 	containerCriticalSection_lock_end:
 	mov esp, ebp
@@ -128,7 +129,7 @@ containerCriticalSection_unlock:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 4		;return value
+	sub esp, 4				;return value
 	mov dword[ebp-4], 69
 	
 	mov eax, dword[ebp+8]

@@ -1,9 +1,13 @@
 [BITS 32]
 
 ;struct tsVector{
-;	CriticalSection* sex;	0
-;	vector* vec;			4
+;	ContainerCriticalSection* sex;	0
+;	vector* vec;					4
 ;}	8 bytes overall
+
+section .rodata use32
+	test_text db "kaktuszos royal",10,0
+	test_text2 db "kaktuszos royal 2",10,0
 
 section .text use32
 
@@ -32,7 +36,7 @@ section .text use32
 	global tsVector_elementSize				;int tsVector_elementSize(tsVector*)
 	
 	global tsVector_vector					;vector* tsVector_vector(tsVector*)
-	global tsVector_lock					;void tsVector_lock(tsVector*)
+	global tsVector_lock					;void tsVector_lock(tsVector*)		//can be unlocked only with an explicit call of tsVector_unlock
 	global tsVector_unlock					;void tsVector_unlock(tsVector*)
 	
 	
@@ -121,7 +125,7 @@ tsVector_clear:
 	
 	;lock
 	push dword[ebp+8]
-	call tsVector_lock
+	call tsVector_lock_internal
 	
 	;call clear
 	mov eax, dword[ebp+8]
@@ -130,7 +134,7 @@ tsVector_clear:
 	
 	;unlock
 	push dword[ebp+8]
-	call tsVector_unlock
+	call tsVector_unlock_internal
 	
 	mov esp, ebp
 	pop ebp
@@ -145,7 +149,7 @@ tsVector_at:
 	
 	;lock
 	push dword[ebp+8]
-	call tsVector_lock
+	call tsVector_lock_internal
 	
 	;call at
 	mov eax, dword[ebp+8]
@@ -156,7 +160,7 @@ tsVector_at:
 	
 	;unlock
 	push dword[ebp+8]
-	call tsVector_unlock
+	call tsVector_unlock_internal
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -172,7 +176,7 @@ tsVector_pushBack:
 	
 	;lock
 	push dword[ebp+8]
-	call tsVector_lock
+	call tsVector_lock_internal
 	
 	;call pushBackBuffer
 	lea ecx, [ebp+12]
@@ -183,7 +187,7 @@ tsVector_pushBack:
 	
 	;unlock
 	push dword[ebp+8]
-	call tsVector_unlock
+	call tsVector_unlock_internal
 	
 	mov esp, ebp
 	pop ebp
@@ -196,7 +200,7 @@ tsVector_pushBackBuffer:
 	
 	;lock
 	push dword[ebp+8]
-	call tsVector_lock
+	call tsVector_lock_internal
 	
 	;call pushBackBuffer
 	mov eax, dword[ebp+8]
@@ -206,7 +210,7 @@ tsVector_pushBackBuffer:
 	
 	;unlock
 	push dword[ebp+8]
-	call tsVector_unlock
+	call tsVector_unlock_internal
 	
 	mov esp, ebp
 	pop ebp
@@ -219,7 +223,7 @@ tsVector_popBack:
 	
 	;lock
 	push dword[ebp+8]
-	call tsVector_lock
+	call tsVector_lock_internal
 	
 	;call pop back
 	mov eax, dword[ebp+8]
@@ -228,7 +232,7 @@ tsVector_popBack:
 	
 	;unlock
 	push dword[ebp+8]
-	call tsVector_unlock
+	call tsVector_unlock_internal
 	
 	mov esp, ebp
 	pop ebp
@@ -241,7 +245,7 @@ tsVector_insert:
 	
 	;lock
 	push dword[ebp+8]
-	call tsVector_lock
+	call tsVector_lock_internal
 	
 	;copy the element onto the stack
 	mov eax, dword[ebp+8]
@@ -265,7 +269,7 @@ tsVector_insert:
 	
 	;unlock
 	push dword[ebp+8]
-	call tsVector_unlock
+	call tsVector_unlock_internal
 	
 	mov esp, ebp
 	pop ebp
@@ -278,7 +282,7 @@ tsVector_removeAt:
 	
 	;lock
 	push dword[ebp+8]
-	call tsVector_lock
+	call tsVector_lock_internal
 	
 	;call remove at
 	mov eax, dword[ebp+8]
@@ -288,7 +292,7 @@ tsVector_removeAt:
 	
 	;unlock
 	push dword[ebp+8]
-	call tsVector_unlock
+	call tsVector_unlock_internal
 	
 	mov esp, ebp
 	pop ebp
@@ -303,7 +307,7 @@ tsVector_remove:
 	
 	;lock
 	push dword[ebp+8]
-	call tsVector_lock
+	call tsVector_lock_internal
 	
 	;copy the element onto the stack
 	mov eax, dword[ebp+8]
@@ -327,7 +331,7 @@ tsVector_remove:
 	
 	;unlock
 	push dword[ebp+8]
-	call tsVector_unlock
+	call tsVector_unlock_internal
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -345,7 +349,7 @@ tsVector_removeCustom:
 	
 	;lock
 	push dword[ebp+8]
-	call tsVector_lock
+	call tsVector_lock_internal
 	
 	;call removeCustom
 	mov eax, dword[ebp+8]
@@ -357,7 +361,7 @@ tsVector_removeCustom:
 	
 	;unlock
 	push dword[ebp+8]
-	call tsVector_unlock
+	call tsVector_unlock_internal
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -375,7 +379,7 @@ tsVector_search:
 	
 	;lock
 	push dword[ebp+8]
-	call tsVector_lock
+	call tsVector_lock_internal
 	
 	;call search
 	mov eax, dword[ebp+8]
@@ -387,7 +391,7 @@ tsVector_search:
 	
 	;unlock
 	push dword[ebp+8]
-	call tsVector_unlock
+	call tsVector_unlock_internal
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -403,7 +407,7 @@ tsVector_forEach:
 	
 	;lock
 	push dword[ebp+8]
-	call tsVector_lock
+	call tsVector_lock_internal
 	
 	;call search
 	mov eax, dword[ebp+8]
@@ -415,7 +419,7 @@ tsVector_forEach:
 	
 	;unlock
 	push dword[ebp+8]
-	call tsVector_unlock
+	call tsVector_unlock_internal
 	
 	mov esp, ebp
 	pop ebp
@@ -429,7 +433,7 @@ tsVector_size:
 	
 	;lock
 	push dword[ebp+8]
-	call tsVector_lock
+	call tsVector_lock_internal
 	
 	;get size
 	mov eax, dword[ebp+8]
@@ -439,7 +443,7 @@ tsVector_size:
 	
 	;unlock
 	push dword[ebp+8]
-	call tsVector_unlock
+	call tsVector_unlock_internal
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -486,23 +490,52 @@ tsVector_lock:
 	push ebp
 	mov ebp, esp
 	
-	;tries to lock critical section non-blockingly (also enables repeated lock calls)
-	mov eax, dword[ebp+8]
-	push dword[eax]
-	call criticalSection_tryLock
-	test eax, eax
-	jnz tsVector_lock_end
+	push dword[ebp+8]
+	call tsVector_lock_internal
 	
-	;waits for lock blockingly
-	call criticalSection_lock
-	
-	tsVector_lock_end:
 	mov esp, ebp
 	pop ebp
 	ret
 	
 	
 tsVector_unlock:
+	push ebp
+	mov ebp, esp
+	
+	push dword[ebp+8]
+	call tsVector_unlock_internal
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;interanl functinos ---------------------------------------------
+
+;locks the ccs without a special lock in
+;void tsVector_lock_internal(tsVector* pvector)
+tsVector_lock_internal:
+	push ebp
+	mov ebp, esp
+	
+	;tries to lock critical section non-blockingly (also enables repeated lock calls)
+	mov eax, dword[ebp+8]
+	push dword[eax]
+	call criticalSection_tryLock
+	test eax, eax
+	jnz tsVector_lock_internal_end
+	
+		;waits for lock blockingly
+		call criticalSection_lock
+	
+	tsVector_lock_internal_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+;unlocks the ccs only if there is no special lock in in place
+;void tsVector_unlock_internal(tsVector* pvector)
+tsVector_unlock_internal:
 	push ebp
 	mov ebp, esp
 	

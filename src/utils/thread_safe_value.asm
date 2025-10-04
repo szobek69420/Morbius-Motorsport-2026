@@ -250,8 +250,10 @@ tsValue_lock:
 	test eax, eax
 	jnz tsValue_lock_end
 	
-	;waits for lock blockingly
-	call criticalSection_lock
+		;waits for lock blockingly
+		mov eax, dword[ebp+8]
+		push dword[eax]
+		call criticalSection_lock
 	
 	tsValue_lock_end:
 	mov esp, ebp

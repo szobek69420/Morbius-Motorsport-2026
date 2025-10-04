@@ -643,7 +643,6 @@ gameLoop_main:
 		call sun_setAngle
 		add esp, 4
 		
-		
 		mov eax, dword[pplayer]
 		push dword[eax+24]
 		push dword[chunk_manager_4d]
@@ -659,7 +658,6 @@ gameLoop_main:
 		push dword[chunk_manager_4d]
 		call chunkManager4d_render
 		add esp, 12
-		
 		
 		
 		;bind the ssao fbo
