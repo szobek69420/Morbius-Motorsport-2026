@@ -115,8 +115,8 @@ section .data use32
 	
 	should_exit dd 0			;tsValue<int>*
 	
-	current_sound_id dd 69420
-	current_playback_id dd 42069
+	current_sound_id dd 0		;tsValue<int>*
+	current_playback_id dd 0	;tsValue<int>*
 	
 section .bss use32
 	system_waveformatex resb 18	;the WAVEFORMATEX structure generated from the system values
@@ -148,6 +148,21 @@ section .text use32
 	extern vector_destroy
 	extern vector_push_back_buffer
 	
+	extern tsVector_init
+	extern tsVector_destroy
+	extern tsVector_pushBack
+	extern tsVector_pushBackBuffer
+	extern tsVector_popBack
+	extern tsVector_search
+	extern tsVector_at
+	extern tsVector_lock
+	extern tsVector_unlock
+	
+	extern tsQueue_init
+	extern tsQueue_destroy
+	extern tsQueue_pushBuffer
+	extern tsQueue_pop
+	
 	extern thread_create
 	extern thread_join
 	extern thread_resume
@@ -160,6 +175,8 @@ section .text use32
 	extern tsValue_destroy
 	extern tsValue_get
 	extern tsValue_set
+	extern tsValue_lock
+	extern tsValue_unlock
 
 sigmaudio_init:
 	push ebp
@@ -227,6 +244,20 @@ sigmaudio_init:
 	mov dword[should_exit], eax
 	push 0
 	push eax
+	call tsValue_set
+	
+	;create and set id helpers
+	push 4
+	call tsValue_create
+	mov dword[current_sound_id], eax
+	call tsValue_create
+	mov dword[current_playback_id], eax
+	
+	push 69420
+	push dword[current_sound_id]
+	call tsValue_set
+	push 42069
+	push dword[current_playback_id]
 	call tsValue_set
 	
 	;create audio device
@@ -323,6 +354,12 @@ sigmaudio_deinit:
 	push dword[should_exit]
 	call tsValue_destroy
 	
+	;destroy id helpers
+	push dword[current_sound_id]
+	call tsValue_destroy
+	push dword[current_playback_id]
+	call tsValue_destroy
+	
 	;unset initialized flag
 	mov dword[initialized], 0
 	
@@ -391,7 +428,7 @@ sigmaudio_import:
 	sub esp, 36	;header					60
 	sub esp, 4	;temp file				64
 	sub esp, 4	;copied file path		68
-	sub esp, 4	;unused
+	sub esp, 4	;sound id				72
 	sub esp, 4	;return value			76
 	
 	mov dword[ebp-4], 0
@@ -476,6 +513,18 @@ sigmaudio_import:
 	push eax
 	call my_strcpy
 	
+	;get the sound id and update the id helper
+	lea eax, [ebp-72]
+	push dword[current_sound_id]
+	call tsValue_get
+	
+	mov eax, dword[ebp-72]
+	inc eax
+	push eax
+	push dword[current_sound_id]
+	call tsValue_set
+	
+	
 	;alloc the Sound struct
 	push 20
 	call my_malloc
@@ -493,8 +542,7 @@ sigmaudio_import:
 	mov dword[eax+8], ecx	;WAVEFORMATEX*
 	mov ecx, dword[ebp-68]
 	mov dword[eax+12], ecx	;path
-	inc dword[current_sound_id]
-	mov ecx, dword[current_sound_id]
+	mov ecx, dword[ebp-72]
 	mov dword[eax+16], ecx
 	
 	;TODO: convert format to internal representation
@@ -535,14 +583,102 @@ sigmaudio_play:
 	sub esp, 4		;sound					12
 	sub esp, 4		;isStopCommand			16
 	
-	;check if the command is in the imported 
+	sub esp, 4		;search result			20
 	
+	;check if the command is in the imported sounds vector
+	push imported_sounds
+	call tsVector_lock
+	
+	push dword[ebp+8]
+	push sigmaudio_play_search_comparator
+	push imported_sounds
+	call tsVector_search
+	mov dword[ebp-20], eax
+	cmp eax, -1
+	jne sigmaudio_play_sound_imported
+		;unlock critical sex
+		push imported_sounds
+		call tsVector_unlock
+		
+		;print error message
+		push dword[ebp+8]
+		push sigmaudio_play_error_sound_not_imported
+		call my_printf
+		
+		jmp sigmaudio_play_end
+		sigmaudio_play_error_sound_not_imported db "sigmaudio_play: %s is not imported",10,0
+	sigmaudio_play_sound_imported:
+	
+	push dword[ebp-20]
+	push imported_sounds
+	call tsVector_at
+	mov dword[ebp-12], eax		;sound
+	
+	push imported_sounds
+	call tsVector_unlock
+	
+	;prepare command buffer
 	mov dword[ebp-16], 0		;play command
+	mov eax, dword[ebp+12]
+	mov dword[ebp-8], eax		;loop count
+	
+	push dword[current_playback_id]
+	call tsValue_lock
+	
+	lea eax, dword[ebp-4]
+	push eax
+	push dword[current_playback_id]
+	call tsValue_get			;playback id
+	
+	mov eax, dword[ebp-4]
+	inc eax
+	push eax
+	push dword[current_playback_id]
+	call tsValue_set
+	
+	call tsValue_unlock
+	
+	;add the command to the command queue
+	lea eax, [ebp-16]
+	push eax
+	push command_queue
+	call tsQueue_pushBuffer
+	
+	sigmaudio_play_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	sigmaudio_play_search_comparator:		;int comparator(Sound*, const char* path)
+		mov eax, dword[esp+4]
+		mov ecx, dword[esp+8]
+		push ecx
+		push dword[eax+12]
+		call my_strcmp
+		add esp, 8
+		ret
+	
+	
+	
+sigmaudio_stop:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 16		;command buffer		16
+	
+	;set values in the buffer
+	mov dword[ebp-16], 69			;stop command
+	mov eax, dword[ebp+8]
+	mov dword[ebp-12], eax			;playback id
+	
+	;add the command to the queue
+	lea eax, [ebp-16]
+	push eax
+	push command_queue
+	call tsQueue_pushBuffer
 	
 	mov esp, ebp
 	pop ebp
 	ret
-	
 
 ;dataStart: how long is the header in bytes
 ;dataLength: how much raw audio data is there in bytes
