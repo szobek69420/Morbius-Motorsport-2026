@@ -125,6 +125,8 @@ section .text use32
 	extern my_memcmp
 	extern my_memcpy
 	
+	extern sigmaudio_changeNumChannels
+	
 audio_loadSound:
 	push ebp
 	mov ebp, esp

@@ -305,7 +305,6 @@ section .text use32
 	extern audio_unloadSound
 	extern audio_playSound
 	extern audio_stopSound
-	extern sigmaudio_changeNumChannels
 	
 	extern framebuffer_create
 	extern framebuffer_destroy
@@ -478,21 +477,6 @@ gameLoop_main:
 	call audio_loadSound
 	mov dword[sound_music], eax
 	add esp, 4
-	
-	push dword[eax+12]
-	push dword[eax+8]
-	push dword[eax+4]
-	mov ecx, esp
-	push 1
-	push ecx
-	call sigmaudio_changeNumChannels
-	add esp, 8
-	
-	mov eax, dword[sound_music]
-	mov ecx, dword[esp]
-	mov dword[eax+4], ecx
-	mov ecx, dword[esp+4]
-	mov dword[eax+8], ecx
 	
 	push 100000000
 	push dword[sound_music]
