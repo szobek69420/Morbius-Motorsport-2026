@@ -125,7 +125,8 @@ section .text use32
 	extern my_memcmp
 	extern my_memcpy
 	
-	extern sigmaudio_changeNumChannels
+	extern sigmaudio_changeSamplesPerSec
+	extern sigmaudio_changeBitsPerSample
 	
 audio_loadSound:
 	push ebp
@@ -198,6 +199,33 @@ audio_loadSound:
 	push dword[ebp-12]
 	call audio_getWAVEFORMATEX
 	add esp, 8
+	
+	push dword[ebp-12]
+	push dword[ebp-16]
+	push dword[ebp-24]
+	mov ecx, esp
+	push 32
+	push ecx
+	call sigmaudio_changeBitsPerSample
+	add esp, 8
+	mov ecx, dword[esp]
+	mov dword[ebp-24], ecx
+	mov ecx, dword[esp+4]
+	mov dword[ebp-16], ecx
+	
+	push dword[ebp-12]
+	push dword[ebp-16]
+	push dword[ebp-24]
+	mov ecx, esp
+	push 100
+	push 10000
+	push ecx
+	call sigmaudio_changeSamplesPerSec
+	add esp, 12
+	mov ecx, dword[esp]
+	mov dword[ebp-24], ecx
+	mov ecx, dword[esp+4]
+	mov dword[ebp-16], ecx
 	
 	;alloc the Sound struct (necessary for waveOutOpen)
 	push 24

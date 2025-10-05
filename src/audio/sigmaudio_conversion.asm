@@ -23,6 +23,11 @@ section .rodata use32
 	ZERO dd 0.0
 	ONE dd 1.0
 	
+	print_int_nl db "%d",10,0
+	print_two_ints_nl db "%d %d",10,0
+	
+	print_float_nl db "%f",10,0
+	
 	test_text db "nagyarnyu dzsida",10,0
 
 section .text use32
@@ -61,7 +66,7 @@ sigmaudio_changeSamplesPerSec:
 	sub esp, 4		;padded new sample count	24
 	sub esp, 4		;bitsPerSample				28
 	sub esp, 4		;numChannels				32
-	sub esp, 4		;nBlockAlign/8				36
+	sub esp, 4		;nBlockAlign				36
 	
 	sub esp, 4		;(float)(oldSampleRate-1)/newSampleRate	40	//-1 is only there to ensure no overflow
 	
@@ -76,7 +81,6 @@ sigmaudio_changeSamplesPerSec:
 	mov cx, word[eax+2]
 	mov dword[ebp-32], ecx		;nChannels
 	mov cx, word[eax+12]
-	shr cx, 3
 	mov dword[ebp-36], ecx		;nBlockAlign
 	
 	;check if the new and old samplesPerSec are same
@@ -94,6 +98,7 @@ sigmaudio_changeSamplesPerSec:
 	idiv ecx
 	mov dword[ebp-16], eax
 	
+	
 	;calculate the new sample count and the padded new sample count
 	mov eax, dword[ebp-16]
 	xor edx, edx
@@ -109,9 +114,8 @@ sigmaudio_changeSamplesPerSec:
 	add eax, dword[ebp-20]
 	mov dword[ebp-24], eax
 	
-	
 	;calculate the size of the new data and alloc it
-	mov eax ,dword[ebp-28]
+	mov eax, dword[ebp-24]
 	imul eax ,dword[ebp-36]
 	mov dword[ebp-8], eax
 	push eax
@@ -158,18 +162,21 @@ sigmaudio_changeSamplesPerSec:
 		mov edx, dword[ebp-32]
 		dec edx					;offset=(numChannels-1)*4 bytes
 		mov ecx, dword[ebp-36]
-		add ecx, edx			;edx+nBlockAlign/8 in ecx (offset for next sample)
+		add ecx, edx			;edx+nBlockAlign in ecx (offset for next sample)
 		sigmaudio_changeSamplesPerSec_8bit_interpol_loop_start:
 			xor eax, eax
-			mov al, byte[esi+edx]
+			mov ah, byte[esi+edx]
+			shl eax, 16
 			cvtsi2ss xmm3, eax
-			mov al, byte[esi+ecx]
+			mov ah, byte[esi+ecx]
+			shl eax, 16
 			cvtsi2ss xmm4, eax
-			mulss xmm3, xmm1
-			mulss xmm4, xmm2
+			mulss xmm3, xmm2
+			mulss xmm4, xmm1
 			addss xmm3, xmm4
 			cvtss2si eax, xmm3
-			mov byte[edi+edx], al
+			shr eax, 16
+			mov byte[edi+edx], ah
 			
 			dec ecx
 			dec edx
@@ -179,12 +186,16 @@ sigmaudio_changeSamplesPerSec:
 		;continue
 		addss xmm1, xmm0
 		subss xmm2, xmm0
-		ucomiss xmm1, dword[ONE]
-		jb sigmaudio_changeSamplesPerSec_8bit_loop_no_overflow
-			subss xmm1, dword[ONE]
-			addss xmm2, dword[ONE]
-			add esi, dword[ebp-36]		;step the source data
-		sigmaudio_changeSamplesPerSec_8bit_loop_no_overflow:
+		
+		sigmaudio_changeSamplesPerSec_8bit_loop_overflow_check:
+			ucomiss xmm1, dword[ONE]
+			jb sigmaudio_changeSamplesPerSec_8bit_loop_no_overflow
+				subss xmm1, dword[ONE]
+				addss xmm2, dword[ONE]
+				add esi, dword[ebp-36]		;step the source data
+				jmp sigmaudio_changeSamplesPerSec_8bit_loop_overflow_check	;if the sampling rate is lowered, xmm1 might be >=2
+			sigmaudio_changeSamplesPerSec_8bit_loop_no_overflow:
+			
 		add edi, dword[ebp-36]
 		dec ebx
 		jnz sigmaudio_changeSamplesPerSec_8bit_loop_start
@@ -196,17 +207,20 @@ sigmaudio_changeSamplesPerSec:
 		dec edx
 		shl edx, 1				;offset=(numChannels-1)*2 bytes
 		mov ecx, dword[ebp-36]
-		add ecx, edx			;edx+nBlockAlign/8 in ecx (offset for next sample)
+		add ecx, edx			;edx+nBlockAlign in ecx (offset for next sample)
 		sigmaudio_changeSamplesPerSec_16bit_interpol_loop_start:
 			xor eax, eax
 			mov ax, word[esi+edx]
+			shl eax, 16
 			cvtsi2ss xmm3, eax
 			mov ax, word[esi+ecx]
+			shl eax, 16
 			cvtsi2ss xmm4, eax
-			mulss xmm3, xmm1
-			mulss xmm4, xmm2
+			mulss xmm3, xmm2
+			mulss xmm4, xmm1
 			addss xmm3, xmm4
 			cvtss2si eax, xmm3
+			shr eax, 16
 			mov word[edi+edx], ax
 			
 			sub ecx, 2
@@ -217,12 +231,15 @@ sigmaudio_changeSamplesPerSec:
 		;continue
 		addss xmm1, xmm0
 		subss xmm2, xmm0
-		ucomiss xmm1, dword[ONE]
-		jb sigmaudio_changeSamplesPerSec_16bit_loop_no_overflow
-			subss xmm1, dword[ONE]
-			addss xmm2, dword[ONE]
-			add esi, dword[ebp-36]		;step the source data
-		sigmaudio_changeSamplesPerSec_16bit_loop_no_overflow:
+		sigmaudio_changeSamplesPerSec_16bit_loop_overflow_check:
+			ucomiss xmm1, dword[ONE]
+			jb sigmaudio_changeSamplesPerSec_16bit_loop_no_overflow
+				subss xmm1, dword[ONE]
+				addss xmm2, dword[ONE]
+				add esi, dword[ebp-36]		;step the source data
+				jmp sigmaudio_changeSamplesPerSec_16bit_loop_overflow_check	;if the sampling rate is lowered, xmm1 might be >=2
+			sigmaudio_changeSamplesPerSec_16bit_loop_no_overflow:
+			
 		add edi, dword[ebp-36]
 		dec ebx
 		jnz sigmaudio_changeSamplesPerSec_16bit_loop_start
@@ -234,23 +251,23 @@ sigmaudio_changeSamplesPerSec:
 		dec edx
 		imul edx, 3				;offset=(numChannels-1)*3 bytes
 		mov ecx, dword[ebp-36]
-		add ecx, edx			;edx+nBlockAlign/8 in ecx (offset for next sample)
+		add ecx, edx			;edx+nBlockAlign in ecx (offset for next sample)
 		sigmaudio_changeSamplesPerSec_24bit_interpol_loop_start:
 			xor eax, eax
 			mov ax, word[esi+edx+1]
-			shl eax, 8
-			mov al, byte[esi+edx]
+			shl eax, 16
+			mov ah, byte[esi+edx]
 			cvtsi2ss xmm3, eax
 			mov ax, word[esi+ecx+1]
-			shl eax, 8
-			mov al, byte[esi+ecx]
+			shl eax, 16
+			mov ah, byte[esi+ecx]
 			cvtsi2ss xmm4, eax
-			mulss xmm3, xmm1
-			mulss xmm4, xmm2
+			mulss xmm3, xmm2
+			mulss xmm4, xmm1
 			addss xmm3, xmm4
 			cvtss2si eax, xmm3
-			mov byte[edi+edx], al
-			shr eax, 8
+			mov byte[edi+edx], ah
+			shr eax, 16
 			mov word[edi+edx+1], ax
 			
 			sub ecx, 3
@@ -261,12 +278,16 @@ sigmaudio_changeSamplesPerSec:
 		;continue
 		addss xmm1, xmm0
 		subss xmm2, xmm0
-		ucomiss xmm1, dword[ONE]
-		jb sigmaudio_changeSamplesPerSec_24bit_loop_no_overflow
-			subss xmm1, dword[ONE]
-			addss xmm2, dword[ONE]
-			add esi, dword[ebp-36]		;step the source data
-		sigmaudio_changeSamplesPerSec_24bit_loop_no_overflow:
+		
+		sigmaudio_changeSamplesPerSec_24bit_loop_overflow_check:
+			ucomiss xmm1, dword[ONE]
+			jb sigmaudio_changeSamplesPerSec_24bit_loop_no_overflow
+				subss xmm1, dword[ONE]
+				addss xmm2, dword[ONE]
+				add esi, dword[ebp-36]		;step the source data
+				jmp sigmaudio_changeSamplesPerSec_24bit_loop_overflow_check	;if the sampling rate is lowered, xmm1 might be >=2
+			sigmaudio_changeSamplesPerSec_24bit_loop_no_overflow:
+			
 		add edi, dword[ebp-36]
 		dec ebx
 		jnz sigmaudio_changeSamplesPerSec_24bit_loop_start
@@ -278,12 +299,12 @@ sigmaudio_changeSamplesPerSec:
 		dec edx
 		shl edx, 2				;offset=(numChannels-1)*4 bytes
 		mov ecx, dword[ebp-36]
-		add ecx, edx			;edx+nBlockAlign/8 in ecx (offset for next sample)
+		add ecx, edx			;edx+nBlockAlign in ecx (offset for next sample)
 		sigmaudio_changeSamplesPerSec_32bit_interpol_loop_start:
 			cvtsi2ss xmm3, dword[esi+edx]
 			cvtsi2ss xmm4, dword[esi+ecx]
-			mulss xmm3, xmm1
-			mulss xmm4, xmm2
+			mulss xmm3, xmm2
+			mulss xmm4, xmm1
 			addss xmm3, xmm4
 			cvtss2si eax, xmm3
 			mov dword[edi+edx], eax
@@ -296,12 +317,16 @@ sigmaudio_changeSamplesPerSec:
 		;continue
 		addss xmm1, xmm0
 		subss xmm2, xmm0
-		ucomiss xmm1, dword[ONE]
-		jb sigmaudio_changeSamplesPerSec_32bit_loop_no_overflow
-			subss xmm1, dword[ONE]
-			addss xmm2, dword[ONE]
-			add esi, dword[ebp-36]		;step the source data
-		sigmaudio_changeSamplesPerSec_32bit_loop_no_overflow:
+		
+		sigmaudio_changeSamplesPerSec_32bit_loop_overflow_check:
+			ucomiss xmm1, dword[ONE]
+			jb sigmaudio_changeSamplesPerSec_32bit_loop_no_overflow
+				subss xmm1, dword[ONE]
+				addss xmm2, dword[ONE]
+				add esi, dword[ebp-36]		;step the source data
+				jmp sigmaudio_changeSamplesPerSec_32bit_loop_overflow_check	;if the sampling rate is lowered, xmm1 might be >=2
+			sigmaudio_changeSamplesPerSec_32bit_loop_no_overflow:
+			
 		add edi, dword[ebp-36]
 		dec ebx
 		jnz sigmaudio_changeSamplesPerSec_32bit_loop_start
@@ -459,25 +484,22 @@ sigmaudio_changeBitsPerSample:
 		cmp dword[ebp-24], 32
 		je sigmaudio_changeBitsPerSample_loop_get_source_32
 		sigmaudio_changeBitsPerSample_loop_get_source_8:
-			xor ecx, ecx
-			mov cl, byte[esi]
-			shl ecx, 24
+			xor cl, cl
+			mov ch, byte[esi]
+			shl ecx, 16
 			inc esi
 			jmp sigmaudio_changeBitsPerSample_loop_get_source_done
 			
 		sigmaudio_changeBitsPerSample_loop_get_source_16:
-			xor ecx, ecx
 			mov cx, word[esi]
 			shl ecx, 16
 			add esi, 2
 			jmp sigmaudio_changeBitsPerSample_loop_get_source_done
 			
 		sigmaudio_changeBitsPerSample_loop_get_source_24:
-			xor ecx, ecx
 			mov cx, word[esi+1]
-			shl ecx, 8
-			mov cl, byte[esi]
-			shl ecx, 8
+			shl ecx, 16
+			mov ch, byte[esi]
 			add esi, 3
 			jmp sigmaudio_changeBitsPerSample_loop_get_source_done
 			
@@ -497,8 +519,8 @@ sigmaudio_changeBitsPerSample:
 		cmp dword[ebp+24], 32
 		je sigmaudio_changeBitsPerSample_loop_set_target_32
 		sigmaudio_changeBitsPerSample_loop_set_target_8:
-			shr ecx, 24
-			mov byte[edi], cl
+			shr ecx, 16
+			mov byte[edi], ch
 			inc edi
 			jmp sigmaudio_changeBitsPerSample_loop_set_target_done
 		sigmaudio_changeBitsPerSample_loop_set_target_16:
@@ -507,8 +529,8 @@ sigmaudio_changeBitsPerSample:
 			add edi, 2
 			jmp sigmaudio_changeBitsPerSample_loop_set_target_done
 		sigmaudio_changeBitsPerSample_loop_set_target_24:
-			mov byte[edi], cl
-			shr ecx, 8
+			mov byte[edi], ch
+			shr ecx, 16
 			mov word[edi+1], cx
 			add edi, 3
 			jmp sigmaudio_changeBitsPerSample_loop_set_target_done
@@ -536,8 +558,9 @@ sigmaudio_changeBitsPerSample:
 	
 	;recalculate the waveformatex
 	mov eax, dword[ebp-8]
+	mov ecx, dword[ebp+24]
+	mov word[eax+14], cx
 	
-	mov cx, word[eax+14]
 	shr cx, 3					;bits->bytes
 	imul cx, word[eax+2]
 	mov word[eax+12], cx		;nBlockAlign
