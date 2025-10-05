@@ -147,6 +147,10 @@ section .text use32
 	;int sigmaudio_play(const char* soundPath, int loopCount)
 	global sigmaudio_play
 	global sigmaudio_stop				;void sigmaudio_stop(int playbackId)
+	
+	extern sigmaudio_changeSamplesPerSec
+	extern sigmaudio_changeNumChannels
+	extern sigmaudio_changeBitsPerSample
 
 	dll_import winmm.dll, waveOutOpen				;creates an audio device
 	dll_import winmm.dll, waveOutClose				;destroys an audio device
@@ -167,6 +171,7 @@ section .text use32
 	extern file_getId
 	extern my_memcmp
 	extern my_memcpy
+	extern my_memset
 	extern my_strcmp
 	extern my_strcpy
 	extern my_strlen
@@ -470,6 +475,10 @@ sigmaudio_import:
 	sub esp, 4	;sound id				72
 	sub esp, 4	;return value			76
 	
+	sub esp, 4	;nBlockAlign count		80
+	sub esp, 4	;padded nBlockAlign count	84
+	sub esp, 4	;padded data size		88
+	
 	mov dword[ebp-4], 0
 	mov dword[ebp-76], 0
 	
@@ -499,13 +508,35 @@ sigmaudio_import:
 		sigmaudio_loadSound_error_could_not_read_header db "sigmaudio_loadSound: Couldn't read header of %s",10,0
 	sigmaudio_loadSound_no_error:
 	
+	;calculate the padded data size
+	mov eax, dword[ebp-24]
+	xor edx, edx
+	xor ecx, ecx 
+	mov cx, word[ebp-28]
+	idiv ecx
+	mov dword[ebp-80], eax		;nBlockAlign count
+	
+	mov eax, dword[ebp-80]
+	xor edx, edx
+	mov ecx, dword[block_length]
+	idiv ecx
+	sub ecx, edx
+	mov eax, dword[ebp-80]
+	add eax, ecx
+	mov dword[ebp-84], eax		;padded nBlockAlign count
+	
+	xor ecx, ecx
+	mov cx, word[ebp-28]
+	imul eax, ecx
+	mov dword[ebp-88], eax		;padded data size
+	
 	;alloc space for the data
-	push dword[ebp-24]
+	push dword[ebp-88]
 	call my_malloc
 	mov dword[ebp-16], eax
 	add esp, 4
 	
-	;read the audio data from the file
+	;read the audio data from the file and zero out the padding
 	push file_open_mode
 	push dword[ebp+8]
 	call my_fopen
@@ -528,6 +559,16 @@ sigmaudio_import:
 	push dword[ebp-64]
 	call my_fclose
 	add esp, 4
+	
+	mov eax, dword[ebp-88]
+	mov ecx, dword[ebp-24]
+	sub eax, ecx
+	mov edx, dword[ebp-16]
+	add edx, ecx
+	push eax
+	push 0
+	push edx
+	call my_memset
 	
 	;get the WAVEFORMATEX
 	push 18
@@ -573,7 +614,7 @@ sigmaudio_import:
 	;init the Sound struct
 	mov eax, dword[ebp-4]
 	
-	mov ecx, dword[ebp-24]
+	mov ecx, dword[ebp-88]
 	mov dword[eax], ecx		;data size
 	mov ecx, dword[ebp-16]
 	mov dword[eax+4], ecx	;data
@@ -584,7 +625,20 @@ sigmaudio_import:
 	mov ecx, dword[ebp-72]
 	mov dword[eax+16], ecx
 	
-	;TODO: convert format to internal representation
+	;convert format to internal representation
+	push dword[block_length]
+	push dword[sample_rate]
+	push dword[ebp-4]
+	call sigmaudio_changeSamplesPerSec
+	
+	push dword[channels]
+	push dword[ebp-4]
+	call sigmaudio_changeNumChannels
+	
+	push dword[bits_per_sample]
+	push dword[ebp-4]
+	call sigmaudio_changeBitsPerSample
+	
 	
 	;add sound to imported sounds and delete buffer
 	push dword[ebp-4]
