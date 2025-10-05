@@ -486,6 +486,7 @@ sigmaudio_changeBitsPerSample:
 		sigmaudio_changeBitsPerSample_loop_get_source_8:
 			xor cl, cl
 			mov ch, byte[esi]
+			sub ch, 0xf0				;convert from unsigned to signed (only 8 bits is unsigned)
 			shl ecx, 16
 			inc esi
 			jmp sigmaudio_changeBitsPerSample_loop_get_source_done
@@ -520,6 +521,7 @@ sigmaudio_changeBitsPerSample:
 		je sigmaudio_changeBitsPerSample_loop_set_target_32
 		sigmaudio_changeBitsPerSample_loop_set_target_8:
 			shr ecx, 16
+			add ch, 0xf0						;convert from signed to unsigned	(only 8 bits is unsigned)
 			mov byte[edi], ch
 			inc edi
 			jmp sigmaudio_changeBitsPerSample_loop_set_target_done

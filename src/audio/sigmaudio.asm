@@ -47,14 +47,14 @@
 ;	int id;							;0
 ;	Sound* sound;					;4
 ;	int loopsLeft;					;8
-;	int currentPosition;			;12	as in sample
+;	int currentPosition;			;12	as in nBlockAlign
 ;}
 
 ;struct PlaybackCommand{
 ;	enum{ PLAY=0, STOP=69, UNLOAD=420 } commandType;
 ;
 ;	union{
-;		struct PlayCommand{ Sound* sound; int loopCount; int playbackId; } playCommand;
+;		struct PlayCommand{ int soundId; int loopCount; int playbackId; } playCommand;
 ;		struct StopCommand{ int playbackId; } stopCommand;
 ;		struct UnloadCommand{ int soundId; } unloadCommand;
 ;	}
@@ -118,7 +118,7 @@ section .data use32
 	bits_per_sample dd 16		;bits per sample per channel
 	block_length dd 100			;number of samples per prepared block
 	
-	imported_sounds dd 0,0		;tsVector<Sound>
+	imported_sounds dd 0,0		;tsVector<Sound*>
 	
 	audio_device dd 0			;waveOut device handle
 	audio_thread dd 0			;Thread*
@@ -185,6 +185,7 @@ section .text use32
 	extern tsVector_pushBack
 	extern tsVector_pushBackBuffer
 	extern tsVector_popBack
+	extern tsVector_removeAt
 	extern tsVector_search
 	extern tsVector_forEach
 	extern tsVector_at
@@ -251,7 +252,7 @@ sigmaudio_init:
 	mov word[ebx+16], 0				;cbSize
 	
 	;create imported sounds vector
-	push 20
+	push 4
 	push imported_sounds
 	call tsVector_init
 	
@@ -349,8 +350,9 @@ sigmaudio_deinit:
 	push imported_sounds
 	call tsVector_forEach
 	jmp sigmaudio_deinit_deported
-		sigmaudio_deinit_deporter:		;void deporter(Sound*, void* unused)
+		sigmaudio_deinit_deporter:		;void deporter(Sound**, void* unused)
 			mov eax, dword[esp+4]
+			mov eax, dword[eax]
 			push dword[eax+12]
 			call sigmaudio_deport
 			add esp, 4
@@ -643,10 +645,7 @@ sigmaudio_import:
 	;add sound to imported sounds and delete buffer
 	push dword[ebp-4]
 	push imported_sounds
-	call tsVector_pushBackBuffer
-	
-	push dword[ebp-4]
-	call my_free
+	call tsVector_pushBack
 	
 	sigmaudio_loadSound_end:
 	mov eax, dword[ebp-76]		;set return value
@@ -691,6 +690,7 @@ sigmaudio_deport:
 	push dword[ebp-20]
 	push imported_sounds
 	call tsVector_at
+	mov eax, dword[eax]
 	mov dword[ebp-24], eax		;sound
 	
 	push imported_sounds
@@ -720,8 +720,9 @@ sigmaudio_deport:
 	mov esp, ebp
 	pop ebp
 	ret
-	sigmaudio_deport_search_comparator:		;int comparator(Sound*, const char* path)
+	sigmaudio_deport_search_comparator:		;int comparator(Sound**, const char* path)
 		mov eax, dword[esp+4]
+		mov eax, dword[eax]
 		mov ecx, dword[esp+8]
 		push ecx
 		push dword[eax+12]
@@ -748,10 +749,11 @@ sigmaudio_play:
 	
 	sub esp, 4		;playback id			4
 	sub esp, 4		;loop count				8
-	sub esp, 4		;sound					12
+	sub esp, 4		;sound id				12
 	sub esp, 4		;isStopCommand			16
 	
 	sub esp, 4		;search result			20
+	sub esp, 4		;sound					24
 	
 	;check if the command is in the imported sounds vector
 	push imported_sounds
@@ -780,7 +782,8 @@ sigmaudio_play:
 	push dword[ebp-20]
 	push imported_sounds
 	call tsVector_at
-	mov dword[ebp-12], eax		;sound
+	mov eax, dword[eax]
+	mov dword[ebp-24], eax		;sound
 	
 	push imported_sounds
 	call tsVector_unlock
@@ -789,6 +792,9 @@ sigmaudio_play:
 	mov dword[ebp-16], PLAYBACK_COMMAND_PLAY		;play command
 	mov eax, dword[ebp+12]
 	mov dword[ebp-8], eax		;loop count
+	mov ecx, dword[ebp-24]
+	mov ecx, dword[ecx+16]
+	mov dword[ebp-12], ecx		;sound id
 	
 	push dword[current_playback_id]
 	call tsValue_lock
@@ -816,8 +822,9 @@ sigmaudio_play:
 	mov esp, ebp
 	pop ebp
 	ret
-	sigmaudio_play_search_comparator:		;int comparator(Sound*, const char* path)
+	sigmaudio_play_search_comparator:		;int comparator(Sound**, const char* path)
 		mov eax, dword[esp+4]
+		mov eax, dword[eax]
 		mov ecx, dword[esp+8]
 		push ecx
 		push dword[eax+12]
@@ -845,6 +852,185 @@ sigmaudio_stop:
 	call tsQueue_pushBuffer
 	
 	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;internal functinos
+
+;void sigmaudio_processCommands_internal()
+sigmaudio_processCommands_internal:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 16			;command buffer			16
+	sub esp, 16			;playback buffer		32
+	sub esp, 4			;sound					36
+	
+	sigmaudio_processCommands_internal_loop_start:
+		;attempt to pop command
+		lea eax, [ebp-16]
+		push eax
+		push command_queue
+		test eax, eax
+		jnz sigmaudio_processCommands_internal_loop_end
+		
+		cmp dword[ebp-16], PLAYBACK_COMMAND_PLAY
+		je sigmaudio_processCommands_loop_play
+		cmp dword[ebp-16], PLAYBACK_COMMAND_STOP
+		je sigmaudio_processCommands_loop_stop
+		cmp dword[ebp-16], PLAYBACK_COMMAND_UNLOAD
+		je sigmaudio_processCommands_loop_unload
+		jmp sigmaudio_processCommands_internal_loop_start		;invalid command
+		
+		sigmaudio_processCommands_loop_play:
+			;PLAY SOUND
+			;check if the sound is still imported
+			push imported_sounds
+			call tsVector_lock
+			
+			push dword[ebp-12]			;sound id
+			push sigmaudio_processCommands_loop_play_search_comparator
+			push imported_sounds
+			call tsVector_search
+			cmp eax, -1
+			jne sigmaudio_processCommands_loop_play_sound_imported
+				;release the lock
+				push imported_sounds
+				call tsVector_unlock
+				;print error message
+				push sigmaudio_processCommands_loop_play_error_sound_not_imported
+				call my_printf
+				jmp sigmaudio_processCommands_internal_loop_start			;continue
+				sigmaudio_processCommands_loop_play_error_sound_not_imported db "sigmaudio_processCommands_internal: sound is not imported",10,0
+			sigmaudio_processCommands_loop_play_sound_imported:
+			push eax
+			push imported_sounds
+			call tsVector_at
+			mov eax, dword[eax]
+			mov dword[ebp-36], eax
+			
+			push imported_sounds
+			call tsVector_unlock
+			
+			;init the other values
+			mov eax, dword[ebp-4]
+			mov dword[ebp-32], eax		;playback id
+			mov ecx, dword[ebp-36]
+			mov dword[ebp-28], ecx		;sound
+			mov edx, dword[ebp-8]
+			mov dword[ebp-24], ecx		;loops left
+			mov dword[ebp-20], 0		;current position
+			
+			;add the playback to the playback vector
+			lea eax, [ebp-32]
+			push eax
+			push playbacks
+			call tsVector_pushBackBuffer
+			jmp sigmaudio_processCommands_internal_loop_start
+			
+			sigmaudio_processCommands_loop_play_search_comparator:		;int comparator(Sound**, int soundId)
+				mov ecx, dword[esp+4]
+				mov ecx, dword[ecx]
+				mov eax, dword[esp+8]
+				sub eax, dword[ecx+16]
+				ret
+		
+		sigmaudio_processCommands_loop_stop:
+			;STOP SOUND
+			;check if the playback is still playing
+			push playbacks
+			call tsVector_lock
+			
+			push dword[ebp-12]
+			push sigmaudio_processCommands_loop_stop_search_comparator
+			push playbacks
+			call tsVector_search
+			cmp eax, -1
+			jne sigmaudio_processCommands_loop_stop_playback_found
+				;release the lock
+				push playbacks
+				call tsVector_unlock
+				;print error message
+				push sigmaudio_processCommands_loop_stop_error_playback_not_found
+				call my_printf
+				jmp sigmaudio_processCommands_internal_loop_start			;continue
+				sigmaudio_processCommands_loop_stop_error_playback_not_found db "sigmaudio_processCommands_internal: playback is not found",10,0
+			sigmaudio_processCommands_loop_stop_playback_found:
+			
+			push eax
+			push playbacks
+			call tsVector_removeAt
+			
+			push playbacks
+			call tsVector_unlock
+			
+			jmp sigmaudio_processCommands_internal_loop_start
+			
+			sigmaudio_processCommands_loop_stop_search_comparator:		;int comparator(Playback*, int playbackId)
+				mov ecx, dword[esp+4]
+				mov eax, dword[esp+8]
+				sub eax, dword[ecx]
+				ret
+		
+		sigmaudio_processCommands_loop_unload:
+			;UNLOAD SOUND
+			;check if the sound is still imported
+			push imported_sounds
+			call tsVector_lock
+			
+			push dword[ebp-12]			;sound id
+			push sigmaudio_processCommands_loop_unload_search_comparator
+			push imported_sounds
+			call tsVector_search
+			cmp eax, -1
+			jne sigmaudio_processCommands_loop_unload_sound_imported
+				;release the lock
+				push imported_sounds
+				call tsVector_unlock
+				;print error message
+				push sigmaudio_processCommands_loop_unload_error_sound_not_imported
+				call my_printf
+				jmp sigmaudio_processCommands_internal_loop_start			;continue
+				sigmaudio_processCommands_loop_unload_error_sound_not_imported db "sigmaudio_processCommands_internal: sound is not imported",10,0
+			sigmaudio_processCommands_loop_unload_sound_imported:
+			push eax
+			push imported_sounds
+			call tsVector_at
+			mov eax, dword[eax]
+			mov dword[ebp-36], eax
+			
+			call tsVector_removeAt
+			
+			push imported_sounds
+			call tsVector_unlock
+			
+			;unload the sound
+			mov eax, dword[ebp-36]
+			push eax
+			push dword[eax+4]
+			call my_free
+			add esp, 4
+			call my_free
+			
+			jmp sigmaudio_processCommands_internal_loop_start
+			
+			sigmaudio_processCommands_loop_unload_search_comparator:		;int comparator(Sound**, int soundId)
+				mov ecx, dword[esp+4]
+				mov ecx, dword[ecx]
+				mov eax, dword[esp+8]
+				sub eax, dword[ecx+16]
+				ret
+	
+	sigmaudio_processCommands_internal_loop_end:
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
 	pop ebp
 	ret
 
