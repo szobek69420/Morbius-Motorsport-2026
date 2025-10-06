@@ -363,6 +363,11 @@ sigmaudio_changeSamplesPerSec:
 	imul ecx, dword[ebp-36]
 	mov dword[eax+8], ecx
 	
+	;update the sample count
+	mov eax, dword[ebp+20]
+	mov ecx, dword[ebp-24]
+	mov dword[eax+20], ecx
+	
 	sigmaudio_changeSamplesPerSec_end:
 	mov esp, ebp
 	pop ebx

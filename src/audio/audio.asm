@@ -206,7 +206,7 @@ audio_loadSound:
 	mov ecx, esp
 	push 16
 	push ecx
-	call sigmaudio_changeBitsPerSample
+	;call sigmaudio_changeBitsPerSample
 	add esp, 8
 	mov ecx, dword[esp]
 	mov dword[ebp-24], ecx
@@ -218,7 +218,7 @@ audio_loadSound:
 	push dword[ebp-24]
 	mov ecx, esp
 	push 100
-	push 10000
+	push 15000
 	push ecx
 	call sigmaudio_changeSamplesPerSec
 	add esp, 12

@@ -41,6 +41,7 @@
 ;	WAVEFORMATEX* formatDescriptor;	;8
 ;	char* filePath;					;12
 ;	int id;							;16		//for internal use
+;	int sampleCount;				;20		//sampleCount as in dataSizeInBytes/system_waveformatex->nBlockAlign
 ;}	20 bytes overall
 
 ;struct Playback{
@@ -67,7 +68,10 @@
 
 section .rodata use32
 
-	MAX_PREPARED_BLOCKS dd 5		;the maximum number of prepared blocks waiting to play
+	;the maximum number of prepared blocks waiting to play
+	;if this is changed, the helpers for the main loop might need to be changed as well
+	MAX_PREPARED_BLOCKS dd 5
+	BLOCK_LENGTH dd 500			;number of samples per prepared block
 	
 	PLAYBACK_COMMAND_PLAY equ 0
 	PLAYBACK_COMMAND_STOP equ 69
@@ -83,6 +87,7 @@ section .rodata use32
 	
 	WHDR_BEGINLOOP dd 0x00000004
 	WHDR_ENDLOOP dd 0x00000008
+	WHDR_DONE dd 0x00000001
 	
 	WOM_OPEN dd 0x3bb
 	WOM_CLOSE dd 0x3bc
@@ -116,13 +121,11 @@ section .data use32
 	sample_rate dd 8000			;Hz (int)
 	channels dd 2				;number of channels
 	bits_per_sample dd 16		;bits per sample per channel
-	block_length dd 100			;number of samples per prepared block
 	
 	imported_sounds dd 0,0		;tsVector<Sound*>
 	
 	audio_device dd 0			;waveOut device handle
 	audio_thread dd 0			;Thread*
-	prepared_block_count dd 0	;Semaphore*
 	playbacks dd 0,0			;tsVector<Playback>
 	command_queue dd 0,0		;tsQueue<PlaybackCommand>
 	
@@ -130,6 +133,13 @@ section .data use32
 	
 	current_sound_id dd 0		;tsValue<int>*
 	current_playback_id dd 0	;tsValue<int>*
+	
+	;helpers for main
+	prepared_block_critical_section	dd 0	;CriticalSection*
+	prepared_block_count dd 0				;int
+	prepared_blocks dd 0,0,0,0,0			;char prepared_blocks[MAX_PREPARED_BLOCKS][BLOCK_LENGTH * system_waveformatex->nBlockAlign]
+	prepared_headers dd 0,0,0,0,0			;WAVEHDR* prepared_headers[MAX_PREPARED_BLOCKS]
+	is_prepared dd 0,0,0,0,0				;int is_prepared[MAX_PREPARED_BLOCKS]
 	
 section .bss use32
 	system_waveformatex resb 18	;the WAVEFORMATEX structure generated from the system values
@@ -160,6 +170,8 @@ section .text use32
 	dll_import winmm.dll, waveOutRestart			;resumes the currently playing sound on the given audio device
 	dll_import winmm.dll, waveOutPrepareHeader		;prepares a playback block to be played
 	dll_import winmm.dll, waveOutUnprepareHeader	;undoes the PrepareHeader func
+
+	dll_import kernel32.dll, Sleep
 
 	extern my_printf
 	extern my_malloc
@@ -211,6 +223,11 @@ section .text use32
 	extern tsValue_set
 	extern tsValue_lock
 	extern tsValue_unlock
+	
+	extern criticalSection_create
+	extern criticalSection_destroy
+	extern criticalSection_lock
+	extern criticalSection_unlock
 
 sigmaudio_init:
 	push ebp
@@ -255,11 +272,6 @@ sigmaudio_init:
 	push 4
 	push imported_sounds
 	call tsVector_init
-	
-	;create prepared block count
-	push dword[MAX_PREPARED_BLOCKS]
-	call semaphore_create
-	mov dword[prepared_block_count], eax
 	
 	;create playback vector
 	push 16
@@ -392,10 +404,6 @@ sigmaudio_deinit:
 	push imported_sounds
 	call tsVector_destroy
 	
-	;destroy prepared block count
-	push dword[prepared_block_count]
-	call semaphore_destroy
-	
 	;destroy should_exit
 	push dword[should_exit]
 	call tsValue_destroy
@@ -422,6 +430,249 @@ sigmaudio_mainLoop:
 	push ebx
 	mov ebp, esp
 	
+	sub esp, 4			;prepared data size			4
+	sub esp, 4			;scaler						8		//1/playbacks.size()
+	sub esp, 4			;current prepared index		12
+	sub esp, 4			;active playback countr		16
+	sub esp, 4			;system_waveformatex->nBlockAlign	20
+	sub esp, 4			;bytesPerSample				24
+	sub esp, 4			;overall sample count		28		//BLOCK_LENGTH*numChannels
+	
+	;calculate prepared data size and overall sample count
+	mov eax, system_waveformatex
+	mov cx, word[eax+12]		;system_waveformatex->nBlockAlign
+	movsx ecx, cx
+	imul ecx, [BLOCK_LENGTH]
+	mov dword[ebp-4], ecx
+	
+	mov dx, word[eax+2]
+	movsx edx, dx
+	imul edx, dword[BLOCK_LENGTH]
+	mov dword[ebp-28], edx
+	
+	;get nBlockAlign and bytesPerSample
+	mov eax, system_waveformatex
+	mov cx, word[eax+12]
+	movsx ecx, cx
+	mov dword[ebp-20], ecx
+	mov dx, word[eax+14]
+	shr dx, 3
+	movsx edx, dx
+	mov dword[ebp-24], edx
+	
+	;create helpers
+	call criticalSection_create
+	mov dword[prepared_block_critical_section], eax
+	
+	mov dword[prepared_block_count], 0
+	
+	mov ebx, dword[MAX_PREPARED_BLOCKS]
+	dec ebx
+	sigmaudio_mainLoop_setup_prepared_loop_start:
+		push dword[ebp-4]
+		call my_malloc
+		mov dword[prepared_blocks+4*ebx], eax
+		add esp, 4
+		
+		push 32
+		call my_malloc
+		mov dword[prepared_headers+4*ebx], eax
+		add esp, 4
+		
+		mov dword[is_prepared+4*ebx], 0
+		
+		dec ebx
+		test ebx, 0x80000000
+		jz sigmaudio_mainLoop_setup_prepared_loop_start
+		
+	
+	
+	
+	sigmaudio_mainLoop_loop_start:
+		
+		;check if there is a block to be prepared
+		sigmaudio_mainLoop_loop_wait:
+			push dword[prepared_block_critical_section]
+			call criticalSection_lock
+			add esp, 4
+			
+			mov eax, dword[prepared_block_count]
+			cmp eax, dword[MAX_PREPARED_BLOCKS]
+			jl sigmaudio_mainLoop_loop_no_more_wait
+				push dword[prepared_block_critical_section]
+				call criticalSection_unlock
+				add esp, 4
+			
+				push 50
+				call [Sleep]
+				
+				jmp sigmaudio_mainLoop_loop_wait
+				
+			sigmaudio_mainLoop_loop_no_more_wait:
+			
+			push dword[prepared_block_critical_section]
+			call criticalSection_unlock
+			add esp, 4
+			
+		;check for ended (or looped) playbacks
+		push 69
+		push sigmaudio_mainLoop_loop_end_check_function
+		push playbacks
+		call tsVector_forEach
+		add esp, 12
+		jmp sigmaudio_mainLoop_loop_end_check_function_skip
+		sigmaudio_mainLoop_loop_end_check_function:	;void func(Playback*, void* unused)
+			mov eax, dword[esp+4]
+			mov ecx, dword[eax+4]
+			mov ecx, dword[ecx+20]
+			cmp ecx, dword[eax+12]			;sound sample count > playback current position?
+			jg sigmaudio_mainLoop_loop_end_check_function_end
+				mov dword[eax+12], 0
+				dec dword[eax+8]
+				cmp dword[eax+8], 0			;are there loops left?
+				jg sigmaudio_mainLoop_loop_end_check_function_end
+					;yeet playback
+					push dword[eax]
+					call sigmaudio_stop
+					add esp, 4
+			sigmaudio_mainLoop_loop_end_check_function_end:
+			ret
+		sigmaudio_mainLoop_loop_end_check_function_skip:
+			
+		;process commands
+		call sigmaudio_processCommands_internal
+		
+		;select the block to be prepared
+		;it's either is_prepared[selected]==0 
+		;or is_prepared[selected]!=0 && (prepared_header[selected]->dwFlags & WHDR_DONE)!=0
+		;(in the latter case the header needs to be unprepared as well)
+		xor ebx, ebx
+		sigmaudio_mainLoop_loop_select_loop_start:
+			test dword[is_prepared+4*ebx], 0xffffffff
+			jz sigmaudio_mainLoop_loop_select_loop_end			;found
+			
+			mov eax, dword[prepared_headers+4*ebx]
+			mov eax, dword[eax+16]		;dwFlags
+			test eax, dword[WHDR_DONE]
+			jz sigmaudio_mainLoop_loop_select_loop_continue
+				;(prepared_header[selected]->dwFlags & WHDR_DONE)!=0
+				;header needs to be unprepared first
+				push 32
+				push dword[prepared_headers+4*ebx]
+				push dword[audio_device]
+				call [waveOutUnprepareHeader]
+				
+				jmp sigmaudio_mainLoop_loop_select_loop_end
+			
+			sigmaudio_mainLoop_loop_select_loop_continue:
+			inc ebx
+			cmp ebx, dword[MAX_PREPARED_BLOCKS]
+			jl sigmaudio_mainLoop_loop_select_loop_start
+		sigmaudio_mainLoop_loop_select_loop_end:
+		;save index
+		mov dword[ebp-12], ebx
+		
+		;calculate the scaler
+		mov dword[ebp-8], 0
+		
+		push playbacks
+		call tsVector_sizeNonBlocking
+		mov dword[ebp-16], eax
+		add esp, 4
+		test eax, eax
+		jz sigmaudio_mainLoop_loop_skip_calculating_scaler
+			movss xmm0, dword[ONE]
+			cvtsi2ss xmm1, eax
+			divss xmm0, xmm1
+			movss dword[ebp-8], xmm0
+		
+		sigmaudio_mainLoop_loop_skip_calculating_scaler:
+		
+		;zero out the data
+		push dword[ebp-4]
+		push 0
+		push dword[prepared_blocks]
+		call my_memset
+		add esp, 12
+		
+		;mix the playbacks
+		
+		sigmaudio_mainLoop_loop_mix_function:		;void func(Playback*, void* ebpOfMainLoop)
+			push ebp
+			push esi
+			push edi
+			push ebx
+			mov ebp, esp
+			
+			sub esp, 4			;bytesPerSample
+			
+			mov eax, dword[ebp+20]
+			mov ecx, dword[ebp+24]
+			
+			mov edx, dword[ecx-24]
+			mov dword[ebp-4], edx		;move bytesPerSample closer
+			
+			mov edx, dword[eax+12]
+			imul edx, dword[ecx-20]
+			mov esi, dword[eax+4]
+			mov esi, dword[eax+4]
+			add esi, edx							;source data in esi
+			mov edi, dword[ecx-12]
+			shl edi, 2
+			mov edi, dword[prepared_blocks+edi]	;destination data in edi
+			mov ebx, dword[ecx-28]					;index in ebx
+			sigmaudio_mainLoop_loop_mix_function_loop_start:
+				cmp dword[ebp-4], 2
+				je sigmaudio_mainLoop_loop_mix_function_loop_16bit
+				cmp dword[ebp-4], 3
+				je sigmaudio_mainLoop_loop_mix_function_loop_24bit
+				cmp dword[ebp-4], 4
+				je sigmaudio_mainLoop_loop_mix_function_loop_32bit
+					;8 bit
+					
+				
+				add esi, dword[ebp-4]
+				add edi, dword[ebp-4]
+				dec ebx
+				jnz sigmaudio_mainLoop_loop_mix_function_loop_start
+				
+			;step the playback
+			mov eax, dword[ebp+20]
+			mov ecx, dword[BLOCK_LENGTH]
+			add dword[eax+12], ecx
+			
+			mov esp, ebp
+			pop ebx
+			pop edi
+			pop esi
+			pop ebp
+			ret
+			
+			
+		
+	;destroy helpers
+	mov ebx, dword[MAX_PREPARED_BLOCKS]
+	dec ebx
+	sigmaudio_mainLoop_delete_prepared_loop_start:
+		push dword[prepared_blocks+4*ebx]
+		call my_free
+		add esp, 4
+		
+		push dword[prepared_headers+4*ebx]
+		call my_free
+		add esp, 4
+		
+		mov dword[is_prepared+4*ebx], 0
+		
+		dec ebx
+		test ebx, 0x80000000
+		jz sigmaudio_mainLoop_delete_prepared_loop_start
+	
+	mov dword[prepared_block_count], 0
+	
+	push dword[prepared_block_critical_section]
+	call criticalSection_destroy
+	add esp, 4
 	
 	mov esp, ebp
 	pop ebx
@@ -520,7 +771,7 @@ sigmaudio_import:
 	
 	mov eax, dword[ebp-80]
 	xor edx, edx
-	mov ecx, dword[block_length]
+	mov ecx, dword[BLOCK_LENGTH]
 	idiv ecx
 	sub ecx, edx
 	mov eax, dword[ebp-80]
@@ -608,7 +859,7 @@ sigmaudio_import:
 	
 	
 	;alloc the Sound struct
-	push 20
+	push 24
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
@@ -617,7 +868,7 @@ sigmaudio_import:
 	mov eax, dword[ebp-4]
 	
 	mov ecx, dword[ebp-88]
-	mov dword[eax], ecx		;data size
+	mov dword[eax], ecx		;(padded) data size
 	mov ecx, dword[ebp-16]
 	mov dword[eax+4], ecx	;data
 	mov ecx, dword[ebp-12]
@@ -625,10 +876,12 @@ sigmaudio_import:
 	mov ecx, dword[ebp-68]
 	mov dword[eax+12], ecx	;path
 	mov ecx, dword[ebp-72]
-	mov dword[eax+16], ecx
+	mov dword[eax+16], ecx	;id
+	mov ecx, dword[ebp-84]
+	mov dword[eax+20], ecx	;(padded) sampleCount
 	
 	;convert format to internal representation
-	push dword[block_length]
+	push dword[BLOCK_LENGTH]
 	push dword[sample_rate]
 	push dword[ebp-4]
 	call sigmaudio_changeSamplesPerSec
@@ -642,7 +895,7 @@ sigmaudio_import:
 	call sigmaudio_changeBitsPerSample
 	
 	
-	;add sound to imported sounds and delete buffer
+	;add sound to imported sounds
 	push dword[ebp-4]
 	push imported_sounds
 	call tsVector_pushBack
