@@ -42,7 +42,8 @@
 ;	char* filePath;					;12
 ;	int id;							;16		//for internal use
 ;	int sampleCount;				;20		//sampleCount as in dataSizeInBytes/system_waveformatex->nBlockAlign
-;}	20 bytes overall
+;	int importCount;				;24
+;}	28 bytes overall
 
 ;struct Playback{
 ;	int id;							;0
@@ -114,6 +115,20 @@ section .rodata use32
 	print_seven_ints_nl db "%d %d %d %d %d %d %d",10,0
 	
 	test_text db "freaky golem",10,0
+	
+	ZERO dd 0
+	ONE dd 1.0
+	
+	;helpers for mixin
+	SCALER_8BIT dd 0.0078125
+	SCALER_16BIT dd 0.000030517578125
+	SCALER_24BIT dd 0.00000011920928955
+	SCALER_32BIT dd 0.00000000046566128730774
+	UNSCALER_8BIT dd 128.0
+	UNSCALER_16BIT dd 32768.0
+	UNSCALER_24BIT dd 8388608.0
+	UNSCALER_32BIT dd 2147483648.0
+	
 	
 section .data use32
 	
@@ -203,6 +218,7 @@ section .text use32
 	extern tsVector_at
 	extern tsVector_lock
 	extern tsVector_unlock
+	extern tsVector_sizeNonBlocking
 	
 	extern tsQueue_init
 	extern tsQueue_destroy
@@ -388,7 +404,7 @@ sigmaudio_deinit:
 		sigmaudio_deinit_error_yeetus_fehlgeschlagen db "sigmaudio_deinit: Sumting wong nig",10,0
 	sigmaudio_deinit_thread_has_been_yeeten:
 	
-	;destroy audio device
+	;close the audio device
 	push dword[audio_device]
 	call [waveOutClose]
 	
@@ -437,6 +453,9 @@ sigmaudio_mainLoop:
 	sub esp, 4			;system_waveformatex->nBlockAlign	20
 	sub esp, 4			;bytesPerSample				24
 	sub esp, 4			;overall sample count		28		//BLOCK_LENGTH*numChannels
+	sub esp, 4			;is last loop				32
+	
+	mov dword[ebp-32], 0
 	
 	;calculate prepared data size and overall sample count
 	mov eax, system_waveformatex
@@ -484,8 +503,6 @@ sigmaudio_mainLoop:
 		dec ebx
 		test ebx, 0x80000000
 		jz sigmaudio_mainLoop_setup_prepared_loop_start
-		
-	
 	
 	
 	sigmaudio_mainLoop_loop_start:
@@ -596,7 +613,12 @@ sigmaudio_mainLoop:
 		add esp, 12
 		
 		;mix the playbacks
-		
+		push ebp
+		push sigmaudio_mainLoop_loop_mix_function
+		push playbacks
+		call tsVector_forEach
+		add esp, 12
+		jmp sigmaudio_mainLoop_loop_mix_done
 		sigmaudio_mainLoop_loop_mix_function:		;void func(Playback*, void* ebpOfMainLoop)
 			push ebp
 			push esi
@@ -629,10 +651,100 @@ sigmaudio_mainLoop:
 				cmp dword[ebp-4], 4
 				je sigmaudio_mainLoop_loop_mix_function_loop_32bit
 					;8 bit
+					mov edx, dword[ebp+24]
 					
+					mov al, byte[esi]
+					sub al, 0xf0			;unsigned -> signed
+					movsx eax, al
+					mov cl, byte[edi]
+					sub cl, 0xf0			;unsigned -> signed
+					movsx ecx, cl
+					cvtsi2ss xmm0, eax
+					cvtsi2ss xmm1, ecx
+					mulss xmm0, dword[SCALER_8BIT]
+					mulss xmm1, dword[SCALER_8BIT]
+					mulss xmm0, dword[edx-8]
+					addss xmm1, xmm0
+					mulss xmm1, dword[UNSCALER_8BIT]
+					cvtss2si eax, xmm1
+					add al, 0xf0			;signed -> unsigned
+					mov byte[edi], al			;there should be no problem with the sign if the scaling is right
+					
+					inc esi
+					inc edi
+					jmp sigmaudio_mainLoop_loop_mix_function_loop_continue
 				
-				add esi, dword[ebp-4]
-				add edi, dword[ebp-4]
+				sigmaudio_mainLoop_loop_mix_function_loop_16bit:
+					;16 bit
+					mov edx, dword[ebp+24]
+					
+					mov ax, word[esi]
+					movsx eax, ax
+					mov cx, word[edi]
+					movsx ecx, cx
+					cvtsi2ss xmm0, eax
+					cvtsi2ss xmm1, ecx
+					mulss xmm0, dword[SCALER_16BIT]
+					mulss xmm1, dword[SCALER_16BIT]
+					mulss xmm0, dword[edx-8]
+					addss xmm1, xmm0
+					mulss xmm1, dword[UNSCALER_16BIT]
+					cvtss2si eax, xmm1
+					mov word[edi], ax			;there should be no problem with the sign if the scaling is right
+					
+					add esi, 2
+					add edi, 2
+					jmp sigmaudio_mainLoop_loop_mix_function_loop_continue
+					
+				sigmaudio_mainLoop_loop_mix_function_loop_24bit:
+					;24 bit
+					mov edx, dword[ebp+24]
+					
+					xor eax, eax
+					mov ax, word[esi+1]
+					shl eax, 16
+					mov ah, byte[esi]
+					sar eax, 8
+					mov cx, word[edi+1]
+					shl ecx, 16
+					mov ch, byte[edi]
+					sar ecx, 8
+					cvtsi2ss xmm0, eax
+					cvtsi2ss xmm1, ecx
+					mulss xmm0, dword[SCALER_24BIT]
+					mulss xmm1, dword[SCALER_24BIT]
+					mulss xmm0, dword[edx-8]
+					addss xmm1, xmm0
+					mulss xmm1, dword[UNSCALER_16BIT]
+					cvtss2si eax, xmm1
+					mov word[edi], ax			;there should be no problem with the sign if the scaling is right
+					shr eax, 8
+					mov byte[edi+2], ah
+					
+					add esi, 3
+					add edi, 3
+					jmp sigmaudio_mainLoop_loop_mix_function_loop_continue
+					
+				sigmaudio_mainLoop_loop_mix_function_loop_32bit:
+					;32 bit
+					mov edx, dword[ebp+24]
+					
+					mov eax, dword[esi]
+					mov ecx, dword[edi]
+					cvtsi2ss xmm0, eax
+					cvtsi2ss xmm1, ecx
+					mulss xmm0, dword[SCALER_32BIT]
+					mulss xmm1, dword[SCALER_32BIT]
+					mulss xmm0, dword[edx-8]
+					addss xmm1, xmm0
+					mulss xmm1, dword[UNSCALER_32BIT]
+					cvtss2si eax, xmm1
+					mov dword[edi], eax			;there should be no problem with the sign if the scaling is right
+					
+					add esi, 4
+					add edi, 4
+					
+				sigmaudio_mainLoop_loop_mix_function_loop_continue:
 				dec ebx
 				jnz sigmaudio_mainLoop_loop_mix_function_loop_start
 				
@@ -647,13 +759,68 @@ sigmaudio_mainLoop:
 			pop esi
 			pop ebp
 			ret
-			
-			
+		sigmaudio_mainLoop_loop_mix_done:
+		
+		;prepare the header and write the buffer
+		;> set the lpData, dwBufferLength, dwFlags and dwLoops values of the header
+		mov ebx, dword[ebp-12]
+		mov eax, dword[prepared_headers+4*ebx]
+		mov ecx, dword[prepared_blocks+4*ebx]
+		
+		mov dword[eax], ecx		;lpData
+		mov edx, dword[ebp-4]
+		mov dword[eax+4], edx	;dwBufferLength
+		mov edx, dword[WHDR_BEGINLOOP]
+		or edx, dword[WHDR_ENDLOOP]
+		mov dword[eax+16], edx	;dwFlags (the flags are for looping)
+		mov dword[eax+20], 1	;dwLoops
+		
+		push 32
+		push eax
+		push dword[audio_device]
+		call [waveOutPrepareHeader]
+		call [waveOutWrite]
+		
+		;was this the last loop?
+		test dword[ebp-32], 0xffffffff
+		jnz sigmaudio_mainLoop_loop_end
+		
+		;check if the next is the last loop
+		;last loop only serves as a cleanup procedure
+		sub esp, 4
+		mov eax, esp
+		push eax
+		push dword[should_exit]
+		call tsValue_get
+		mov eax, dword[esp+8]
+		add esp, 12
+		test eax, eax
+		jz sigmaudio_mainLoop_loop_start
+			;set last loop flag
+			mov dword[ebp-32], 69
+			jmp sigmaudio_mainLoop_loop_start
+		
+	sigmaudio_mainLoop_loop_end:	
+	
+	;stop playbakc
+	push dword[audio_device]
+	call [waveOutReset]
 		
 	;destroy helpers
 	mov ebx, dword[MAX_PREPARED_BLOCKS]
 	dec ebx
 	sigmaudio_mainLoop_delete_prepared_loop_start:
+		;unprepare headers if necessary
+		test dword[is_prepared+4*ebx], 0xffffffff
+		jz sigmaudio_mainLoop_delete_prepared_loop_no_unprepare
+			push 32
+			push dword[prepared_headers+4*ebx]
+			push dword[audio_device]
+			call [waveOutUnprepareHeader]
+			add esp, 12
+		sigmaudio_mainLoop_delete_prepared_loop_no_unprepare:
+		
+		;free memory
 		push dword[prepared_blocks+4*ebx]
 		call my_free
 		add esp, 4
@@ -687,25 +854,14 @@ sigmaudio_callback:
 	push ebp
 	mov ebp, esp
 	
-	mov eax, dword[ebp+12]
-	cmp eax, dword[WOM_OPEN]
-	je sigmaudio_callback_device_opened
-	cmp eax, dword[WOM_CLOSE]
-	je sigmaudio_callback_device_closed
 	cmp eax, dword[WOM_DONE]
-	je sigmaudio_callback_playback_ended
-	jmp sigmaudio_callback_end
+	jne sigmaudio_callback_end
+		;decrement the currently playing blocks
+		push dword[prepared_block_critical_section]
+		call criticalSection_lock
+		dec dword[prepared_block_count]
+		call criticalSection_unlock
 	
-	sigmaudio_callback_device_opened:
-		jmp sigmaudio_callback_end
-		
-	sigmaudio_callback_device_closed:
-		jmp sigmaudio_callback_end
-		
-	sigmaudio_callback_playback_ended:
-		jmp sigmaudio_callback_end
-	
-
 	sigmaudio_callback_end:
 	mov esp, ebp
 	pop ebp
@@ -734,6 +890,32 @@ sigmaudio_import:
 	
 	mov dword[ebp-4], 0
 	mov dword[ebp-76], 0
+	
+	;check if the sound is already imported
+	push dword[ebp+20]
+	push sigmaudio_import_already_imported_comparator
+	push imported_sounds
+	call tsVector_search
+	add esp, 12
+	cmp eax, -1
+	jne sigmaudio_loadSound_end		;sound already imported
+	jmp sigmaudio_import_not_imported
+	sigmaudio_import_already_imported_comparator:		;int comparator(Sound**, const char* soundPath)
+		mov eax, dword[esp+4]
+		mov eax, dword[eax]
+		mov ecx, dword[esp+8]
+		push ecx
+		push dword[eax+12]
+		call my_strcmp
+		add esp, 8
+		test eax, eax
+		jnz sigmaudio_import_already_imported_comparator_end
+			mov ecx, dword[esp+4]
+			mov ecx, dword[ecx]
+			inc dword[ecx+24]		;increment import count
+		sigmaudio_import_already_imported_comparator_end:
+		ret
+	sigmaudio_import_not_imported:
 	
 	;read the header
 	lea eax, [ebp-24]
@@ -859,7 +1041,7 @@ sigmaudio_import:
 	
 	
 	;alloc the Sound struct
-	push 24
+	push 28
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
@@ -879,6 +1061,7 @@ sigmaudio_import:
 	mov dword[eax+16], ecx	;id
 	mov ecx, dword[ebp-84]
 	mov dword[eax+20], ecx	;(padded) sampleCount
+	mov dword[eax+24], 0	;import count
 	
 	;convert format to internal representation
 	push dword[BLOCK_LENGTH]
@@ -948,6 +1131,11 @@ sigmaudio_deport:
 	
 	push imported_sounds
 	call tsVector_unlock
+	
+	;decrement the import count (and exit if it's not 0)
+	mov eax, dword[ebp-24]
+	dec dword[eax+24]
+	jnz sigmaudio_deport_end
 	
 	;register stop commands for the playbacks gehöring to this sound
 	;NOTE: if there is a deadlock, it might be here due to locking the command queue under the lock of playbacks
