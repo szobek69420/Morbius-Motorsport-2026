@@ -72,7 +72,7 @@ section .rodata use32
 	;the maximum number of prepared blocks waiting to play
 	;if this is changed, the helpers for the main loop might need to be changed as well
 	MAX_PREPARED_BLOCKS dd 5
-	BLOCK_LENGTH dd 500			;number of samples per prepared block
+	BLOCK_LENGTH dd 2000			;number of samples per prepared block
 	
 	PLAYBACK_COMMAND_PLAY equ 0
 	PLAYBACK_COMMAND_STOP equ 69
@@ -438,6 +438,7 @@ sigmaudio_deinit:
 	pop ebp
 	ret
 
+
 ;void sigmaudio_mainLoop()
 sigmaudio_mainLoop:
 	push ebp
@@ -526,6 +527,8 @@ sigmaudio_mainLoop:
 				jmp sigmaudio_mainLoop_loop_wait
 				
 			sigmaudio_mainLoop_loop_no_more_wait:
+			;increment prepared block count
+			inc dword[prepared_block_count]
 			
 			push dword[prepared_block_critical_section]
 			call criticalSection_unlock
@@ -761,7 +764,7 @@ sigmaudio_mainLoop:
 			ret
 		sigmaudio_mainLoop_loop_mix_done:
 		
-		;prepare the header and write the buffer
+		;set and prepare the header
 		;> set the lpData, dwBufferLength, dwFlags and dwLoops values of the header
 		mov ebx, dword[ebp-12]
 		mov eax, dword[prepared_headers+4*ebx]
@@ -779,6 +782,11 @@ sigmaudio_mainLoop:
 		push eax
 		push dword[audio_device]
 		call [waveOutPrepareHeader]
+		
+		;write the bloc
+		push 32
+		push dword[prepared_headers+4*ebx]
+		push dword[audio_device]
 		call [waveOutWrite]
 		
 		;was this the last loop?
@@ -854,6 +862,7 @@ sigmaudio_callback:
 	push ebp
 	mov ebp, esp
 	
+	mov eax, dword[ebp+12]
 	cmp eax, dword[WOM_DONE]
 	jne sigmaudio_callback_end
 		;decrement the currently playing blocks

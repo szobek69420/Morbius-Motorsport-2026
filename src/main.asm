@@ -43,6 +43,9 @@ section .text use32
 	
 	extern gameState_isMainMenu
 	
+	extern sigmaudio_init
+	extern sigmaudio_deinit
+	
 	..start:
 		push ebp
 		mov ebp, esp
@@ -205,6 +208,12 @@ main_init:
 	call main_initializeInput
 	add esp, 4
 	
+	;audio system
+	push 16
+	push 2
+	push 44000
+	call sigmaudio_init
+	
 	;set return value
 	mov eax, dword[ebp-4]
 	
@@ -217,6 +226,9 @@ main_init:
 main_deinit:
 	push ebp
 	mov ebp, esp
+	
+	;deinit audio system
+	call sigmaudio_deinit
 	
 	;destroy window and opengl context
 	push dword[pwindow]
