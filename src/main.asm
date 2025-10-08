@@ -45,6 +45,10 @@ section .text use32
 	
 	extern sigmaudio_init
 	extern sigmaudio_deinit
+	extern sigmaudio_import
+	extern sigmaudio_deport
+	extern sigmaudio_play
+	extern sigmaudio_stop
 	
 	..start:
 		push ebp
@@ -266,12 +270,12 @@ main_mainMenuHandler:
 			
 			;load and play main menu music
 			push main_menu_music_path
-			call audio_loadSound
-			mov dword[music], eax
+			call sigmaudio_import
 			
 			push 10000000
-			push dword[music]
-			call audio_playSound
+			push main_menu_music_path
+			call sigmaudio_play
+			mov dword[music], eax
 			
 			jmp main_mainMenuHandler_end
 	main_mainMenuHandler_prev_main_menu:
@@ -285,8 +289,9 @@ main_mainMenuHandler:
 			
 			;stop and unload main menu music
 			push dword[music]
-			call audio_stopSound
-			call audio_unloadSound
+			call sigmaudio_stop
+			push main_menu_music_path
+			call sigmaudio_deport
 		
 			jmp main_mainMenuHandler_end
 	

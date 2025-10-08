@@ -72,7 +72,7 @@ section .rodata use32
 	;the maximum number of prepared blocks waiting to play
 	;if this is changed, the helpers for the main loop might need to be changed as well
 	MAX_PREPARED_BLOCKS dd 5
-	BLOCK_LENGTH dd 2000			;number of samples per prepared block
+	BLOCK_LENGTH dd 8000			;number of samples per prepared block
 	
 	PLAYBACK_COMMAND_PLAY equ 0
 	PLAYBACK_COMMAND_STOP equ 69
@@ -112,7 +112,9 @@ section .rodata use32
 	error_header_could_not_be_prepared db "audio_playSound: block header couldn't be prepared",10,0
 	error_data_could_not_be_written db "audio_playSound: data couldn't be written to device",10,0
 
+	print_int_nl db "%d",10,0
 	print_seven_ints_nl db "%d %d %d %d %d %d %d",10,0
+	print_string_nl db "%s",10,0
 	
 	test_text db "freaky golem",10,0
 	
@@ -222,6 +224,7 @@ section .text use32
 	
 	extern tsQueue_init
 	extern tsQueue_destroy
+	extern tsQueue_push
 	extern tsQueue_pushBuffer
 	extern tsQueue_pop
 	
@@ -509,19 +512,12 @@ sigmaudio_mainLoop:
 	sigmaudio_mainLoop_loop_start:
 		
 		;check if there is a block to be prepared
-		sigmaudio_mainLoop_loop_wait:
-			push dword[prepared_block_critical_section]
-			call criticalSection_lock
-			add esp, 4
-			
-			mov eax, dword[prepared_block_count]
-			cmp eax, dword[MAX_PREPARED_BLOCKS]
+		;no need for lock here
+		sigmaudio_mainLoop_loop_wait:	
+			mov eax, dword[MAX_PREPARED_BLOCKS]
+			cmp dword[prepared_block_count], eax
 			jl sigmaudio_mainLoop_loop_no_more_wait
-				push dword[prepared_block_critical_section]
-				call criticalSection_unlock
-				add esp, 4
-			
-				push 50
+				push 5
 				call [Sleep]
 				
 				jmp sigmaudio_mainLoop_loop_wait
@@ -529,10 +525,6 @@ sigmaudio_mainLoop:
 			sigmaudio_mainLoop_loop_no_more_wait:
 			;increment prepared block count
 			inc dword[prepared_block_count]
-			
-			push dword[prepared_block_critical_section]
-			call criticalSection_unlock
-			add esp, 4
 			
 		;check for ended (or looped) playbacks
 		push 69
@@ -572,8 +564,8 @@ sigmaudio_mainLoop:
 			jz sigmaudio_mainLoop_loop_select_loop_end			;found
 			
 			mov eax, dword[prepared_headers+4*ebx]
-			mov eax, dword[eax+16]		;dwFlags
-			test eax, dword[WHDR_DONE]
+			mov ecx, dword[WHDR_DONE]
+			test dword[eax+16], ecx	;test dwFlags
 			jz sigmaudio_mainLoop_loop_select_loop_continue
 				;(prepared_header[selected]->dwFlags & WHDR_DONE)!=0
 				;header needs to be unprepared first
@@ -589,6 +581,7 @@ sigmaudio_mainLoop:
 			cmp ebx, dword[MAX_PREPARED_BLOCKS]
 			jl sigmaudio_mainLoop_loop_select_loop_start
 		sigmaudio_mainLoop_loop_select_loop_end:
+
 		;save index
 		mov dword[ebp-12], ebx
 		
@@ -640,7 +633,7 @@ sigmaudio_mainLoop:
 			mov edx, dword[eax+12]
 			imul edx, dword[ecx-20]
 			mov esi, dword[eax+4]
-			mov esi, dword[eax+4]
+			mov esi, dword[esi+4]
 			add esi, edx							;source data in esi
 			mov edi, dword[ecx-12]
 			shl edi, 2
@@ -776,14 +769,14 @@ sigmaudio_mainLoop:
 		mov edx, dword[WHDR_BEGINLOOP]
 		or edx, dword[WHDR_ENDLOOP]
 		mov dword[eax+16], edx	;dwFlags (the flags are for looping)
-		mov dword[eax+20], 1	;dwLoops
+		mov dword[eax+20], 0	;dwLoops
 		
 		push 32
 		push eax
 		push dword[audio_device]
 		call [waveOutPrepareHeader]
 		
-		;write the bloc
+		;write buffer
 		push 32
 		push dword[prepared_headers+4*ebx]
 		push dword[audio_device]
@@ -857,7 +850,7 @@ sigmaudio_mainLoop:
 	ret
 	
 	
-;void sigmaudio_callback(HANDLE hwo, uint32 uMsg, Sound* sound, int* dwParam1, int* dwParam2 );
+;void sigmaudio_callback(HANDLE hwo, uint32 uMsg, void* unused, int* dwParam1, int* dwParam2 );
 sigmaudio_callback:
 	push ebp
 	mov ebp, esp
@@ -867,9 +860,9 @@ sigmaudio_callback:
 	jne sigmaudio_callback_end
 		;decrement the currently playing blocks
 		push dword[prepared_block_critical_section]
-		call criticalSection_lock
+		;call criticalSection_lock
 		dec dword[prepared_block_count]
-		call criticalSection_unlock
+		;call criticalSection_unlock
 	
 	sigmaudio_callback_end:
 	mov esp, ebp
@@ -1039,6 +1032,7 @@ sigmaudio_import:
 	
 	;get the sound id and update the id helper
 	lea eax, [ebp-72]
+	push eax
 	push dword[current_sound_id]
 	call tsValue_get
 	
@@ -1047,7 +1041,6 @@ sigmaudio_import:
 	push eax
 	push dword[current_sound_id]
 	call tsValue_set
-	
 	
 	;alloc the Sound struct
 	push 28
@@ -1070,7 +1063,7 @@ sigmaudio_import:
 	mov dword[eax+16], ecx	;id
 	mov ecx, dword[ebp-84]
 	mov dword[eax+20], ecx	;(padded) sampleCount
-	mov dword[eax+24], 0	;import count
+	mov dword[eax+24], 1	;import count
 	
 	;convert format to internal representation
 	push dword[BLOCK_LENGTH]
@@ -1085,7 +1078,6 @@ sigmaudio_import:
 	push dword[bits_per_sample]
 	push dword[ebp-4]
 	call sigmaudio_changeBitsPerSample
-	
 	
 	;add sound to imported sounds
 	push dword[ebp-4]
@@ -1200,7 +1192,7 @@ sigmaudio_play:
 	sub esp, 4		;playback id			4
 	sub esp, 4		;loop count				8
 	sub esp, 4		;sound id				12
-	sub esp, 4		;isStopCommand			16
+	sub esp, 4		;command type			16
 	
 	sub esp, 4		;search result			20
 	sub esp, 4		;sound					24
@@ -1325,6 +1317,7 @@ sigmaudio_processCommands_internal:
 		lea eax, [ebp-16]
 		push eax
 		push command_queue
+		call tsQueue_pop
 		test eax, eax
 		jnz sigmaudio_processCommands_internal_loop_end
 		
