@@ -215,7 +215,7 @@ main_init:
 	;audio system
 	push 16
 	push 2
-	push 44000
+	push 44100
 	call sigmaudio_init
 	
 	;set return value

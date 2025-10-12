@@ -556,7 +556,7 @@ sigmaudio_mainLoop:
 		
 		;select the block to be prepared
 		;it's either is_prepared[selected]==0 
-		;or is_prepared[selected]!=0 && (prepared_header[selected]->dwFlags & WHDR_DONE)!=0
+		;or (prepared_header[selected]->dwFlags & WHDR_DONE)!=0
 		;(in the latter case the header needs to be unprepared as well)
 		xor ebx, ebx
 		sigmaudio_mainLoop_loop_select_loop_start:
@@ -573,6 +573,8 @@ sigmaudio_mainLoop:
 				push dword[prepared_headers+4*ebx]
 				push dword[audio_device]
 				call [waveOutUnprepareHeader]
+				
+				mov dword[is_prepared+4*ebx], 0
 				
 				jmp sigmaudio_mainLoop_loop_select_loop_end
 			
@@ -602,9 +604,10 @@ sigmaudio_mainLoop:
 		sigmaudio_mainLoop_loop_skip_calculating_scaler:
 		
 		;zero out the data
+		mov ebx, dword[ebp-12]
 		push dword[ebp-4]
 		push 0
-		push dword[prepared_blocks]
+		push dword[prepared_blocks+4*ebx]
 		call my_memset
 		add esp, 12
 		
@@ -679,7 +682,7 @@ sigmaudio_mainLoop:
 					mov cx, word[edi]
 					movsx ecx, cx
 					cvtsi2ss xmm0, eax
-					cvtsi2ss xmm1, ecx
+					cvtsi2ss xmm1,  ecx
 					mulss xmm0, dword[SCALER_16BIT]
 					mulss xmm1, dword[SCALER_16BIT]
 					mulss xmm0, dword[edx-8]
@@ -766,21 +769,22 @@ sigmaudio_mainLoop:
 		mov dword[eax], ecx		;lpData
 		mov edx, dword[ebp-4]
 		mov dword[eax+4], edx	;dwBufferLength
-		mov edx, dword[WHDR_BEGINLOOP]
-		or edx, dword[WHDR_ENDLOOP]
-		mov dword[eax+16], edx	;dwFlags (the flags are for looping)
-		mov dword[eax+20], 0	;dwLoops
+		mov dword[eax+16], 0	;dwFlags (the flags are for looping)
+		mov dword[eax+20], 1	;dwLoops
 		
 		push 32
-		push eax
+		push dword[prepared_headers+4*ebx]
 		push dword[audio_device]
 		call [waveOutPrepareHeader]
+		
+		mov dword[is_prepared+4*ebx], 69
 		
 		;write buffer
 		push 32
 		push dword[prepared_headers+4*ebx]
 		push dword[audio_device]
 		call [waveOutWrite]
+		
 		
 		;was this the last loop?
 		test dword[ebp-32], 0xffffffff
