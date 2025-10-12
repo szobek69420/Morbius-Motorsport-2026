@@ -3,6 +3,7 @@ section .rodata use32
 	window_name db "Morbius Motorsport 2026",0
 	window_icon_path db "./sprites/window_icon.bmp",0
 	main_menu_music_path db "./sfx/main_menu/main_menu_music.wav",0
+	click_sound_path db "./sfx/main_menu/click.wav",0
 	test_text db "bingus my beloved",10,0
 	
 	message_current_game_state_init db "main: current game state: init",10,0
@@ -247,12 +248,6 @@ main_deinit:
 	pop ebp
 	ret
 	
-extern audio_loadSound
-extern audio_unloadSound
-extern audio_playSound
-extern audio_stopSound
-extern audio_pauseSound
-	
 ;void main_mainMenuHandler(int gameState)
 main_mainMenuHandler:
 	push ebp
@@ -270,6 +265,9 @@ main_mainMenuHandler:
 			
 			;load and play main menu music
 			push main_menu_music_path
+			call sigmaudio_import
+			
+			push click_sound_path
 			call sigmaudio_import
 			
 			push 10000000
@@ -290,7 +288,10 @@ main_mainMenuHandler:
 			;stop and unload main menu music
 			push dword[music]
 			call sigmaudio_stop
+			
 			push main_menu_music_path
+			call sigmaudio_deport
+			push click_sound_path
 			call sigmaudio_deport
 		
 			jmp main_mainMenuHandler_end

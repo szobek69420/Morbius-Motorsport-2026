@@ -72,7 +72,7 @@ section .rodata use32
 	;the maximum number of prepared blocks waiting to play
 	;if this is changed, the helpers for the main loop might need to be changed as well
 	MAX_PREPARED_BLOCKS dd 5
-	BLOCK_LENGTH dd 8000			;number of samples per prepared block
+	BLOCK_LENGTH dd 2000			;number of samples per prepared block
 	
 	PLAYBACK_COMMAND_PLAY equ 0
 	PLAYBACK_COMMAND_STOP equ 69
@@ -113,10 +113,13 @@ section .rodata use32
 	error_data_could_not_be_written db "audio_playSound: data couldn't be written to device",10,0
 
 	print_int_nl db "%d",10,0
+	print_two_ints_nl db "%d %d",10,0
+	print_four_ints_nl db "%d %d %d %d",10,0
 	print_seven_ints_nl db "%d %d %d %d %d %d %d",10,0
 	print_string_nl db "%s",10,0
 	
 	test_text db "freaky golem",10,0
+	test_text2 db "cheeky golem",10,0
 	
 	ZERO dd 0
 	ONE dd 1.0
@@ -898,7 +901,7 @@ sigmaudio_import:
 	mov dword[ebp-76], 0
 	
 	;check if the sound is already imported
-	push dword[ebp+20]
+	push dword[ebp+8]
 	push sigmaudio_import_already_imported_comparator
 	push imported_sounds
 	call tsVector_search
@@ -918,7 +921,7 @@ sigmaudio_import:
 		jnz sigmaudio_import_already_imported_comparator_end
 			mov ecx, dword[esp+4]
 			mov ecx, dword[ecx]
-			inc dword[ecx+24]		;increment import count
+			inc dword[ecx+24]		;increment import count!!!!!
 		sigmaudio_import_already_imported_comparator_end:
 		ret
 	sigmaudio_import_not_imported:
@@ -1035,6 +1038,9 @@ sigmaudio_import:
 	call my_strcpy
 	
 	;get the sound id and update the id helper
+	push dword[current_sound_id]
+	call tsValue_lock
+	
 	lea eax, [ebp-72]
 	push eax
 	push dword[current_sound_id]
@@ -1045,6 +1051,8 @@ sigmaudio_import:
 	push eax
 	push dword[current_sound_id]
 	call tsValue_set
+	
+	call tsValue_unlock
 	
 	;alloc the Sound struct
 	push 28
@@ -1142,14 +1150,6 @@ sigmaudio_deport:
 	dec dword[eax+24]
 	jnz sigmaudio_deport_end
 	
-	;register stop commands for the playbacks gehöring to this sound
-	;NOTE: if there is a deadlock, it might be here due to locking the command queue under the lock of playbacks
-	mov eax, dword[ebp-24]
-	push dword[eax+16]
-	push sigmaudio_deport_register_stop_command
-	push playbacks
-	call tsVector_forEach
-	
 	;register unload command
 	mov dword[ebp-16], PLAYBACK_COMMAND_UNLOAD
 	mov eax, dword[ebp-24]
@@ -1174,18 +1174,6 @@ sigmaudio_deport:
 		push dword[eax+12]
 		call my_strcmp
 		add esp, 8
-		ret
-	sigmaudio_deport_register_stop_command: ;void thisnigga(Playback*, int soundId)
-		mov eax, dword[esp+4]
-		mov ecx, dword[eax+4]
-		mov ecx, dword[ecx+16]
-		cmp ecx, dword[esp+8]
-		je sigmaudio_deport_register_stop_command_match
-			ret
-		sigmaudio_deport_register_stop_command_match:
-		push dword[eax]
-		call sigmaudio_stop
-		add esp, 4
 		ret
 	
 	
@@ -1369,7 +1357,7 @@ sigmaudio_processCommands_internal:
 			mov ecx, dword[ebp-36]
 			mov dword[ebp-28], ecx		;sound
 			mov edx, dword[ebp-8]
-			mov dword[ebp-24], ecx		;loops left
+			mov dword[ebp-24], edx		;loops left
 			mov dword[ebp-20], 0		;current position
 			
 			;add the playback to the playback vector
@@ -1454,6 +1442,40 @@ sigmaudio_processCommands_internal:
 			
 			push imported_sounds
 			call tsVector_unlock
+			
+			;stop every playback that belongs to the sound
+			push playbacks
+			call tsVector_lock
+			add esp, 4
+			
+			sigmaudio_processCommands_loop_unload_loop_start:
+				;search for playback
+				mov eax, dword[ebp-36]
+				push dword[eax+16]
+				push sigmaudio_processCommands_loop_unload_comparator
+				push playbacks
+				call tsVector_search
+				add esp, 12
+				cmp eax, -1
+				je sigmaudio_processCommands_loop_unload_loop_end
+					;remove the playback
+					push eax
+					push playbacks
+					call tsVector_removeAt
+					add esp, 8
+					jmp sigmaudio_processCommands_loop_unload_loop_start
+			
+				sigmaudio_processCommands_loop_unload_comparator: ;int thisnigga(Playback*, int soundId)
+					mov ecx, dword[esp+4]
+					mov eax, dword[ecx+4]
+					mov eax, dword[eax+16]
+					sub eax, dword[esp+8]
+					ret
+					
+			sigmaudio_processCommands_loop_unload_loop_end:
+			push playbacks
+			call tsVector_unlock
+			add esp, 4
 			
 			;unload the sound
 			mov eax, dword[ebp-36]

@@ -1,7 +1,7 @@
 [BITS 32]
 
 ;struct tsVector{
-;	ContainerCriticalSection* sex;	0
+;	CriticalSection* sex;			0
 ;	vector* vec;					4
 ;}	8 bytes overall
 
