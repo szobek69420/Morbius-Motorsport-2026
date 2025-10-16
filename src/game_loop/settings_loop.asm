@@ -612,10 +612,11 @@ settingsLoop_initCanvas:
 	settingsLoop_initCanvas_returnButtonCallback:
 		call settingsLoop_saveValues
 		
+		push 0
 		push 1
 		push click_sound_path
 		call sigmaudio_play
-		add esp, 8
+		add esp, 12
 		
 		mov eax, dword[esp+8]
 		push dword[GAME_STATE_MENU]

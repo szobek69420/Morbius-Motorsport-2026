@@ -273,9 +273,10 @@ main_mainMenuHandler:
 			push click2_sound_path
 			call sigmaudio_import
 			
+			push 0x7fffffff
 			push 10000000
 			push main_menu_music_path
-			;call sigmaudio_play
+			call sigmaudio_play
 			
 			jmp main_mainMenuHandler_end
 	main_mainMenuHandler_prev_main_menu:

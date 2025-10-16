@@ -480,10 +480,11 @@ menuLoop_initCanvas:
 	jmp menuLoop_initCanvas_startButtonCallback_skip
 	;void menuLoop_startButtonCallback(UIElement* element, tsValue<int>* returnValue)
 	menuLoop_initCanvas_startButtonCallback:
+		push 0
 		push 1
 		push click_sound_path
 		call sigmaudio_play
-		add esp, 8
+		add esp, 12
 	
 		mov eax, dword[esp+8]
 		push dword[GAME_STATE_INGAME]
@@ -551,10 +552,11 @@ menuLoop_initCanvas:
 	jmp menuLoop_initCanvas_settingsButtonCallback_skip
 	;void menuLoop_initCanvas_settingsButtonCallback(UIElement* element, tsValue<int>* returnValue)
 	menuLoop_initCanvas_settingsButtonCallback:
+		push 0
 		push 1
 		push click_sound_path
 		call sigmaudio_play
-		add esp, 8
+		add esp, 12
 	
 		mov eax, dword[esp+8]
 		push dword[GAME_STATE_SETTINGS]
@@ -617,10 +619,11 @@ menuLoop_initCanvas:
 	jmp menuLoop_initCanvas_exitButtonCallback_skip
 	;void menuLoop_initCanvas_exitButtonCallback(UIElement* element, tsValue<int>* returnValue)
 	menuLoop_initCanvas_exitButtonCallback:
+		push 0
 		push 1
 		push click_sound_path
 		call sigmaudio_play
-		add esp, 8
+		add esp, 12
 	
 		mov eax, dword[esp+8]
 		push dword[GAME_STATE_DEINIT]

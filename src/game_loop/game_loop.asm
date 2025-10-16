@@ -346,10 +346,7 @@ section .text use32
 	
 	extern sky_getColour
 	
-	extern perlin_init2d
-	extern perlin_deinit2d
-	extern perlin_init3d
-	extern perlin_deinit3d
+	extern perlin3d_init
 	
 	extern mat4_viewGlm
 	extern mat4_perspective
@@ -408,11 +405,8 @@ gameLoop_main:
 	call input_hideCursor
 	add esp, 8
 	
-	;init perlin noises
-	push 100
-	call perlin_init2d
-	call perlin_init3d
-	add esp, 4
+	;init perlin noise
+	call perlin3d_init
 	
 	;init physics
 	call physics4d_init
@@ -844,10 +838,6 @@ gameLoop_main:
 	
 	;deinit physics
 	call physics4d_deinit
-	
-	;deinit perlin noise
-	call perlin_deinit3d
-	call perlin_deinit2d
 	
 	;unset window resize callback
 	push 0

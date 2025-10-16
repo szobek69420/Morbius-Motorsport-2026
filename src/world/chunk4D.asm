@@ -55,6 +55,8 @@ section .rodata use32
 	
 	test_text db "stalinkin park",10,0
 	
+	ONE db 1.0
+	
 section .text use32
 
 	;the collider and renderable is initialized by the chunk manager
@@ -100,8 +102,6 @@ section .text use32
 	extern colliderGroup4d_printInfo
 	extern physics4d_registerColliderGroup
 	extern physics4d_unregisterColliderGroup
-	
-	extern perlin_sample3d
 	
 	
 chunk4d_vec4ToBlockPos:
@@ -1109,7 +1109,8 @@ chunk4d_generateHeightMap:
 				push dword[ebp-24]
 				push dword[ebp-20]
 				push dword[ebp-16]
-				call perlin_sample3d
+				;call perlin_sample3d
+				fld dword[ONE]
 				fstp dword[ebp-40]
 				add esp, 12
 				
