@@ -4,6 +4,7 @@ section .rodata use32
 	window_icon_path db "./sprites/window_icon.bmp",0
 	main_menu_music_path db "./sfx/main_menu/main_menu_music.wav",0
 	click_sound_path db "./sfx/main_menu/click.wav",0
+	click2_sound_path db "./sfx/main_menu/click_better.wav",0
 	test_text db "bingus my beloved",10,0
 	
 	message_current_game_state_init db "main: current game state: init",10,0
@@ -269,11 +270,12 @@ main_mainMenuHandler:
 			
 			push click_sound_path
 			call sigmaudio_import
+			push click2_sound_path
+			call sigmaudio_import
 			
 			push 10000000
 			push main_menu_music_path
-			call sigmaudio_play
-			mov dword[music], eax
+			;call sigmaudio_play
 			
 			jmp main_mainMenuHandler_end
 	main_mainMenuHandler_prev_main_menu:
@@ -286,12 +288,14 @@ main_mainMenuHandler:
 			mov dword[main_menu], 0
 			
 			;stop and unload main menu music
-			push dword[music]
+			push main_menu_music_path
 			call sigmaudio_stop
 			
 			push main_menu_music_path
 			call sigmaudio_deport
 			push click_sound_path
+			call sigmaudio_deport
+			push click2_sound_path
 			call sigmaudio_deport
 		
 			jmp main_mainMenuHandler_end

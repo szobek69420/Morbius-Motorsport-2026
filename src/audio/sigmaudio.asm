@@ -50,17 +50,18 @@
 ;	Sound* sound;					;4
 ;	int loopsLeft;					;8
 ;	int currentPosition;			;12	as in nBlockAlign
-;}
+;	int priority;					;16
+;}	20 bytes overall
 
 ;struct PlaybackCommand{
 ;	enum{ PLAY=0, STOP=69, UNLOAD=420 } commandType;
 ;
 ;	union{
-;		struct PlayCommand{ int soundId; int loopCount; int playbackId; } playCommand;
+;		struct PlayCommand{ int soundId; int loopCount; int playbackId; int priority; } playCommand;
 ;		struct StopCommand{ int playbackId; } stopCommand;
 ;		struct UnloadCommand{ int soundId; } unloadCommand;
 ;	}
-;}	16 bytes overall
+;}	20 bytes overall
 
 %macro dll_import 2
 	import %2 %1
@@ -72,7 +73,9 @@ section .rodata use32
 	;the maximum number of prepared blocks waiting to play
 	;if this is changed, the helpers for the main loop might need to be changed as well
 	MAX_PREPARED_BLOCKS dd 5
-	BLOCK_LENGTH dd 2000			;number of samples per prepared block
+	BLOCK_LENGTH dd 1000			;number of samples per prepared block
+	MAX_PLAYBACK_COUNT dd 5			;max number of playbacks
+	VOLUME_SCALER dd 0.2			;1/MAX_PLAYBACK_COUNT
 	
 	PLAYBACK_COMMAND_PLAY equ 0
 	PLAYBACK_COMMAND_STOP equ 69
@@ -174,7 +177,7 @@ section .text use32
 	global sigmaudio_deport				;void sigmaudio_deport(const char* soundPath)
 	
 	;returns the id of the playback if gg, else 0
-	;int sigmaudio_play(const char* soundPath, int loopCount)
+	;int sigmaudio_play(const char* soundPath, int loopCount, int priority)
 	global sigmaudio_play
 	global sigmaudio_stop				;void sigmaudio_stop(int playbackId)
 	
@@ -296,13 +299,13 @@ sigmaudio_init:
 	call tsVector_init
 	
 	;create playback vector
-	push 16
+	push 20
 	push playbacks
 	call tsVector_init
 	
 	;create command queue
 	push 64
-	push 16
+	push 20
 	push command_queue
 	call tsQueue_init
 	
@@ -591,20 +594,13 @@ sigmaudio_mainLoop:
 		mov dword[ebp-12], ebx
 		
 		;calculate the scaler
-		mov dword[ebp-8], 0
-		
 		push playbacks
 		call tsVector_sizeNonBlocking
 		mov dword[ebp-16], eax
 		add esp, 4
-		test eax, eax
-		jz sigmaudio_mainLoop_loop_skip_calculating_scaler
-			movss xmm0, dword[ONE]
-			cvtsi2ss xmm1, eax
-			divss xmm0, xmm1
-			movss dword[ebp-8], xmm0
 		
-		sigmaudio_mainLoop_loop_skip_calculating_scaler:
+		mov eax, dword[VOLUME_SCALER]
+		mov dword[ebp-8], eax
 		
 		;zero out the data
 		mov ebx, dword[ebp-12]
@@ -1078,6 +1074,16 @@ sigmaudio_import:
 	mov dword[eax+24], 1	;import count
 	
 	;convert format to internal representation
+	push dword[ebp+8]
+	push print_string_nl
+	call my_printf
+	
+	mov eax, dword[ebp-12]
+	push dword[eax+4]
+	push dword[sample_rate]
+	push print_two_ints_nl
+	call my_printf
+	
 	push dword[BLOCK_LENGTH]
 	push dword[sample_rate]
 	push dword[ebp-4]
@@ -1108,9 +1114,9 @@ sigmaudio_deport:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 16			;command buffer		16
-	sub esp, 4			;search resutl		20
-	sub esp, 4			;psound				24
+	sub esp, 20			;command buffer		20
+	sub esp, 4			;search resutl		24
+	sub esp, 4			;psound				28
 	
 	;get the sound
 	push imported_sounds
@@ -1120,7 +1126,7 @@ sigmaudio_deport:
 	push sigmaudio_deport_search_comparator
 	push imported_sounds
 	call tsVector_search
-	mov dword[ebp-20], eax
+	mov dword[ebp-24], eax
 	cmp eax, -1
 	jne sigmaudio_deport_sound_imported
 		;unlock critical sex
@@ -1136,27 +1142,27 @@ sigmaudio_deport:
 		sigmaudio_deport_error_sound_not_imported db "sigmaudio_deport: %s is not imported",10,0
 	sigmaudio_deport_sound_imported:
 	
-	push dword[ebp-20]
+	push dword[ebp-24]
 	push imported_sounds
 	call tsVector_at
 	mov eax, dword[eax]
-	mov dword[ebp-24], eax		;sound
+	mov dword[ebp-28], eax		;sound
 	
 	push imported_sounds
 	call tsVector_unlock
 	
 	;decrement the import count (and exit if it's not 0)
-	mov eax, dword[ebp-24]
+	mov eax, dword[ebp-28]
 	dec dword[eax+24]
 	jnz sigmaudio_deport_end
 	
 	;register unload command
-	mov dword[ebp-16], PLAYBACK_COMMAND_UNLOAD
-	mov eax, dword[ebp-24]
+	mov dword[ebp-20], PLAYBACK_COMMAND_UNLOAD
+	mov eax, dword[ebp-28]
 	mov eax, dword[eax+16]
-	mov dword[ebp-12], eax		;sound id
+	mov dword[ebp-16], eax		;sound id
 	
-	lea eax, [ebp-16]
+	lea eax, [ebp-20]
 	push eax
 	push command_queue
 	call tsQueue_pushBuffer
@@ -1181,13 +1187,14 @@ sigmaudio_play:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 4		;playback id			4
-	sub esp, 4		;loop count				8
-	sub esp, 4		;sound id				12
-	sub esp, 4		;command type			16
+	sub esp, 4		;priority				4
+	sub esp, 4		;playback id			8
+	sub esp, 4		;loop count				12
+	sub esp, 4		;sound id				16
+	sub esp, 4		;command type			20
 	
-	sub esp, 4		;search result			20
-	sub esp, 4		;sound					24
+	sub esp, 4		;search result			24
+	sub esp, 4		;sound					28
 	
 	;check if the command is in the imported sounds vector
 	push imported_sounds
@@ -1197,7 +1204,7 @@ sigmaudio_play:
 	push sigmaudio_play_search_comparator
 	push imported_sounds
 	call tsVector_search
-	mov dword[ebp-20], eax
+	mov dword[ebp-24], eax
 	cmp eax, -1
 	jne sigmaudio_play_sound_imported
 		;unlock critical sex
@@ -1213,32 +1220,34 @@ sigmaudio_play:
 		sigmaudio_play_error_sound_not_imported db "sigmaudio_play: %s is not imported",10,0
 	sigmaudio_play_sound_imported:
 	
-	push dword[ebp-20]
+	push dword[ebp-24]
 	push imported_sounds
 	call tsVector_at
 	mov eax, dword[eax]
-	mov dword[ebp-24], eax		;sound
+	mov dword[ebp-28], eax		;sound
 	
 	push imported_sounds
 	call tsVector_unlock
 	
 	;prepare command buffer
-	mov dword[ebp-16], PLAYBACK_COMMAND_PLAY		;play command
+	mov dword[ebp-20], PLAYBACK_COMMAND_PLAY		;play command
 	mov eax, dword[ebp+12]
-	mov dword[ebp-8], eax		;loop count
-	mov ecx, dword[ebp-24]
+	mov dword[ebp-12], eax		;loop count
+	mov ecx, dword[ebp-28]
 	mov ecx, dword[ecx+16]
-	mov dword[ebp-12], ecx		;sound id
+	mov dword[ebp-16], ecx		;sound id
+	mov edx, dword[ebp+16]
+	mov dword[ebp-4], edx		;priority
 	
 	push dword[current_playback_id]
 	call tsValue_lock
 	
-	lea eax, dword[ebp-4]
+	lea eax, dword[ebp-8]
 	push eax
 	push dword[current_playback_id]
 	call tsValue_get			;playback id
 	
-	mov eax, dword[ebp-4]
+	mov eax, dword[ebp-8]
 	inc eax
 	push eax
 	push dword[current_playback_id]
@@ -1247,7 +1256,7 @@ sigmaudio_play:
 	call tsValue_unlock
 	
 	;add the command to the command queue
-	lea eax, [ebp-16]
+	lea eax, [ebp-20]
 	push eax
 	push command_queue
 	call tsQueue_pushBuffer
@@ -1272,15 +1281,15 @@ sigmaudio_stop:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 16		;command buffer		16
+	sub esp, 20		;command buffer		20
 	
 	;set values in the buffer
-	mov dword[ebp-16], PLAYBACK_COMMAND_STOP			;stop command
+	mov dword[ebp-20], PLAYBACK_COMMAND_STOP			;stop command
 	mov eax, dword[ebp+8]
-	mov dword[ebp-12], eax			;playback id
+	mov dword[ebp-16], eax			;playback id
 	
 	;add the command to the queue
-	lea eax, [ebp-16]
+	lea eax, [ebp-20]
 	push eax
 	push command_queue
 	call tsQueue_pushBuffer
@@ -1300,24 +1309,26 @@ sigmaudio_processCommands_internal:
 	push ebx
 	mov ebp, esp
 	
-	sub esp, 16			;command buffer			16
-	sub esp, 16			;playback buffer		32
-	sub esp, 4			;sound					36
+	sub esp, 20			;command buffer			20
+	sub esp, 20			;playback buffer		40
+	sub esp, 4			;sound					44
+	sub esp, 4			;lowest priority		48
+	sub esp, 4			;lowest priority index	52
 	
 	sigmaudio_processCommands_internal_loop_start:
 		;attempt to pop command
-		lea eax, [ebp-16]
+		lea eax, [ebp-20]
 		push eax
 		push command_queue
 		call tsQueue_pop
 		test eax, eax
 		jnz sigmaudio_processCommands_internal_loop_end
 		
-		cmp dword[ebp-16], PLAYBACK_COMMAND_PLAY
+		cmp dword[ebp-20], PLAYBACK_COMMAND_PLAY
 		je sigmaudio_processCommands_loop_play
-		cmp dword[ebp-16], PLAYBACK_COMMAND_STOP
+		cmp dword[ebp-20], PLAYBACK_COMMAND_STOP
 		je sigmaudio_processCommands_loop_stop
-		cmp dword[ebp-16], PLAYBACK_COMMAND_UNLOAD
+		cmp dword[ebp-20], PLAYBACK_COMMAND_UNLOAD
 		je sigmaudio_processCommands_loop_unload
 		jmp sigmaudio_processCommands_internal_loop_start		;invalid command
 		
@@ -1327,7 +1338,7 @@ sigmaudio_processCommands_internal:
 			push imported_sounds
 			call tsVector_lock
 			
-			push dword[ebp-12]			;sound id
+			push dword[ebp-16]			;sound id
 			push sigmaudio_processCommands_loop_play_search_comparator
 			push imported_sounds
 			call tsVector_search
@@ -1346,22 +1357,72 @@ sigmaudio_processCommands_internal:
 			push imported_sounds
 			call tsVector_at
 			mov eax, dword[eax]
-			mov dword[ebp-36], eax
+			mov dword[ebp-44], eax
 			
 			push imported_sounds
 			call tsVector_unlock
 			
+			;check if there is a free slot for the sound
+			;if not, check if there are any sounds with lower priority
+			push playbacks
+			call tsVector_sizeNonBlocking
+			cmp eax, dword[MAX_PLAYBACK_COUNT]
+			jl sigmaudio_processCommands_loop_play_sound_slot_available
+				mov dword[ebp-48], 0x7fffffff
+				mov dword[ebp-52], 0
+				
+				push ebp
+				push sigmaudio_processCommands_loop_play_sound_min_foreach_function
+				push playbacks
+				call tsVector_forEach
+				add esp, 12
+				test dword[ebp-52], 0xffffffff
+				jnz sigmaudio_processCommands_loop_play_sound_unload_lower_priority_playback
+					;print error message
+					mov eax, dword[ebp-44]
+					push dword[eax+12]
+					push sigmaudio_processCommands_loop_play_sound_error_no_available_slot
+					call my_printf
+					add esp, 8
+					jmp sigmaudio_processCommands_internal_loop_start
+					
+					sigmaudio_processCommands_loop_play_sound_error_no_available_slot db "sigmaudio_processCommands: %s cound not be played as too many sounds are playing already",10,0
+				sigmaudio_processCommands_loop_play_sound_unload_lower_priority_playback:
+				
+				mov eax, dword[ebp-52]
+				push dword[eax]
+				call sigmaudio_stop
+				add esp, 4
+				jmp sigmaudio_processCommands_loop_play_sound_slot_available
+				
+				;void func(Playback*, void* ebpOfProcessCommands)
+				;searches for the minimal priority
+				sigmaudio_processCommands_loop_play_sound_min_foreach_function:
+					mov eax, dword[esp+4]
+					mov ecx, dword[esp+8]
+					mov edx, dword[eax+16]
+					cmp edx, dword[ecx-48]
+					jge sigmaudio_processCommands_loop_play_sound_min_foreach_function_end
+						mov dword[ecx-48], edx
+						mov dword[ecx-52], eax
+					sigmaudio_processCommands_loop_play_sound_min_foreach_function_end:
+					ret
+				
+			sigmaudio_processCommands_loop_play_sound_slot_available:
+			
 			;init the other values
+			mov eax, dword[ebp-8]
+			mov dword[ebp-40], eax		;playback id
+			mov ecx, dword[ebp-44]
+			mov dword[ebp-36], ecx		;sound
+			mov edx, dword[ebp-12]
+			mov dword[ebp-32], edx		;loops left
+			mov dword[ebp-28], 0		;current position
 			mov eax, dword[ebp-4]
-			mov dword[ebp-32], eax		;playback id
-			mov ecx, dword[ebp-36]
-			mov dword[ebp-28], ecx		;sound
-			mov edx, dword[ebp-8]
-			mov dword[ebp-24], edx		;loops left
-			mov dword[ebp-20], 0		;current position
+			mov dword[ebp-24], eax		;priority
 			
 			;add the playback to the playback vector
-			lea eax, [ebp-32]
+			lea eax, [ebp-40]
 			push eax
 			push playbacks
 			call tsVector_pushBackBuffer
@@ -1380,7 +1441,7 @@ sigmaudio_processCommands_internal:
 			push playbacks
 			call tsVector_lock
 			
-			push dword[ebp-12]
+			push dword[ebp-16]
 			push sigmaudio_processCommands_loop_stop_search_comparator
 			push playbacks
 			call tsVector_search
@@ -1417,7 +1478,7 @@ sigmaudio_processCommands_internal:
 			push imported_sounds
 			call tsVector_lock
 			
-			push dword[ebp-12]			;sound id
+			push dword[ebp-16]			;sound id
 			push sigmaudio_processCommands_loop_unload_search_comparator
 			push imported_sounds
 			call tsVector_search
@@ -1436,7 +1497,7 @@ sigmaudio_processCommands_internal:
 			push imported_sounds
 			call tsVector_at
 			mov eax, dword[eax]
-			mov dword[ebp-36], eax
+			mov dword[ebp-44], eax
 			
 			call tsVector_removeAt
 			
@@ -1450,7 +1511,7 @@ sigmaudio_processCommands_internal:
 			
 			sigmaudio_processCommands_loop_unload_loop_start:
 				;search for playback
-				mov eax, dword[ebp-36]
+				mov eax, dword[ebp-44]
 				push dword[eax+16]
 				push sigmaudio_processCommands_loop_unload_comparator
 				push playbacks
@@ -1478,7 +1539,7 @@ sigmaudio_processCommands_internal:
 			add esp, 4
 			
 			;unload the sound
-			mov eax, dword[ebp-36]
+			mov eax, dword[ebp-44]
 			push eax
 			push dword[eax+4]
 			call my_free

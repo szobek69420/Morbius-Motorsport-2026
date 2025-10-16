@@ -26,6 +26,8 @@ section .rodata use32
 	format_render_distance db "render_distance: %d",10,0
 	format_resolution db "resolution: %d",10,0
 	
+	click_sound_path db "./sfx/main_menu/click_better.wav",0
+	
 	;resolutions
 	RESOLUTION_WIDTHS dd 10, 256, 640, 1280, 1920, 1920, 2560, 15360
 	RESOLUTION_HEIGHTS dd 10, 144, 480, 720, 1080, 1, 1440, 8640
@@ -171,6 +173,8 @@ section .text use32
 	extern GAME_STATE_INGAME
 	extern GAME_STATE_DEINIT
 	extern GAME_STATE_SETTINGS
+	
+	extern sigmaudio_play
 	
 settingsLoop_main:
 	push ebp
@@ -607,6 +611,11 @@ settingsLoop_initCanvas:
 	;void settingsLoop_initCanvas_returnButtonCallback(UIElement* element, tsValue<int>* returnValue)
 	settingsLoop_initCanvas_returnButtonCallback:
 		call settingsLoop_saveValues
+		
+		push 1
+		push click_sound_path
+		call sigmaudio_play
+		add esp, 8
 		
 		mov eax, dword[esp+8]
 		push dword[GAME_STATE_MENU]

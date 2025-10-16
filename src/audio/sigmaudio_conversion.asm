@@ -55,7 +55,7 @@ sigmaudio_changeSamplesPerSec:
 	push ebp
 	push esi
 	push edi
-	push ebx
+	push ebx 
 	mov ebp, esp
 	
 	sub esp, 4		;new data					4
@@ -85,7 +85,7 @@ sigmaudio_changeSamplesPerSec:
 	
 	;check if the new and old samplesPerSec are same
 	mov eax, dword[ebp-12]
-	mov eax, dword[eax+8]
+	mov eax, dword[eax+4]
 	cmp eax, dword[ebp+24]
 	je sigmaudio_changeSamplesPerSec_end
 	
