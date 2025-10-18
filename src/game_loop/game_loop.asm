@@ -347,6 +347,7 @@ section .text use32
 	extern sky_getColour
 	
 	extern perlin3d_init
+	extern perlin3d_sample
 	
 	extern mat4_viewGlm
 	extern mat4_perspective

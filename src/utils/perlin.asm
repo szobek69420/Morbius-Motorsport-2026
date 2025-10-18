@@ -15,9 +15,12 @@ section .rodata use32
 	
 	print_two_ints_nl db "%d %d",10,0
 	print_three_ints_nl db "%d %d %d",10,0
+	print_eight_ints_nl db "%d %d %d %d %d %d %d %d",10,0
 	print_float_nl db "%f",10,0
 	print_two_floats_nl db "%f %f",10,0
 	print_three_floats_nl db "%f %f %f",10,0
+	print_four_floats_nl db "%f %f %f %f",10,0
+	print_eight_floats_nl db "%f %f %f %f %f %f %f %f",10,0
 	
 	test_text db "womb raider",10,0
 	
@@ -42,7 +45,10 @@ section .text use32
 	extern my_printf
 	
 	extern vec3_normalize
+	extern vec3_print
 	extern vec4_dot
+	extern vec4_smoothstep1
+	extern math_lerp
 	extern math_smoothstep1
 	
 perlin3d_init:
@@ -84,12 +90,13 @@ perlin3d_init:
 		movss dword[ebp-8], xmm2
 		mov dword[ebp-4], 0
 		
+		movss xmm0, dword[PERLIN3D_SCALER]
+		shufps xmm0, xmm0, 0b00000000
 		movups xmm1, [ebp-16]
 		mulps xmm1, xmm0
-		movups [ebp-16], xmm1
+		movups [esi], xmm1
 		
-		lea eax, [ebp-16]
-		push eax
+		push esi
 		call vec3_normalize
 		add esp, 4
 		
@@ -102,16 +109,19 @@ perlin3d_init:
 	mov edi, dword[PERLIN3D_VECTOR_GRID_WIDTH_BYTES]
 	sub edi, 16
 	add edi, PERLIN3D_VECTOR_GRID
+	mov ecx, esi
+	mov esi, edi
+	mov edi, ecx
 	mov ebx, dword[PERLIN3D_VECTOR_GRID_WIDTH]
 	perlin3d_init_marginal_z_outer_loop_start:
 		mov eax, dword[PERLIN3D_VECTOR_GRID_WIDTH]
 		perlin3d_init_marginal_z_inner_loop_start:
-			mov ecx, dword[edi]
-			mov dword[esi], ecx
-			mov edx, dword[edi+4]
-			mov dword[esi+4], edx
-			mov ecx, dword[edi+8]
-			mov dword[esi+8], ecx
+			mov ecx, dword[esi]
+			mov dword[edi], ecx
+			mov edx, dword[esi+4]
+			mov dword[edi+4], edx
+			mov ecx, dword[esi+8]
+			mov dword[edi+8], ecx
 		
 			add esi, dword[PERLIN3D_VECTOR_GRID_WIDTH_BYTES]
 			add edi, dword[PERLIN3D_VECTOR_GRID_WIDTH_BYTES]
@@ -188,7 +198,7 @@ perlin3d_sample:
 	sub esp, 16			;index (int)	32
 	sub esp, 16			;interpolator	48
 	sub esp, 32			;helper float[8]	80
-	sub esp, 16			;dot product vector	96 ;helper for the dot product loop
+	sub esp, 16			;dot product vector	96 //helper for the dot product loop
 	
 	;calculate pos mod 1
 	mov eax, dword[ebp+20]
@@ -214,10 +224,13 @@ perlin3d_sample:
 	subps xmm0, xmm1
 	movups [ebp-48], xmm0		;interpolator
 	
-	cvtpi2ps xmm0, qword[ebp-32]
-	movq qword[ebp-32], xmm0
-	cvtpi2ps xmm1, qword[ebp-24]
-	movq qword[ebp-24], xmm1
+	movq xmm0, qword[ebp-32]
+	cvtps2pi mm0, xmm0
+	movq qword[ebp-32], mm0
+	emms
+	movss xmm1, dword[ebp-24]
+	cvtss2si eax, xmm1
+	mov dword[ebp-24], eax
 	
 	;calculate dot products
 	mov dword[ebp-84], 0
@@ -241,7 +254,7 @@ perlin3d_sample:
 				imul eax, dword[PERLIN3D_VECTOR_GRID_WIDTH]
 				add eax, dword[ebp-24]
 				add eax, ebx
-				shl eax, 3
+				shl eax, 4
 				add eax, PERLIN3D_VECTOR_GRID
 				push eax
 				lea ecx, [ebp-96]
@@ -280,22 +293,16 @@ perlin3d_sample:
 		jle perlin3d_sample_dot_product_x_loop_start
 	
 	;smoothstep the interpolators
-	push dword[ebp-48]
-	call math_smoothstep1
-	fstp dword[ebp-48]
-	push dword[ebp-44]
-	call math_smoothstep1
-	fstp dword[ebp-44]
-	push dword[ebp-40]
-	call math_smoothstep1
-	fstp dword[ebp-40]
+	lea eax, [ebp-48]
+	push eax
+	call vec4_smoothstep1
 	
 	;interpolate the dot products
 	;x axis
 	movss xmm0, dword[ebp-48]
 	shufps xmm0, xmm0, 0b00000000
-	movups xmm1, [ebp-80]
-	movups xmm2, [ebp-64]
+	movups xmm1, [ebp-64]
+	movups xmm2, [ebp-80]
 	subps xmm1, xmm2
 	vfmadd213ps xmm1, xmm0, xmm2
 	
@@ -304,7 +311,7 @@ perlin3d_sample:
 	movss xmm0, dword[ZERO]
 	movaps xmm2, xmm1
 	shufps xmm2, xmm0, 0b00001110
-	subss xmm2, xmm1
+	subps xmm2, xmm1
 	movss xmm0, dword[ebp-44]
 	shufps xmm0, xmm0, 0b00000000
 	
@@ -316,10 +323,10 @@ perlin3d_sample:
 	movss xmm1, dword[ebp-76]
 	movss xmm2, dword[ebp-80]
 	subss xmm1, xmm2
-	mulss xmm1, xmm0
-	addss xmm1, xmm2
+	vfmadd213ss xmm1, xmm0, xmm2
 	movss dword[ebp-80], xmm1
 	
+	perlin3d_sample_end:
 	;set return value
 	fld dword[ebp-80]
 	

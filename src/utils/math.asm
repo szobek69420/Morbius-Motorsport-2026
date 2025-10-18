@@ -97,16 +97,10 @@ math_clamp:
 	sub esp, 4			;return value
 	
 	movss xmm0, dword[ebp+8]
-	
-	ucomiss xmm0, dword[ebp+12]
-	jae math_clamp_not_smaller_than_min
-		movss xmm0, dword[ebp+12]
-	math_clamp_not_smaller_than_min:
-	
-	ucomiss xmm0, dword[ebp+16]
-	jbe math_clamp_not_greater_than_max
-		movss xmm0, dword[ebp+16]
-	math_clamp_not_greater_than_max:
+	movss xmm1, dword[ebp+12]
+	movss xmm2, dword[ebp+16]
+	maxss xmm0, xmm1
+	minss xmm0, xmm2
 	
 	;set return value
 	movss dword[ebp-4], xmm0

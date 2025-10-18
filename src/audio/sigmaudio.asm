@@ -1074,16 +1074,6 @@ sigmaudio_import:
 	mov dword[eax+24], 1	;import count
 	
 	;convert format to internal representation
-	push dword[ebp+8]
-	push print_string_nl
-	call my_printf
-	
-	mov eax, dword[ebp-12]
-	push dword[eax+4]
-	push dword[sample_rate]
-	push print_two_ints_nl
-	call my_printf
-	
 	push dword[BLOCK_LENGTH]
 	push dword[sample_rate]
 	push dword[ebp-4]

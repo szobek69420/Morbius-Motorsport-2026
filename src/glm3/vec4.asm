@@ -17,6 +17,11 @@ section .data use32
 	deg2rad dd 0.01745329252
 	
 	test_text db "fuxos kondenzator",10,0
+	
+	ZERO dd 0.0
+	ONE dd 1.0
+	TWO dd 2.0
+	THREE dd 3.0
 
 section .text use32
 	extern my_printf
@@ -39,6 +44,9 @@ section .text use32
 	
 	;planeDir1 and planeDir2 shall be orthogoonal
 	global vec4_rotateAroundPlane	;void vec4_rotateAroundPlane(vec4* vec, vec4* planeDir1, vec4* planeDir2, float angleInDegrees)
+	
+	;smoothstep(0,1,x) on each element of the vector
+	global vec4_smoothstep1		;void vec4_smoothstep1(vec4* vec)
 	
 vec4_print:
 	push ebp
@@ -509,6 +517,42 @@ vec4_rotateAroundPlane:
 	call vec4_add			;invariant part + (cos(angle)*var36-sin(angle)*var40)*normPlaneDir1 + (sin(angle)*var36+cos(angle)*var40)*normPlaneDir2
 	
 	
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+vec4_smoothstep1:
+	push ebp
+	mov ebp, esp
+	
+	;get the vector
+	mov eax, dword[ebp+8]
+	movups xmm0, [eax]
+	
+	;clamp the values
+	movss xmm1, dword[ONE]
+	shufps xmm1, xmm1, 0b00000000
+	movss xmm2, dword[ZERO]
+	shufps xmm2, xmm2, 0b00000000
+	minps xmm0, xmm1
+	maxps xmm0, xmm2
+	
+	;smoothstep
+	movss xmm2, dword[TWO]
+	shufps xmm2, xmm2, 0b00000000
+	movss xmm3, dword[THREE]
+	shufps xmm3, xmm3, 0b00000000
+	
+	movaps xmm1, xmm0
+	mulps xmm1, xmm1
+	mulps xmm0, xmm2
+	subps xmm3, xmm0
+	mulps xmm1, xmm3
+	
+	;save the vector
+	movups [eax], xmm1
 	
 	mov esp, ebp
 	pop ebp
