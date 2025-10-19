@@ -11,14 +11,14 @@
 ;	int chunkAlreadyProcessed;					;60			;is the chunk in its final state (in practice; is there a graphics load update waiting for the chunk)
 ;}		64 bytes overall
 
-SIDE_POS_X equ 0x00000000
-SIDE_NEG_X equ 0x00000001
-SIDE_POS_Y equ 0x00000002
-SIDE_NEG_Y equ 0x00000003
-SIDE_POS_Z equ 0x00000004
-SIDE_NEG_Z equ 0x00000005
-SIDE_POS_W equ 0x00000006
-SIDE_NEG_W equ 0x00000007
+SIDE_POS_X equ 0x0000
+SIDE_NEG_X equ 0x0001
+SIDE_POS_Y equ 0x0002
+SIDE_NEG_Y equ 0x0003
+SIDE_POS_Z equ 0x0004
+SIDE_NEG_Z equ 0x0005
+SIDE_POS_W equ 0x0006
+SIDE_NEG_W equ 0x0007
 
 section .rodata use32
 	EPSILON dd 0.00001
@@ -38,11 +38,16 @@ section .rodata use32
 	
 	CHUNK_BLOCK_COUNT dd 886464			;CHUNK_HEIGHT_MAP_WIDTH^3 * (CHUNK_HEIGHT+2)
 	
-	CHUNK_HEIGHT_MAP_FACTOR_X dd 0.00053
-	CHUNK_HEIGHT_MAP_FACTOR_Z dd 0.00057
-	CHUNK_HEIGHT_MAP_FACTOR_W dd 0.00059
+	CHUNK_HEIGHT_MAP_OCTAVE1_X dd 0.00053
+	CHUNK_HEIGHT_MAP_OCTAVE1_Z dd 0.00057
+	CHUNK_HEIGHT_MAP_OCTAVE1_W dd 0.00059
 	
-	CHUNK_HEIGHT_MAP_SCALE dd 60.0
+	CHUNK_HEIGHT_MAP_OCTAVE2_X dd 0.00159
+	CHUNK_HEIGHT_MAP_OCTAVE2_Z dd 0.00171
+	CHUNK_HEIGHT_MAP_OCTAVE2_W dd 0.00177
+	
+	CHUNK_HEIGHT_MAP_SCALE2 dd 15.0
+	CHUNK_HEIGHT_MAP_SCALE1 dd 40.0
 	CHUNK_HEIGHT_MAP_BASE dd 80.0
 	
 	AABB_SCALE dd 0.5, 0.5, 0.5, 0.5
@@ -55,7 +60,8 @@ section .rodata use32
 	
 	test_text db "stalinkin park",10,0
 	
-	ONE db 1.0
+	ONE dd 1.0
+	THREE dd 3.0
 	
 section .text use32
 
@@ -103,6 +109,7 @@ section .text use32
 	extern physics4d_registerColliderGroup
 	extern physics4d_unregisterColliderGroup
 	
+	extern perlin3d_sample
 	
 chunk4d_vec4ToBlockPos:
 	push ebp
@@ -255,6 +262,8 @@ chunk4d_generate:
 	sub esp, 16				;chunk position as floats			72
 	
 	sub esp, 16				;origin block (tree helper)			88
+	
+	sub esp, 16				;conversion helper					104
 	
 	;alloc space for chunk
 	push 64
@@ -557,12 +566,21 @@ chunk4d_generate:
 	sub esi, 1							;current block pos in esi, it will be iterated backwards
 	mov edi, dword[CHUNK_HEIGHT]		;y index in edi
 	chunk4d_generate_mesh_y_loop_start:
+		lea eax, [edi-1]
+		cvtsi2ss xmm0, eax
+		movss dword[ebp-100], xmm0
 		push edi							;save y index
 		mov edi, dword[CHUNK_WIDTH]			;x index in edi
 		chunk4d_generate_mesh_x_loop_start:
+			lea eax, [edi-1]
+			cvtsi2ss xmm0, eax
+			movss dword[ebp-104], xmm0
 			push edi							;save x index
 			mov edi, dword[CHUNK_WIDTH]			;z index in edi
 			chunk4d_generate_mesh_z_loop_start:
+				lea eax, [edi-1]
+				cvtsi2ss xmm0, eax
+				movss dword[ebp-96], xmm0
 				push edi							;save z index
 				mov edi, dword[CHUNK_WIDTH]			;w index in edi
 				chunk4d_generate_mesh_w_loop_start:
@@ -570,34 +588,11 @@ chunk4d_generate:
 					cmp byte[esi], 0
 					je chunk4d_generate_mesh_w_loop_continue
 					
+					lea eax, [edi-1]
+					cvtsi2ss xmm0, eax
+					movss dword[ebp-92], xmm0
+					
 					mov dword[ebp-56], 0		;block is not yet visible
-				
-					;calculate current (chunk local) block position
-					sub esp, 16				;current block position
-					
-					mov eax, dword[esp+20]
-					dec eax
-					mov dword[esp], eax
-					fild dword[esp]
-					fstp dword[esp]			;x index
-					
-					mov eax, dword[esp+24]
-					dec eax
-					mov dword[esp+4], eax
-					fild dword[esp+4]
-					fstp dword[esp+4]		;y index
-					
-					mov eax, dword[esp+16]
-					dec eax
-					mov dword[esp+8], eax
-					fild dword[esp+8]
-					fstp dword[esp+8]		;z index
-					
-					mov eax, edi
-					dec eax
-					mov dword[esp+12], eax
-					fild dword[esp+12]
-					fstp dword[esp+12]		;w index
 					
 					;add the side to the vertex data if it may be visible (neighbouring block is transparent)
 					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH_SQUARED]
@@ -607,23 +602,23 @@ chunk4d_generate:
 						lea eax, [ebp-48]
 						mov dword[esp], eax				;vertex vector
 						
-						mov eax, dword[esp+8]
+						mov eax, dword[ebp-104]
 						mov dword[esp+4], eax			;block pos x
 						call vector_push_back
-						mov eax, dword[esp+12]
+						mov eax, dword[ebp-100]
 						mov dword[esp+4], eax			;block pos y
 						call vector_push_back
-						mov eax, dword[esp+16]
+						mov eax, dword[ebp-96]
 						mov dword[esp+4], eax			;block pos z
 						call vector_push_back
-						mov eax, dword[esp+20]
+						mov eax, dword[ebp-92]
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
 						xor eax, eax
 						mov al, byte[esi]
-						shl eax, 16
-						or eax, SIDE_POS_X
+						rol eax, 16
+						mov ax, SIDE_POS_X
 						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
@@ -641,23 +636,23 @@ chunk4d_generate:
 						lea eax, [ebp-48]
 						mov dword[esp], eax				;vertex vector
 						
-						mov eax, dword[esp+8]
+						mov eax, dword[ebp-104]
 						mov dword[esp+4], eax			;block pos x
 						call vector_push_back
-						mov eax, dword[esp+12]
+						mov eax, dword[ebp-100]
 						mov dword[esp+4], eax			;block pos y
 						call vector_push_back
-						mov eax, dword[esp+16]
+						mov eax, dword[ebp-96]
 						mov dword[esp+4], eax			;block pos z
 						call vector_push_back
-						mov eax, dword[esp+20]
+						mov eax, dword[ebp-92]
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
 						xor eax, eax
 						mov al, byte[esi]
-						shl eax, 16
-						or eax, SIDE_NEG_X
+						rol eax, 16
+						mov ax, SIDE_NEG_X
 						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
@@ -673,23 +668,23 @@ chunk4d_generate:
 						lea eax, [ebp-48]
 						mov dword[esp], eax				;vertex vector
 						
-						mov eax, dword[esp+8]
+						mov eax, dword[ebp-104]
 						mov dword[esp+4], eax			;block pos x
 						call vector_push_back
-						mov eax, dword[esp+12]
+						mov eax, dword[ebp-100]
 						mov dword[esp+4], eax			;block pos y
 						call vector_push_back
-						mov eax, dword[esp+16]
+						mov eax, dword[ebp-96]
 						mov dword[esp+4], eax			;block pos z
 						call vector_push_back
-						mov eax, dword[esp+20]
+						mov eax, dword[ebp-92]
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
 						xor eax, eax
 						mov al, byte[esi]
-						shl eax, 16
-						or eax, SIDE_POS_Y
+						rol eax, 16
+						mov ax, SIDE_POS_Y
 						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
@@ -707,23 +702,23 @@ chunk4d_generate:
 						lea eax, [ebp-48]
 						mov dword[esp], eax				;vertex vector
 						
-						mov eax, dword[esp+8]
+						mov eax, dword[ebp-104]
 						mov dword[esp+4], eax			;block pos x
 						call vector_push_back
-						mov eax, dword[esp+12]
+						mov eax, dword[ebp-100]
 						mov dword[esp+4], eax			;block pos y
 						call vector_push_back
-						mov eax, dword[esp+16]
+						mov eax, dword[ebp-96]
 						mov dword[esp+4], eax			;block pos z
 						call vector_push_back
-						mov eax, dword[esp+20]
+						mov eax, dword[ebp-92]
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
 						xor eax, eax
 						mov al, byte[esi]
-						shl eax, 16
-						or eax, SIDE_NEG_Y
+						rol eax, 16
+						mov ax, SIDE_NEG_Y
 						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
@@ -739,23 +734,23 @@ chunk4d_generate:
 						lea eax, [ebp-48]
 						mov dword[esp], eax				;vertex vector
 						
-						mov eax, dword[esp+8]
+						mov eax, dword[ebp-104]
 						mov dword[esp+4], eax			;block pos x
 						call vector_push_back
-						mov eax, dword[esp+12]
+						mov eax, dword[ebp-100]
 						mov dword[esp+4], eax			;block pos y
 						call vector_push_back
-						mov eax, dword[esp+16]
+						mov eax, dword[ebp-96]
 						mov dword[esp+4], eax			;block pos z
 						call vector_push_back
-						mov eax, dword[esp+20]
+						mov eax, dword[ebp-92]
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
 						xor eax, eax
 						mov al, byte[esi]
-						shl eax, 16
-						or eax, SIDE_POS_Z
+						rol eax, 16
+						mov ax, SIDE_POS_Z
 						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
@@ -773,23 +768,23 @@ chunk4d_generate:
 						lea eax, [ebp-48]
 						mov dword[esp], eax				;vertex vector
 						
-						mov eax, dword[esp+8]
+						mov eax, dword[ebp-104]
 						mov dword[esp+4], eax			;block pos x
 						call vector_push_back
-						mov eax, dword[esp+12]
+						mov eax, dword[ebp-100]
 						mov dword[esp+4], eax			;block pos y
 						call vector_push_back
-						mov eax, dword[esp+16]
+						mov eax, dword[ebp-96]
 						mov dword[esp+4], eax			;block pos z
 						call vector_push_back
-						mov eax, dword[esp+20]
+						mov eax, dword[ebp-92]
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
 						xor eax, eax
 						mov al, byte[esi]
-						shl eax, 16
-						or eax, SIDE_NEG_Z
+						rol eax, 16
+						mov ax, SIDE_NEG_Z
 						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
@@ -804,23 +799,23 @@ chunk4d_generate:
 						lea eax, [ebp-48]
 						mov dword[esp], eax				;vertex vector
 						
-						mov eax, dword[esp+8]
+						mov eax, dword[ebp-104]
 						mov dword[esp+4], eax			;block pos x
 						call vector_push_back
-						mov eax, dword[esp+12]
+						mov eax, dword[ebp-100]
 						mov dword[esp+4], eax			;block pos y
 						call vector_push_back
-						mov eax, dword[esp+16]
+						mov eax, dword[ebp-96]
 						mov dword[esp+4], eax			;block pos z
 						call vector_push_back
-						mov eax, dword[esp+20]
+						mov eax, dword[ebp-92]
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
 						xor eax, eax
 						mov al, byte[esi]
-						shl eax, 16
-						or eax, SIDE_POS_W
+						rol eax, 16
+						mov ax, SIDE_POS_W
 						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
@@ -836,23 +831,23 @@ chunk4d_generate:
 						lea eax, [ebp-48]
 						mov dword[esp], eax				;vertex vector
 						
-						mov eax, dword[esp+8]
+						mov eax, dword[ebp-104]
 						mov dword[esp+4], eax			;block pos x
 						call vector_push_back
-						mov eax, dword[esp+12]
+						mov eax, dword[ebp-100]
 						mov dword[esp+4], eax			;block pos y
 						call vector_push_back
-						mov eax, dword[esp+16]
+						mov eax, dword[ebp-96]
 						mov dword[esp+4], eax			;block pos z
 						call vector_push_back
-						mov eax, dword[esp+20]
+						mov eax, dword[ebp-92]
 						mov dword[esp+4], eax			;block pos w
 						call vector_push_back
 						
 						xor eax, eax
 						mov al, byte[esi]
-						shl eax, 16
-						or eax, SIDE_NEG_W
+						rol eax, 16
+						mov ax, SIDE_NEG_W
 						mov dword[esp+4], eax			;block type and side normal
 						call vector_push_back
 						
@@ -865,7 +860,7 @@ chunk4d_generate:
 					;the aabbs sind local to the chunk yet
 					cmp dword[ebp-56], 0
 					je chunk4d_generate_mesh_no_aabb
-						mov eax, esp
+						lea eax, [ebp-104]
 						push AABB_SCALE
 						push eax
 						call aabb4d_create
@@ -876,7 +871,6 @@ chunk4d_generate:
 					
 					chunk4d_generate_mesh_no_aabb:
 					
-					add esp, 16				;release current block position
 					
 					chunk4d_generate_mesh_w_loop_continue:
 					dec esi
@@ -945,22 +939,22 @@ chunk4d_generate:
 	add esp, 4
 	
 	;calculate the chunk's position
-	fild dword[CHUNK_WIDTH]
-	fild dword[ebp+20]
-	fmulp
-	fstp dword[ebp-72]
+	cvtsi2ss xmm0, dword[CHUNK_WIDTH]
+	
+	cvtsi2ss xmm1, dword[ebp+20]
+	mulss xmm1, xmm0
+	movss dword[ebp-72], xmm1
 	
 	mov dword[ebp-68], 0
 	
-	fild dword[CHUNK_WIDTH]
-	fild dword[ebp+24]
-	fmulp
-	fstp dword[ebp-64]
+	cvtsi2ss xmm2, dword[ebp+24]
+	mulss xmm2, xmm0
+	movss dword[ebp-64], xmm2
 	
-	fild dword[CHUNK_WIDTH]
-	fild dword[ebp+28]
-	fmulp
-	fstp dword[ebp-60]
+	cvtsi2ss xmm3, dword[ebp+28]
+	mulss xmm3, xmm0
+	movss dword[ebp-60], xmm3
+	
 	
 	;translate the collider group by the position of the chunk
 	;as the current position and bound values are local to the chunk
@@ -1042,89 +1036,136 @@ chunk4d_generateHeightMap:
 	mov ebp, esp
 	
 	;value is what goes into the generation function (sin), base is this value at the base position of the chunk
-	sub esp, 4			;x base				4
-	sub esp, 4			;z base				8
-	sub esp, 4			;w base				12
+	sub esp, 4			;x base	1			4
+	sub esp, 4			;z base	1			8
+	sub esp, 4			;w base	1			12
 	
-	sub esp, 4			;x value			16
-	sub esp, 4			;z value			20
-	sub esp, 4			;w value			24
+	sub esp, 4			;x octave 1			16
+	sub esp, 4			;z octave 1			20
+	sub esp, 4			;w octave 1			24
 	
-	sub esp, 4			;x gen func value	28(unused)
-	sub esp, 4			;z gen func value	32(unused)
-	sub esp, 4			;w gen func value	36(unused)
+	sub esp, 4			;x base	2			28
+	sub esp, 4			;z base	2			32
+	sub esp, 4			;w base	2			36
 	
-	sub esp, 4			;gen helper			40
+	sub esp, 4			;x octave 2			40
+	sub esp, 4			;z octave 2			44
+	sub esp, 4			;w octave 2			48
 	
+	sub esp, 24			;unused
 	
-	fild dword[ebp+20]
-	fimul dword[CHUNK_WIDTH]
-	fmul dword[CHUNK_HEIGHT_MAP_FACTOR_X]
-	fstp dword[ebp-4]
-	
-	fild dword[ebp+24]
-	fimul dword[CHUNK_WIDTH]
-	fmul dword[CHUNK_HEIGHT_MAP_FACTOR_Z]
-	fstp dword[ebp-8]
-	
-	fild dword[ebp+28]
-	fimul dword[CHUNK_WIDTH]
-	fmul dword[CHUNK_HEIGHT_MAP_FACTOR_W]
-	fstp dword[ebp-12]
+	sub esp, 4			;gen helper1		72
+	sub esp, 4			;gen helper2		76
 	
 	
+	cvtsi2ss xmm0, dword[CHUNK_WIDTH]
+	
+	cvtsi2ss xmm1, dword[ebp+20]
+	mulss xmm1, xmm0
+	movss xmm2, dword[CHUNK_HEIGHT_MAP_OCTAVE1_X]
+	mulss xmm2, xmm1
+	movss dword[ebp-4], xmm2
+	movss xmm3, dword[CHUNK_HEIGHT_MAP_OCTAVE2_X]
+	mulss xmm3, xmm1
+	movss dword[ebp-28], xmm3
+	
+	cvtsi2ss xmm1, dword[ebp+24]
+	mulss xmm1, xmm0
+	movss xmm2, dword[CHUNK_HEIGHT_MAP_OCTAVE1_Z]
+	mulss xmm2, xmm1
+	movss dword[ebp-8], xmm2
+	movss xmm3, dword[CHUNK_HEIGHT_MAP_OCTAVE2_Z]
+	mulss xmm3, xmm1
+	movss dword[ebp-32], xmm3
+	
+	cvtsi2ss xmm1, dword[ebp+28]
+	mulss xmm1, xmm0
+	movss xmm2, dword[CHUNK_HEIGHT_MAP_OCTAVE1_W]
+	mulss xmm2, xmm1
+	movss dword[ebp-12], xmm2
+	movss xmm3, dword[CHUNK_HEIGHT_MAP_OCTAVE2_W]
+	mulss xmm3, xmm1
+	movss dword[ebp-36], xmm3
+	
+	;update current x values
 	mov eax, dword[ebp-4]
-	mov dword[ebp-16], eax				;x value is x base
+	mov dword[ebp-16], eax
+	mov ecx, dword[ebp-28]
+	mov dword[ebp-40], ecx
 	
 	mov esi, dword[ebp+16]				;current height in esi
 	mov edi, dword[CHUNK_WIDTH]	
 	add edi, 2							;x index in edi
 	chunk4d_generateHeightMap_loop_x_start:
-		fld dword[ebp-16]
-		fadd dword[CHUNK_HEIGHT_MAP_FACTOR_X]
-		fstp dword[ebp-16]				;x value updated
+		;update current x values
+		movss xmm0, dword[ebp-16]
+		addss xmm0, dword[CHUNK_HEIGHT_MAP_OCTAVE1_X]
+		movss dword[ebp-16], xmm0
+		movss xmm1, dword[ebp-40]
+		addss xmm1, dword[CHUNK_HEIGHT_MAP_OCTAVE2_X]
+		movss dword[ebp-40], xmm1
 	
+		;update current z values
 		mov eax, dword[ebp-8]
-		mov dword[ebp-20], eax				;z value is z base
+		mov dword[ebp-20], eax
+		mov ecx, dword[ebp-32]
+		mov dword[ebp-44], ecx
 		
 		push edi							;save x index
 		mov edi, dword[CHUNK_WIDTH]	
 		add edi, 2							;z index in edi
 		chunk4d_generateHeightMap_loop_z_start:
-			fld dword[ebp-20]
-			fadd dword[CHUNK_HEIGHT_MAP_FACTOR_Z]
-			fstp dword[ebp-20]				;z value updated
+			;update current z values
+			movss xmm0, dword[ebp-20]
+			addss xmm0, dword[CHUNK_HEIGHT_MAP_OCTAVE1_Z]
+			movss dword[ebp-20], xmm0
+			movss xmm1, dword[ebp-44]
+			addss xmm1, dword[CHUNK_HEIGHT_MAP_OCTAVE2_Z]
+			movss dword[ebp-44], xmm1
 		
+			;update current w values
 			mov eax, dword[ebp-12]
-			mov dword[ebp-24], eax				;w value is w base
+			mov dword[ebp-24], eax
+			mov ecx, dword[ebp-36]
+			mov dword[ebp-48], ecx
 			
 			push edi							;save z index
 			mov edi, dword[CHUNK_WIDTH]	
 			add edi, 2							;w index in edi
 			chunk4d_generateHeightMap_loop_w_start:
-				fld dword[ebp-24]
-				fadd dword[CHUNK_HEIGHT_MAP_FACTOR_W]
-				fstp dword[ebp-24]				;w value updated
+				;update current w values
+				movss xmm0, dword[ebp-24]
+				addss xmm0, dword[CHUNK_HEIGHT_MAP_OCTAVE1_W]
+				movss dword[ebp-24], xmm0
+				movss xmm1, dword[ebp-48]
+				addss xmm1, dword[CHUNK_HEIGHT_MAP_OCTAVE2_W]
+				movss dword[ebp-48], xmm1
 				
+				;sample octaves
 				push dword[ebp-24]
 				push dword[ebp-20]
 				push dword[ebp-16]
-				;call perlin_sample3d
-				fld dword[ONE]
-				fstp dword[ebp-40]
+				call perlin3d_sample
+				fstp dword[ebp-72]
 				add esp, 12
 				
-				movss xmm0, dword[ebp-40]
-				movss xmm1, dword[CHUNK_HEIGHT_MAP_SCALE]
-				mulss xmm0, xmm1
-				movss xmm1, dword[CHUNK_HEIGHT_MAP_BASE]
+				push dword[ebp-48]
+				push dword[ebp-44]
+				push dword[ebp-40]
+				call perlin3d_sample
+				fstp dword[ebp-76]
+				add esp, 12
+				
+				movss xmm0, dword[ebp-72]
+				mulss xmm0, dword[CHUNK_HEIGHT_MAP_SCALE1]
+				movss xmm1, dword[ebp-76]
+				mulss xmm1, dword[CHUNK_HEIGHT_MAP_SCALE2]
 				addss xmm0, xmm1
-				movss dword[ebp-40], xmm0
+				addss xmm0, dword[CHUNK_HEIGHT_MAP_BASE]
+				cvtss2si eax, xmm0
+				mov dword[ebp-72], eax
 				
-				fld dword[ebp-40]
-				fistp dword[ebp-40]
-				
-				mov al, byte[ebp-40]		;it is converted to unsigned char this way so that its unsignedness doesn't cause problems
+				mov al, byte[ebp-72]		;it is converted to unsigned char this way so that its unsignedness doesn't cause problems
 				mov byte[esi], al
 			
 				inc esi
