@@ -50,6 +50,7 @@ mkdir build
 ..\build_tools\nasm.exe -fobj glm3/vec4.asm -o build/vec4.o
 ..\build_tools\nasm.exe -fobj glm3/mat3.asm -o build/mat3.o
 ..\build_tools\nasm.exe -fobj glm3/mat4.asm -o build/mat4.o
+..\build_tools\nasm.exe -fobj settings/settings.asm -o build/settings.o
 ..\build_tools\nasm.exe -fobj player/player.asm -o build/player.o
 ..\build_tools\nasm.exe -fobj hypershapes/hyperplane.asm -o build/hyperplane.o
 ..\build_tools\nasm.exe -fobj renderable/hypercube_renderable.asm -o build/hypercube_renderable.o
@@ -63,6 +64,7 @@ mkdir build
 ..\build_tools\alink.exe -subsys console -oPE ^
 build/main.o ^
 build/window.o ^
+build/settings.o ^
 build/sun.o ^
 build/sky.o ^
 build/player.o ^

@@ -20,35 +20,7 @@ section .rodata use32
 	background_texture_path db "sprites/ui/menu/background.bmp",0
 	slider_knob_texture_path db "sprites/ui/settings/slider_knob.bmp",0
 	
-	open_mode_read db "r",0
-	open_mode_write db "w",0
-	settings_file_path db "./settings/spaghetti.bolognese",0
-	format_render_distance db "render_distance: %d",10,0
-	format_resolution db "resolution: %d",10,0
-	
 	click_sound_path db "./sfx/main_menu/click_better.wav",0
-	
-	;resolutions
-	RESOLUTION_WIDTHS dd 10, 256, 640, 1280, 1920, 1920, 2560, 15360
-	RESOLUTION_HEIGHTS dd 10, 144, 480, 720, 1080, 1, 1440, 8640
-	RESOLUTION_NAMES:
-	dd RESOLUTION_NAME_0
-	dd RESOLUTION_NAME_1
-	dd RESOLUTION_NAME_2
-	dd RESOLUTION_NAME_3
-	dd RESOLUTION_NAME_4
-	dd RESOLUTION_NAME_5
-	dd RESOLUTION_NAME_6
-	dd RESOLUTION_NAME_7
-	
-	RESOLUTION_NAME_0 db "Helen Keller (0x0)",0
-	RESOLUTION_NAME_1 db "256x144",0
-	RESOLUTION_NAME_2 db "640x480",0
-	RESOLUTION_NAME_3 db "HD (1280x720)",0
-	RESOLUTION_NAME_4 db "FHD (1920x1080)",0
-	RESOLUTION_NAME_5 db "Chinese FHD (1920x1)",0
-	RESOLUTION_NAME_6 db "QHD (2560x1440)",0
-	RESOLUTION_NAME_7 db "Mogger (15360x8640)",0
 
 section .data use32
 	window dd 0					;GLFWwindow*
@@ -175,6 +147,11 @@ section .text use32
 	extern GAME_STATE_SETTINGS
 	
 	extern sigmaudio_play
+	
+	extern settings_read
+	extern settings_write
+	extern settings_getBuffer
+	extern settings_resolutionInfo
 	
 settingsLoop_main:
 	push ebp
@@ -362,86 +339,29 @@ settingsLoop_loadValues:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 4			;render distance		4
-	sub esp, 4			;resolution				8
-	sub esp, 4			;file					12
+	call settings_read
 	
-	;check if the settings file exists and create it if necessary
-	push open_mode_read
-	push settings_file_path
-	call my_fopen
-	test eax, eax
-	jnz settingsLoop_loadValues_file_exists
-		;save default values
-		mov dword[VALUE_RENDER_DISTANCE], 3
-		mov dword[VALUE_RESOLUTION], 3
-		
-		call settingsLoop_saveValues
-		
-		;open file noch 'mal
-		push open_mode_read
-		push settings_file_path
-		call my_fopen
-	settingsLoop_loadValues_file_exists:
-	
-	mov dword[ebp-12], eax
-	
-	;read values
-	lea eax, [ebp-4]
-	push eax
-	push format_render_distance
-	push dword[ebp-12]
-	call my_fscanf
-	
-	lea eax, [ebp-8]
-	push eax
-	push format_resolution
-	push dword[ebp-12]
-	call my_fscanf
-	
-	;close file
-	push dword[ebp-12]
-	call my_fclose
-	
-	;set values	
-	mov eax, dword[ebp-4]
-	mov dword[VALUE_RENDER_DISTANCE], eax
-	
-	mov ecx, dword[ebp-8]
-	mov dword[VALUE_RESOLUTION], ecx
-	
+	mov ecx, dword[eax]
+	mov dword[VALUE_RENDER_DISTANCE], ecx
+	mov edx, dword[eax+4]
+	mov dword[VALUE_RESOLUTION], edx
 	
 	mov esp, ebp
 	pop ebp
 	ret
 	
-;void settingsLoop_loadValues()
+;void settingsLoop_saveValues()
 settingsLoop_saveValues:
 	push ebp
 	mov ebp, esp
 	
-	sub esp, 4			;file		4
+	call settings_getBuffer
+	mov ecx, dword[VALUE_RENDER_DISTANCE]
+	mov dword[eax], ecx
+	mov edx, dword[VALUE_RESOLUTION]
+	mov dword[eax+4], edx
 	
-	;open file
-	push open_mode_write
-	push settings_file_path
-	call my_fopen
-	mov dword[ebp-4], eax
-	
-	;write things
-	push dword[VALUE_RENDER_DISTANCE]
-	push format_render_distance
-	push dword[ebp-4]
-	call my_fprintf
-	
-	push dword[VALUE_RESOLUTION]
-	push format_resolution
-	push dword[ebp-4]
-	call my_fprintf
-	
-	;close file
-	push dword[ebp-4]
-	call my_fclose
+	call settings_write
 	
 	mov esp, ebp
 	pop ebp
@@ -847,6 +767,10 @@ settingsLoop_resolutionOnValueChangedCallback:
 	
 	sub esp, 4			;value (int)		4
 	
+	sub esp, 4			;name				8
+	sub esp, 4			;height				12
+	sub esp, 4			;width				16
+	
 	;get and round value
 	push dword[ebp+8]
 	call uiSlider_getValue
@@ -857,9 +781,18 @@ settingsLoop_resolutionOnValueChangedCallback:
 	mov eax, dword[ebp-4]
 	mov dword[VALUE_RESOLUTION], eax
 	
+	;get the info
+	lea eax, [ebp-8]
+	lea ecx, [ebp-12]
+	lea edx, [ebp-16]
+	push eax
+	push ecx
+	push edx
+	push dword[VALUE_RESOLUTION]
+	call settings_resolutionInfo
+	
 	;set the text
-	mov eax, dword[ebp-4]
-	push dword[RESOLUTION_NAMES+4*eax]
+	push dword[ebp-8]
 	push dword[ebp+12]
 	call uiText_setText
 	

@@ -18,9 +18,6 @@
 section .rodata use32
 	PHYSICS_UPDATE_INTERVAL_MS dd 15
 	TIME_COEFFICIENT dd 0.01		;100 seconds long days
-	
-	RENDER_WIDTH dd 1280
-	RENDER_HEIGHT dd 800
 
 	ZERO dd 0.0
 	ONE dd 1.0
@@ -108,7 +105,9 @@ section .bss use32
 	sound_music resb 4
 	
 section .data use32
-	render_distance dd 3
+	RENDER_DISTANCE dd 4
+	RENDER_WIDTH dd 1280
+	RENDER_HEIGHT dd 720
 
 	last_frame_milliseconds dd 0		;int, the GetTickCount of the last frame
 	delta_time_milliseconds dd 0		;int
@@ -367,6 +366,9 @@ section .text use32
 	extern memoryUsageDiagram_update
 	extern memoryUsageDiagram_getTexture
 	
+	extern settings_read
+	extern settings_resolutionInfo
+	
 gameLoop_main:
 	push ebp
 	push esi
@@ -405,6 +407,9 @@ gameLoop_main:
 	push dword[current_window]
 	call input_hideCursor
 	add esp, 8
+
+	;get settings
+	call gameLoop_loadSettings
 	
 	;init perlin noise
 	call perlin3d_init
@@ -979,7 +984,7 @@ gameLoop_chunkLoader:
 			;do chunk update things		
 			mov eax, dword[pplayer]
 			mov eax, dword[eax]				;&player.camera.position
-			push dword[render_distance]
+			push dword[RENDER_DISTANCE]
 			push eax
 			push dword[chunk_manager_4d]
 			call chunkManager4d_load
@@ -1034,6 +1039,31 @@ gameLoop_windowResizeCallback:
 	pop ebp
 	ret
 	
+	
+gameLoop_loadSettings:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;settings buffer		4
+	
+	;get the settings buffer
+	call settings_read
+	mov dword[ebp-4], eax
+	
+	;set values
+	mov ecx, dword[eax]
+	mov dword[RENDER_DISTANCE], ecx
+	
+	mov edx, dword[eax+4]
+	push 0
+	push RENDER_HEIGHT
+	push RENDER_WIDTH
+	push edx
+	call settings_resolutionInfo
+	
+	mov esp, ebp
+	pop ebp
+	ret
 	
 
 ;void gameLoop_createFramebuffers()
@@ -1694,7 +1724,7 @@ gameLoop_updateInfoCanvas:
 	
 	
 	;render distance
-	push dword[render_distance]
+	push dword[RENDER_DISTANCE]
 	push print_render_distance
 	lea eax, [ebp-100]
 	push eax
