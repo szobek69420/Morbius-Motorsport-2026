@@ -162,7 +162,10 @@ vec4_magnitude:
 	mov eax, dword[esp+4]		;&vector in eax
 	push eax
 	call vec4_sqrMagnitude
-	fsqrt
+	fstp dword[esp]
+	sqrtss xmm0, dword[esp]
+	movss dword[esp], xmm0
+	fld dword[esp]
 	add esp,4
 	ret
 	
@@ -234,6 +237,26 @@ vec4_mulWithMat:
 	haddps xmm1, xmm1
 	movss dword[eax+12], xmm1
 	
+	ret
+	
+;my L cpu got absolutely mogged by this, so I couldn't test it
+vec4_coolerMulWithMat:
+	mov eax, dword[esp+4]
+	mov ecx, dword[esp+8]
+	vmovdqu64 zmm0, [ecx]
+	vbroadcastf32x8 zmm1, [eax]
+	vmulps zmm0, zmm1
+	vextractf32x8 ymm1, zmm0, 0b1
+	vextractf32x8 ymm0, zmm0, 0b0
+	vhaddps ymm0, ymm0, ymm1
+	vhaddps ymm0, ymm0, ymm0
+	vextractf32x4 xmm1, ymm0, 0b1
+	movq [eax], xmm0
+	movq [eax+8], xmm1
+	mov ecx, dword[eax+4]
+	mov edx, dword[eax+8]
+	mov dword[eax+4], edx
+	mov dword[eax+8], ecx
 	ret
 
 

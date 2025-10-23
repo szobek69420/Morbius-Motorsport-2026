@@ -62,7 +62,6 @@ section .text use32
 		mov dword[ebp-4], eax
 	
 		finit
-
 		
 		start_loop_start:
 			;check if a transition to/from the main menu happened
