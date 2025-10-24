@@ -2277,7 +2277,6 @@ chunkManager4d_frustumCull:
 	sub esp, 16				;temp vector 2						92
 	sub esp, 16				;temp vector 1						108
 	sub esp, 16				;temp vector 3						124
-	sub esp, 4				;debug helper						128
 	
 	mov dword[ebp-4], 0
 	
@@ -2392,7 +2391,7 @@ chunkManager4d_frustumCull:
 	mov word[ebp-42], 0b111
 	mov word[ebp-44], 0b000
 	
-	mov ebx, 16					;index in ebx
+	mov ebx, 24					;index in ebx
 	mov esi, chunkManager4d_frustumCull_edges
 	chunkManager4d_frustumCull_fr_loop_start:
 		;calculate the edge points
@@ -2447,9 +2446,7 @@ chunkManager4d_frustumCull:
 		xor dword[ebp-116], eax
 		xor dword[ebp-112], eax
 		
-		;check if the values are less than -projection.w or greater than projection.w
-		;https://bruop.github.io/frustum_culling/
-		;NOTE: the tutorial operates with the cringe DX frustum
+		;check if the values are less than -|projection.w| or greater than |projection.w|
 		vbroadcastss xmm0, dword[ebp-112]
 		movups xmm1, [ebp-124]
 		movaps xmm2, xmm1
@@ -2459,47 +2456,41 @@ chunkManager4d_frustumCull:
 		movups [ebp-108], xmm1			;negative if less than -|projection.w|
 		
 		mov al, byte[ebp-105]
-		ror al, 7
+		rol al, 1
 		and al, 0b00000001
 		or al,  0b00000110
 		and byte[ebp-42], al
 		
 		mov cl, byte[ebp-101]
-		ror cl, 6
+		rol cl, 2
 		and cl, 0b00000010
 		or cl,  0b00000101
 		and byte[ebp-42], cl
 		
 		mov dl, byte[ebp-97]
-		ror dl, 5
+		rol dl, 3
 		and dl, 0b00000100
 		or dl,  0b00000011
 		and byte[ebp-42], dl
 		
 		mov al, byte[ebp-89]
-		ror al, 7
+		rol al, 1
 		and al, 0b00000001
 		or byte[ebp-44], al
 		
 		mov cl, byte[ebp-85]
-		ror cl, 6
+		rol cl, 2
 		and cl, 0b00000010
 		or byte[ebp-44], cl
 		
 		mov dl, byte[ebp-81]
-		ror dl, 5
+		rol dl, 3
 		and dl, 0b00000100
 		or byte[ebp-44], dl
-		
-		inc dword[ebp-128]
 		
 		chunkManager4d_frustumCull_fr_loop_continue:
 		dec ebx
 		jnz chunkManager4d_frustumCull_fr_loop_start
-		
-	push dword[ebp-128]
-	push print_int_nl
-	call my_printf
 		
 	;check if the chunk should be culled
 	mov dword[ebp-4], 69
@@ -2522,20 +2513,29 @@ chunkManager4d_frustumCull:
 	pop esi
 	pop ebp
 	ret
+	;excluding the edges along the y-axis
 	chunkManager4d_frustumCull_edges:
-		dd 0,4,8,12,	0,4,8,28
-		dd 0,4,8,12,	0,4,24,12
-		dd 0,4,8,12,	0,20,8,12
-		dd 0,4,8,12,	16,4,8,12
-		dd 0,4,8,28,	0,4,24,28
-		dd 0,4,8,28,	0,20,8,28
-		dd 0,4,8,28,	16,4,8,28
-		dd 0,4,24,12,	0,20,24,12
-		dd 0,4,24,12,	16,4,24,12
-		dd 0,4,24,28,	0,20,24,28
-		dd 0,4,24,28,	16,4,24,28
-		dd 0,20,8,12,	0,20,8,28
-		dd 0,20,8,12,	16,20,8,12
-		dd 0,20,8,28,	16,20,8,28
-		dd 0,20,24,12,	16,20,24,12
-		dd 0,20,24,28,	16,20,24,28
+		dd 0,4,8,12,		0,4,8,28
+		dd 0,4,8,12,		0,4,24,12
+		dd 0,4,8,12,		16,4,8,12
+		dd 0,4,8,28,		0,4,24,28
+		dd 0,4,8,28,		16,4,8,28
+		dd 0,4,24,12,		0,4,24,28
+		dd 0,4,24,12,		16,4,24,12
+		dd 0,4,24,28,		16,4,24,28
+		dd 0,20,8,12,		0,20,8,28
+		dd 0,20,8,12,		0,20,24,12
+		dd 0,20,8,12,		16,20,8,12
+		dd 0,20,8,28,		0,20,24,28
+		dd 0,20,8,28,		16,20,8,28
+		dd 0,20,24,12,		0,20,24,28
+		dd 0,20,24,12,		16,20,24,12
+		dd 0,20,24,28,		16,20,24,28
+		dd 16,4,8,12,		16,4,8,28
+		dd 16,4,8,12,		16,4,24,12
+		dd 16,4,8,28,		16,4,24,28
+		dd 16,4,24,12,		16,4,24,28
+		dd 16,20,8,12,		16,20,8,28
+		dd 16,20,8,12,		16,20,24,12
+		dd 16,20,8,28,		16,20,24,28
+		dd 16,20,24,12,		16,20,24,28
