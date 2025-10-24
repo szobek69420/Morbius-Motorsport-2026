@@ -219,23 +219,23 @@ vec4_mulWithMat:
 	haddps xmm1, xmm1
 	movss dword[eax], xmm1
 	
-	movups xmm1, [ecx+16]
-	mulps xmm1, xmm0
-	haddps xmm1, xmm1
-	haddps xmm1, xmm1
-	movss dword[eax+4], xmm1
+	movups xmm2, [ecx+16]
+	mulps xmm2, xmm0
+	haddps xmm2, xmm2
+	haddps xmm2, xmm2
+	movss dword[eax+4], xmm2
 	
-	movups xmm1, [ecx+32]
-	mulps xmm1, xmm0
-	haddps xmm1, xmm1
-	haddps xmm1, xmm1
-	movss dword[eax+8], xmm1
+	movups xmm3, [ecx+32]
+	mulps xmm3, xmm0
+	haddps xmm3, xmm3
+	haddps xmm3, xmm3
+	movss dword[eax+8], xmm3
 	
-	movups xmm1, [ecx+48]
-	mulps xmm1, xmm0
-	haddps xmm1, xmm1
-	haddps xmm1, xmm1
-	movss dword[eax+12], xmm1
+	movups xmm4, [ecx+48]
+	mulps xmm4, xmm0
+	haddps xmm4, xmm4
+	haddps xmm4, xmm4
+	movss dword[eax+12], xmm4
 	
 	ret
 	

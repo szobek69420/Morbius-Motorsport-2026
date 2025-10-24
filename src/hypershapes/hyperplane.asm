@@ -414,8 +414,8 @@ hyperPlane_intersectWithLineSegment:
 	fstp dword[ebp-24]
 	
 	;check if the points are on the two sides of the plane
-	mov eax, dword[esp-20]
-	mov ecx, dword[esp-24]
+	mov eax, dword[ebp-20]
+	mov ecx, dword[ebp-24]
 	test eax, eax
 	jz hyperPlane_intersectWithLineSegment_intersection_found
 	test ecx, ecx
@@ -432,36 +432,27 @@ hyperPlane_intersectWithLineSegment:
 	and dword[ebp-20], 0x7fffffff
 	and dword[ebp-24], 0x7fffffff
 	
-	;calculate (point2-point1)/(|distance1+distance2|*|point2-point1|)
-	;|distance1+distance2| so that it can directly be put into
+	;calculate |distance1|*(point2-point1)/(|distance1+distance2|)
 	push dword[ebp+12]
 	push dword[ebp+16]
 	lea eax, [ebp-16]
 	push eax
 	call vec4_sub
-	call vec4_magnitude
-	fstp dword[esp+4]
-	movss xmm0, dword[esp+4]
-	movss xmm1, dword[ebp-20]
+	movss xmm0, dword[ebp-20]
+	movss xmm1, xmm0
 	addss xmm1, dword[ebp-24]
-	mulss xmm0, xmm1
-	movss xmm2, dword[ONE]
-	divss xmm2, xmm0
-	movss dword[esp+8], xmm2			;1/((|distance1|+|distance2|)*|point2-point1|)
+	divss xmm0, xmm1
+	movss dword[esp+8], xmm0			;|distance1|/(|distance1|+|distance2|)
 	mov eax, dword[esp]
 	mov dword[esp+4], eax
 	call vec4_scale
 	
 	;calculate the intersection point
-	;point1 + |distance1|*(point2-point1)/((|distance1|+|distance2|)*|point2-point1|)
+	;point1 + |distance1|*(point2-point1)/((|distance1|+|distance2|))
 	lea eax, [ebp-16]
-	push dword[ebp-20]
 	push eax
-	push dword[ebp+20]
-	call vec4_scale
-	mov eax, dword[esp+4]
 	push dword[ebp+12]
-	push eax
+	push dword[ebp+20]
 	call vec4_add
 	
 	hyperPlane_intersectWithLineSegment_end:

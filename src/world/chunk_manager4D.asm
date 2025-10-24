@@ -83,9 +83,6 @@ section .rodata use32
 	print_four_floats_nl db "%f %f %f %f",10,0
 	
 	ONE dd 1.0
-	
-section .data use32
-	cull_count dd 0
 
 section .text use32
 	;should be called from the graphics thread
@@ -177,10 +174,12 @@ section .text use32
 	extern mutex_unlock
 	
 	extern vec3_normalize
+	extern vec3_print
 	extern vec4_dot
 	extern vec4_add
 	extern vec4_scale
 	extern vec4_mulWithMat
+	extern vec4_print
 	extern mat4_mul
 	
 	extern renderable_createCustom
@@ -476,7 +475,6 @@ chunkManager4d_render:
 	mov dword[ebp-148], eax
 	mov dword[ebp-144], ecx
 	
-	mov dword[cull_count], 0
 	;render loaded chunks
 	mov eax, dword[ebp+20]
 	lea ecx, [ebp-148]
@@ -484,11 +482,6 @@ chunkManager4d_render:
 	push chunkManager4d_render_render_loaded_function
 	push eax
 	call tsVector_forEach
-	
-	push dword[cull_count]
-	push print_int_nl
-	;call my_printf
-	add esp, 8
 	
 	;render fantom chunks
 	mov eax, dword[ebp+20]
@@ -546,11 +539,7 @@ chunkManager4d_render:
 		push dword[ebp-4]
 		call chunkManager4d_frustumCull
 		test eax, eax
-		;jnz chunkManager4d_render_render_loaded_function_end
-		jz no_cull
-			inc dword[cull_count]
-			jmp chunkManager4d_render_render_loaded_function_end
-		no_cull:
+		jnz chunkManager4d_render_render_loaded_function_end
 		
 		;set chunkPos uniform
 		mov eax, dword[ebp-4]
@@ -2288,11 +2277,14 @@ chunkManager4d_frustumCull:
 	sub esp, 16				;temp vector 2						92
 	sub esp, 16				;temp vector 1						108
 	sub esp, 16				;temp vector 3						124
+	sub esp, 4				;debug helper						128
 	
 	mov dword[ebp-4], 0
 	
 	mov dword[ebp-36], 0
 	mov dword[ebp-40], 0x80000000
+	
+	mov dword[ebp-128], 0
 	
 	;obtain collider group and bounds
 	mov eax, dword[ebp+20]
@@ -2421,7 +2413,7 @@ chunkManager4d_frustumCull:
 		lea ecx, [ebp-92]
 		push ecx
 		lea edx, [ebp-108]
-		push ecx
+		push edx
 		push dword[ebp+24]
 		call hyperPlane_intersectWithLineSegment
 		add esp, 16
@@ -2435,6 +2427,7 @@ chunkManager4d_frustumCull:
 		push dword[ebp+32]
 		call hyperPlane_positionTo3d
 		add esp, 12
+	
 		
 		;calculate the projection space intersection point
 		mov ecx, dword[ONE]
@@ -2446,7 +2439,7 @@ chunkManager4d_frustumCull:
 		call vec4_mulWithMat
 		add esp, 8
 		
-		;make it so that projection.w := |projection.w|
+		;get the absolute value of the projection.w and adjust the signs accordingly
 		mov eax, dword[ebp-112]
 		and eax, 0x80000000
 		xor dword[ebp-124], eax
@@ -2454,67 +2447,69 @@ chunkManager4d_frustumCull:
 		xor dword[ebp-116], eax
 		xor dword[ebp-112], eax
 		
-		;check if the values are less than -|projection.w| or greater than |projection.w|
-		;aka outside of the frustum
+		;check if the values are less than -projection.w or greater than projection.w
+		;https://bruop.github.io/frustum_culling/
+		;NOTE: the tutorial operates with the cringe DX frustum
 		vbroadcastss xmm0, dword[ebp-112]
 		movups xmm1, [ebp-124]
 		movaps xmm2, xmm1
 		subps xmm2, xmm0
-		movups [ebp-92], xmm2			;negative if not greater than |projection.w|
+		movups [ebp-92], xmm2			;positive if greater than |projection.w|
 		addps xmm1, xmm0
 		movups [ebp-108], xmm1			;negative if less than -|projection.w|
 		
 		mov al, byte[ebp-105]
-		not al
-		rol al, 1
-		and al, 0b00000001		;if not less than -|projection.w| then non-zero
-		not al
+		ror al, 7
+		and al, 0b00000001
+		or al,  0b00000110
 		and byte[ebp-42], al
 		
 		mov cl, byte[ebp-101]
-		not cl
-		rol cl, 2
-		and cl, 0b00000010		;if not less than -|projection.w| then non-zero
-		not cl
+		ror cl, 6
+		and cl, 0b00000010
+		or cl,  0b00000101
 		and byte[ebp-42], cl
 		
 		mov dl, byte[ebp-97]
-		not dl
-		rol dl, 3
-		and dl, 0b00000100		;if not less than -|projection.w| then non-zero
-		not dl
+		ror dl, 5
+		and dl, 0b00000100
+		or dl,  0b00000011
 		and byte[ebp-42], dl
 		
 		mov al, byte[ebp-89]
-		rol al, 1
+		ror al, 7
 		and al, 0b00000001
 		or byte[ebp-44], al
 		
 		mov cl, byte[ebp-85]
-		rol cl, 2
+		ror cl, 6
 		and cl, 0b00000010
 		or byte[ebp-44], cl
 		
 		mov dl, byte[ebp-81]
-		rol dl, 3
+		ror dl, 5
 		and dl, 0b00000100
 		or byte[ebp-44], dl
+		
+		inc dword[ebp-128]
 		
 		chunkManager4d_frustumCull_fr_loop_continue:
 		dec ebx
 		jnz chunkManager4d_frustumCull_fr_loop_start
 		
+	push dword[ebp-128]
+	push print_int_nl
+	call my_printf
+		
 	;check if the chunk should be culled
 	mov dword[ebp-4], 69
 	
-	mov ax, word[ebp-42]
-	and ax, 0b111
-	test ax, ax
+	mov al, byte[ebp-42]
+	test al, al
 	jnz chunkManager4d_frustumCull_end
-	mov cx, word[ebp-44]
-	and cx, 0b111
-	cmp cx, 0b111
-	;jne chunkManager4d_frustumCull_end
+	mov cl, byte[ebp-44]
+	cmp cl, 0b111
+	jne chunkManager4d_frustumCull_end
 	
 	mov dword[ebp-4], 0
 		
