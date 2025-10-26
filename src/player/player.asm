@@ -61,6 +61,9 @@ section .rodata use32
 	debug_normal_vertex_shader db "shaders/player/debug_normal.vag",0
 	debug_normal_fragment_shader db "shaders/player/debug_normal.fag",0
 	
+	block_break_sound_path db "./sfx/ingame/block_break.wav",0
+	block_place_sound_path db "./sfx/ingame/block_place.wav",0
+	
 	debug_normal_vertex_vector:
 	dd 2
 	dd 2
@@ -208,6 +211,10 @@ section .text use32
 	extern input_keyHeld
 	extern GLFW_KEY_C
 	
+	extern sigmaudio_import
+	extern sigmaudio_deport
+	extern sigmaudio_play
+	
 player_init:
 	push ebp
 	mov ebp, esp
@@ -302,6 +309,13 @@ player_init:
 	mov dword[eax+56], 0
 	mov dword[eax+60], 0
 	
+	;import sounds
+	push block_break_sound_path
+	call sigmaudio_import
+	push block_place_sound_path
+	call sigmaudio_import
+	add esp, 8
+	
 	;set return value
 	mov eax, dword[ebp-4]
 	
@@ -336,6 +350,13 @@ player_destroy:
 	;dealloc
 	push dword[ebp+8]
 	call my_free
+	
+	;unload sounds
+	push block_break_sound_path
+	call sigmaudio_deport
+	push block_place_sound_path
+	call sigmaudio_deport
+	add esp, 8
 	
 	mov esp, ebp
 	pop ebp
@@ -1132,6 +1153,9 @@ player_breakBlock:
 	call chunkManager4d_registerChangedBlock
 	add esp, 20
 	
+	;play the sound
+	push block_break_sound_path
+	call sigmaudio_play
 	
 	player_breakBlock_end:
 	mov esp, ebp
@@ -1263,6 +1287,9 @@ player_placeBlock:
 	call chunkManager4d_registerChangedBlock
 	add esp, 20
 	
+	;play the sound
+	push block_place_sound_path
+	call sigmaudio_play
 	
 	player_placeBlock_end:
 	mov esp, ebp

@@ -320,6 +320,7 @@ main_initializeInput:
 	push ebp
 	mov ebp, esp
 	
+	push dword[ebp+8]
 	call input_init
 	
 	

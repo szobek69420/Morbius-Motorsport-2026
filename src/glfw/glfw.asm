@@ -308,8 +308,9 @@ section .rodata use32
 	glfwDefine GLFW_DONT_CARE,-1
 	
 section .text use32
-	
+	dll_import glfw3.dll, glfwCreateCursor
 	dll_import glfw3.dll, glfwCreateWindow
+	dll_import glfw3.dll, glfwDestroyCursor
 	dll_import glfw3.dll, glfwDestroyWindow
 	dll_import glfw3.dll, glfwInit
 	dll_import glfw3.dll, glfwGetCurrentContext
@@ -318,6 +319,7 @@ section .text use32
 	dll_import glfw3.dll, glfwGetTime
 	dll_import glfw3.dll, glfwMakeContextCurrent
 	dll_import glfw3.dll, glfwPollEvents
+	dll_import glfw3.dll, glfwSetCursor
 	dll_import glfw3.dll, glfwSetCursorPos
 	dll_import glfw3.dll, glfwSetCursorPosCallback
 	dll_import glfw3.dll, glfwSetFramebufferSizeCallback

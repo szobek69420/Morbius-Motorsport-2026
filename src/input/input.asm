@@ -37,6 +37,8 @@ MOUSE_SCROLL_EVENT equ 4
 EVENT_QUEUE_MAX_SIZE equ 50
 
 section .rodata use32
+	cursor_image_path db "./sprites/cursor.bmp",0
+
 	test_text db "globus",10,0
 	print_two_ints db "%d %d",10,0
 
@@ -60,10 +62,15 @@ section .bss use32
 	event_queue_size resb 4			;int
 	event_queue_data resb 1000		;Event*, EVENT_QUEUE_MAX_SIZE*20 bytes
 
-
+	cursor resb 4					;GLFWcursor*
+	cursor_image resb 12			;GLFWimage
+	cursor_image_data resb 1048576	;1MB at most
+	
+	window resb 4					;GLFWwindow*
+	
 section .text use32
 
-	global input_init		;void input_init()
+	global input_init		;void input_init(GLFWwindow* window)
 	global input_update		;void input_update()
 	
 	;void input_pushEvent(Event event)
@@ -107,10 +114,18 @@ section .text use32
 	
 	extern glfwSetCursorPos
 	extern glfwSetInputMode
+	extern glfwCreateCursor
+	extern glfwSetCursor
+	
+	extern image_loadBMP
+	extern image_flip
 	
 input_init:
 	push ebp
 	mov ebp, esp
+	
+	mov eax, dword[ebp+8]
+	mov dword[window], eax
 	
 	push 349
 	push 0
@@ -152,6 +167,32 @@ input_init:
 	
 	mov dword[event_queue_first_index], 0
 	mov dword[event_queue_size], 0
+	
+	;create cursor
+	;NOTE: no need to destroy it manually at the end as glfwTerminate takes care of that
+	mov eax, cursor_image
+	lea ecx, [eax+8]
+	push ecx			;bits per pixel, must be 32 for cursor images
+	sub ecx, 4
+	push ecx
+	sub ecx, 4
+	push ecx
+	push cursor_image_data
+	push cursor_image_path
+	call image_loadBMP
+	
+	mov eax, cursor_image
+	mov dword[eax+8], cursor_image_data
+	
+	push 0
+	push 0
+	push cursor_image
+	call [glfwCreateCursor]
+	mov dword[cursor], eax
+	
+	push dword[cursor]
+	push dword[window]
+	call [glfwSetCursor]
 	
 	mov esp, ebp
 	pop ebp

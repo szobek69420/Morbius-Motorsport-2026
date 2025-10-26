@@ -8,8 +8,8 @@ section .rodata use32
 	format_resolution db "resolution: %d",10,0
 	
 	;resolutions
-	RESOLUTION_WIDTHS dd 10, 256, 640, 1280, 1920, 1920, 2560, 15360
-	RESOLUTION_HEIGHTS dd 10, 144, 480, 720, 1080, 1, 1440, 8640
+	RESOLUTION_WIDTHS dd 0, 256, 640, 1280, 1920, 1920, 2560, 15360
+	RESOLUTION_HEIGHTS dd 0, 144, 480, 720, 1080, 1, 1440, 8640
 	RESOLUTION_NAMES:
 	dd RESOLUTION_NAME_0
 	dd RESOLUTION_NAME_1
@@ -177,7 +177,7 @@ settings_resolutionInfo:
 	mov eax, dword[ebp+8]
 	test eax, 0x80000000
 	jnz settings_resolutionInfo_error
-	cmp eax, 7
+	cmp eax, 8
 	jge settings_resolutionInfo_error
 	
 		mov ecx, dword[RESOLUTION_WIDTHS+4*eax]

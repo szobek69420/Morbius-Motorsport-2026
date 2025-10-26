@@ -46,6 +46,7 @@ section .rodata use32
 	
 	sound_path db "./sfx/ingame/battlecry.wav",0
 	music_path db "./sfx/ingame/music.wav",0
+	spawn_sound_path db "./sfx/ingame/new_round.wav",0
 	
 	error_incomplete_framebuffer db "game_loop: L framebuffer uhuhu ahah",10,0
 	
@@ -300,10 +301,10 @@ section .text use32
 	extern tsValue_isEqual
 	extern tsQueue_size
 	
-	extern audio_loadSound
-	extern audio_unloadSound
-	extern audio_playSound
-	extern audio_stopSound
+	extern sigmaudio_import
+	extern sigmaudio_deport
+	extern sigmaudio_play
+	extern sigmaudio_stop
 	
 	extern framebuffer_create
 	extern framebuffer_destroy
@@ -474,14 +475,22 @@ gameLoop_main:
 	
 	;audio things
 	push music_path
-	call audio_loadSound
-	mov dword[sound_music], eax
+	call sigmaudio_import
 	add esp, 4
 	
+	push 69420			;very high priority
 	push 100000000
-	push dword[sound_music]
-	call audio_playSound
-	add esp, 8
+	push music_path
+	call sigmaudio_play
+	mov dword[sound_music], eax
+	add esp, 12
+	
+	push 0
+	push 1
+	push spawn_sound_path
+	call sigmaudio_import
+	call sigmaudio_play
+	add esp, 12
 	
 	;init last frame time
 	call [GetTickCount]
@@ -544,7 +553,7 @@ gameLoop_main:
 		call uiElement_processInput
 		
 		;process a chunk graphics update 4d
-		mov ebx, 5
+		mov ebx, 10
 		gameLoop_main_graphics_update_loop_start:
 			push dword[chunk_manager_4d]
 			call chunkManager4d_processGraphicsUpdate
@@ -804,8 +813,14 @@ gameLoop_main:
 	
 	;yeet sounds
 	push dword[sound_music]
-	call audio_stopSound
-	call audio_unloadSound
+	call sigmaudio_stop
+	
+	push music_path
+	call sigmaudio_deport
+	add esp, 4
+	
+	push spawn_sound_path
+	call sigmaudio_deport
 	add esp, 4
 	
 	;destroy chunk manager

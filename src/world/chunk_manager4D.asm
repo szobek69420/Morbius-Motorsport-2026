@@ -148,6 +148,7 @@ section .text use32
 	
 	extern queue_init
 	extern queue_pushBuffer
+	extern queue_pushBufferFront
 	extern queue_pop
 	extern queue_isEmpty
 	extern queue_search
@@ -1146,8 +1147,9 @@ chunkManager4d_processChangedBlocks:
 	sub esp, 16			;popped blocks vector			16
 	sub esp, 36			;pending changed block buffer	52
 	sub esp, 4			;vector<ChangedBlock>*			56
-	sub esp, 12			;ivec3 previousChunkPos			68
-	sub esp, 16			;vector<ivec3> changedChunks	84
+	sub esp, 4			;is the prev chunk priority?	60
+	sub esp, 12			;ivec3 previousChunkPos			72
+	sub esp, 16			;changedChunks vector			88 //vector<struct{ivec3,int isPriority}>
 
 	;init vectors
 	push 36
@@ -1155,8 +1157,8 @@ chunkManager4d_processChangedBlocks:
 	push eax
 	call vector_init
 	
-	push 12
-	lea eax, [ebp-84]
+	push 16
+	lea eax, [ebp-88]
 	push eax
 	call vector_init
 	
@@ -1222,15 +1224,16 @@ chunkManager4d_processChangedBlocks:
 		chunkManager4d_processChangedBlocks_register_outer_loop_start:
 			;set current chunk
 			mov eax, dword[esi+4]
-			mov dword[ebp-68], eax
+			mov dword[ebp-72], eax
 			mov ecx, dword[esi+8]
-			mov dword[ebp-64], ecx
+			mov dword[ebp-68], ecx
 			mov edx, dword[esi+12]
-			mov dword[ebp-60], edx
+			mov dword[ebp-64], edx
+			mov dword[ebp-60], 0
 			
 			;get the changed block vector
 			mov eax, dword[ebp+20]
-			lea ecx, [ebp-68]
+			lea ecx, [ebp-72]
 			push 12
 			push ecx
 			push dword[eax+8]
@@ -1247,7 +1250,7 @@ chunkManager4d_processChangedBlocks:
 				
 				mov eax, dword[ebp+20]
 				mov ecx, esp
-				lea edx, [ebp-68]
+				lea edx, [ebp-72]
 				push 16
 				push 12
 				push ecx
@@ -1257,7 +1260,7 @@ chunkManager4d_processChangedBlocks:
 				add esp, 36
 				
 				mov eax, dword[ebp+20]
-				lea ecx, [ebp-68]
+				lea ecx, [ebp-72]
 				push 12
 				push ecx
 				push dword[eax+8]
@@ -1273,26 +1276,30 @@ chunkManager4d_processChangedBlocks:
 				call vector_push_back_buffer
 				add esp, 8
 				
+				;mark as priority if necessary
+				mov eax, dword[esi+32]
+				or dword[ebp-60], eax
+				
 				;continue if there are more blocks and the next block is in this chunk as well
 				add esi, 36
 				dec edi
 				jz chunkManager4d_processChangedBlocks_register_inner_loop_end
 				mov eax, dword[esi+4]
-				cmp eax, dword[ebp-68]
+				cmp eax, dword[ebp-72]
 				jne chunkManager4d_processChangedBlocks_register_inner_loop_end
 				mov eax, dword[esi+8]
-				cmp eax, dword[ebp-64]
+				cmp eax, dword[ebp-68]
 				jne chunkManager4d_processChangedBlocks_register_inner_loop_end
 				mov eax, dword[esi+12]
-				cmp eax, dword[ebp-60]
+				cmp eax, dword[ebp-64]
 				jne chunkManager4d_processChangedBlocks_register_inner_loop_end
 					jmp chunkManager4d_processChangedBlocks_register_inner_loop_start
 			chunkManager4d_processChangedBlocks_register_inner_loop_end:
 			
 			;add the chunk to the changed chunks viktor
-			lea eax, [esi-32]
+			lea eax, [ebp-72]
 			push eax				;chunk pos
-			lea ecx, [ebp-84]
+			lea ecx, [ebp-88]
 			push ecx
 			call vector_push_back_buffer
 			add esp, 8
@@ -1303,15 +1310,16 @@ chunkManager4d_processChangedBlocks:
 	chunkManager4d_processChangedBlocks_end:
 	
 	;push reload updates for the changed chunks
-	mov esi, dword[ebp-72]		;current chunk pos in esi
-	mov edi, dword[ebp-84]		;index in edi
+	mov esi, dword[ebp-76]		;current chunk pos in esi
+	mov edi, dword[ebp-88]		;index in edi
 	cmp edi, 0
 	jle	chunkManager4d_processChangedBlocks_reload_loop_end
 	chunkManager4d_processChangedBlocks_reload_loop_start:
+		push dword[esi+12]
 		push esi
 		push dword[ebp+20]
 		call chunkManager4d_registerChunkReloadUpdate_internal
-		add esp, 8
+		add esp, 12
 	
 		push dword[esi+8]
 		push dword[esi+4]
@@ -1320,7 +1328,7 @@ chunkManager4d_processChangedBlocks:
 		;call chunkManager4d_reloadChunkByPosition_internal
 		add esp, 16
 		
-		add esi, 12
+		add esi, 16
 		dec edi
 		jnz chunkManager4d_processChangedBlocks_reload_loop_start
 	chunkManager4d_processChangedBlocks_reload_loop_end:
@@ -1330,7 +1338,7 @@ chunkManager4d_processChangedBlocks:
 	push eax
 	call vector_destroy
 	
-	lea eax, [ebp-84]
+	lea eax, [ebp-88]
 	push eax
 	call vector_destroy
 	
@@ -1436,26 +1444,37 @@ chunkManager4d_getPlayerChunk:
 	
 ;internal functinos
 
-;void chunkManager4d_registerChunkReloadUpdate_internal(ChunkManager4D*, ivec3* chunkPos)
+;void chunkManager4d_registerChunkReloadUpdate_internal(ChunkManager4D*, ivec3* chunkPos, int isPriority)
 chunkManager4d_registerChunkReloadUpdate_internal:
 	push ebp
 	mov ebp, esp
 	
-	;is the chunk already scheduled for reload?
-	push dword[ebp+12]
-	push chunkManager4d_registerChunkReloadUpdate_internal_search_comparator
-	mov eax, dword[ebp+8]
-	add eax, 52
-	push eax
-	call queue_search
-	cmp eax, -1
-	jne chunkManager4d_registerChunkReloadUpdate_internal_end
-		;register update
+	;is priority?
+	test dword[ebp+16], 0xffffffff
+	jz chunkManager4d_registerChunkReloadUpdate_internal_no_priority
+		;priority, just push the update to the front
 		push dword[ebp+12]
 		mov eax, dword[ebp+8]
 		add eax, 52
 		push eax
-		call queue_pushBuffer
+		call queue_pushBufferFront
+	
+	chunkManager4d_registerChunkReloadUpdate_internal_no_priority:
+		;is the chunk already scheduled for reload?
+		push dword[ebp+12]
+		push chunkManager4d_registerChunkReloadUpdate_internal_search_comparator
+		mov eax, dword[ebp+8]
+		add eax, 52
+		push eax
+		call queue_search
+		cmp eax, -1
+		jne chunkManager4d_registerChunkReloadUpdate_internal_end
+			;register update
+			push dword[ebp+12]
+			mov eax, dword[ebp+8]
+			add eax, 52
+			push eax
+			call queue_pushBuffer
 	
 	chunkManager4d_registerChunkReloadUpdate_internal_end:
 	mov esp, ebp

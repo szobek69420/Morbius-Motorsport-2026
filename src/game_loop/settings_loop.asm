@@ -637,6 +637,10 @@ settingsLoop_initCanvas:
 	mov dword[esp+4], slider_knob_texture_path
 	call uiImage_setTexture
 	
+	push dword[TEXT_RENDER_DISTANCE_VALUE]
+	push dword[SLIDER_RENDER_DISTANCE]
+	call settingsLoop_renderDistanceOnValueChangedCallback
+	
 	;create resolution value text
 	push dword[UI_TEXT]
 	call uiElement_create
@@ -727,6 +731,10 @@ settingsLoop_initCanvas:
 	call uiElement_setSize
 	mov dword[esp+4], slider_knob_texture_path
 	call uiImage_setTexture
+	
+	push dword[TEXT_RESOLUTION_VALUE]
+	push dword[SLIDER_RESOLUTION]
+	call settingsLoop_resolutionOnValueChangedCallback
 	
 	mov esp, ebp
 	pop ebp
