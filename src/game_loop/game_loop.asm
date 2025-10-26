@@ -81,6 +81,15 @@ section .rodata use32
 	print_gpu_type db "%s, %s",0
 	
 	cursor_image_path db "./sprites/ui/ingame/cursor.bmp",0
+	keyboard_image_path db "./sprites/ui/ingame/keyboard_icon.bmp",0
+	mouse_image_path db "./sprites/ui/ingame/mouse_icon.bmp",0
+	
+	print_keyboard_text_1 db "Move - WASD",0
+	print_keyboard_text_2 db "Ascend - Space",0
+	print_keyboard_text_3 db "Descend - LShift",0
+	print_mouse_text_1 db "LMB - Break block",0
+	print_mouse_text_2 db "RMB - Place block",0
+	print_mouse_text_3 db "Scroll - Rotate plane",0
 	
 section .bss use32
 	return_value resb 4					;tsValue<int>*, default value is dword[GAME_STATE_INGAME], anything else breaks out of the game loop
@@ -164,6 +173,16 @@ section .data use32
 	
 	TEXT_VERSION dd 0
 	TEXT_GPU dd 0
+	
+	IMAGE_KEYBOARD dd 0
+	TEXT_KEYBOARD_1 dd 0
+	TEXT_KEYBOARD_2 dd 0
+	TEXT_KEYBOARD_3 dd 0
+	
+	IMAGE_MOUSE dd 0
+	TEXT_MOUSE_1 dd 0
+	TEXT_MOUSE_2 dd 0
+	TEXT_MOUSE_3 dd 0
 
 section .text use32
 
@@ -1564,6 +1583,29 @@ gameLoop_initInfoCanvas:
 		SET_TEXT TEXT_VERSION
 	gameLoop_initInfoCanvas_no_version:
 	
+	;controls
+	INIT_IMAGE IMAGE_KEYBOARD, CANVAS_INFO, keyboard_image_path, -10, 65, 50, 50, UI_CENTER, UI_BOTTOM, UI_RIGHT, UI_BOTTOM
+	
+	INIT_TEXT		TEXT_KEYBOARD_1, CANVAS_INFO, -10, 50, UI_CENTER, UI_BOTTOM
+	FINE_TUNE_TEXT	TEXT_KEYBOARD_1, print_keyboard_text_1, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	INIT_TEXT		TEXT_KEYBOARD_2, CANVAS_INFO, -10, 30, UI_CENTER, UI_BOTTOM
+	FINE_TUNE_TEXT	TEXT_KEYBOARD_2, print_keyboard_text_2, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	INIT_TEXT		TEXT_KEYBOARD_3, CANVAS_INFO, -10, 10, UI_CENTER, UI_BOTTOM
+	FINE_TUNE_TEXT	TEXT_KEYBOARD_3, print_keyboard_text_3, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	
+	INIT_IMAGE IMAGE_MOUSE, CANVAS_INFO, mouse_image_path, 0, 65, 50, 50, UI_CENTER, UI_BOTTOM, UI_LEFT, UI_BOTTOM
+	
+	INIT_TEXT		TEXT_MOUSE_1, CANVAS_INFO, 10, 50, UI_CENTER, UI_BOTTOM
+	FINE_TUNE_TEXT	TEXT_MOUSE_1, print_mouse_text_1, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	INIT_TEXT		TEXT_MOUSE_2, CANVAS_INFO, 10, 30, UI_CENTER, UI_BOTTOM
+	FINE_TUNE_TEXT	TEXT_MOUSE_2, print_mouse_text_2, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	INIT_TEXT		TEXT_MOUSE_3, CANVAS_INFO, 10, 10, UI_CENTER, UI_BOTTOM
+	FINE_TUNE_TEXT	TEXT_MOUSE_3, print_mouse_text_3, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
 	
 	mov esp, ebp
 	pop ebp
