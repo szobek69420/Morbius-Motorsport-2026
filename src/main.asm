@@ -323,7 +323,6 @@ main_initializeInput:
 	push dword[ebp+8]
 	call input_init
 	
-	
 	push input_keyCallback
 	push dword[ebp+8]
 	call [glfwSetKeyCallback]

@@ -20,13 +20,19 @@
 
 ;layout:
 ;struct GraphicsUpdate{
-;	int isLoadUpdate;		0
+;	int updateType;			0
 ;	union{					4
 ;		struct LoadData{ Chunk4D*; };
 ;		struct UnloadData{ Renderable*, int isFantom;};
-;		struct IgnoredUpdate{ NULL; }
+;		struct CompositeData { short isFinalized, short numUpdates, GraphicsUpdate** updates; };
+;		struct IgnoredUpdate{ NULL; };
 ;	}
 ;}	12 bytes
+
+GRAPHICS_UPDATE_IGNORED equ 0
+GRAPHICS_UPDATE_LOAD equ 69
+GRAPHICS_UPDATE_UNLOAD equ 420
+GRAPHICS_UPDATE_COMPOSITE equ 69420
 
 ;layout:
 ;struct ReloadUpdate{
@@ -124,6 +130,7 @@ section .text use32
 	
 	extern my_printf
 	extern my_malloc
+	extern my_realloc
 	extern my_free
 	extern my_memcpy
 	extern my_qsort
@@ -158,8 +165,12 @@ section .text use32
 	extern tsQueue_pushBuffer
 	extern tsQueue_pushArray
 	extern tsQueue_pop
+	extern tsQueue_at
 	extern tsQueue_search
 	extern tsQueue_forEach
+	extern tsQueue_sizeNonBlocking
+	extern tsQueue_lock
+	extern tsQueue_unlock
 	extern tsVector_lock
 	extern tsVector_unlock
 	extern tsVector_vector
@@ -947,12 +958,14 @@ chunkManager4d_processGraphicsUpdate:
 	test eax, eax
 	jnz chunkManager4d_processGraphicsUpdate_end		;problem
 	
-	test dword[ebp-8], 0xffffffff
-	jz chunkManager4d_processGraphicsUpdate_end			;ignored update
+	cmp dword[ebp-12], GRAPHICS_UPDATE_IGNORED
+	je chunkManager4d_processGraphicsUpdate_end			;ignored update
 		mov dword[ebp-16], 69
 	
-	test dword[ebp-12], 0xffffffff
-	jz chunkManager4d_processGraphicsUpdate_unload_update
+	cmp dword[ebp-12], GRAPHICS_UPDATE_UNLOAD
+	je chunkManager4d_processGraphicsUpdate_unload_update
+	cmp dword[ebp-12], GRAPHICS_UPDATE_COMPOSITE
+	je chunkManager4d_processGraphicsUpdate_composite_update
 		;load update
 		;only chunks with mesh should be here
 		
@@ -1022,6 +1035,13 @@ chunkManager4d_processGraphicsUpdate:
 		;destroy renderable
 		push dword[ebp-8]
 		call renderable_destroy
+		
+		jmp chunkManager4d_processGraphicsUpdate_end
+		
+	chunkManager4d_processGraphicsUpdate_composite_update:
+		;composite update
+		
+		jmp chunkManager4d_processGraphicsUpdate_end
 	
 	chunkManager4d_processGraphicsUpdate_end:
 	mov eax, dword[ebp-16]
@@ -1864,14 +1884,14 @@ chunkManager4d_unloadChunk_internal:
 	;void chunkManager4d_unloadChunk_internal_remove_from_graphics_queue_lambda(GraphicsUpdate*, struct{Chunk4D*, int removalTookPlace}*)
 	chunkManager4d_unloadChunk_internal_remove_from_graphics_queue_lambda:
 		mov eax, dword[esp+4]
-		test dword[eax], 0xffffffff
-		jz chunkManager4d_unloadChunk_internal_remove_from_graphics_queue_lambda_end	;not load update
+		cmp dword[eax], GRAPHICS_UPDATE_LOAD
+		jne chunkManager4d_unloadChunk_internal_remove_from_graphics_queue_lambda_end	;not load update
 		mov ecx, dword[esp+8]
 		mov edx, dword[ecx]
 		cmp edx, dword[eax+4]
 		jne chunkManager4d_unloadChunk_internal_remove_from_graphics_queue_lambda_end
-			mov dword[eax+4], 0		;update shall be ignored
-			mov dword[ecx+4], 69		;removal happened
+			mov dword[eax], GRAPHICS_UPDATE_IGNORED		;update shall be ignored
+			mov dword[ecx+4], 69						;removal happened
 		chunkManager4d_unloadChunk_internal_remove_from_graphics_queue_lambda_end:
 		ret
 
@@ -2030,17 +2050,16 @@ chunkManager4d_pushGraphicsLoadUpdate_internal:
 	
 	sub esp, 12		;update buffer		12
 	
-	mov dword[ebp-12], 69	;load update
+	mov dword[ebp-12], GRAPHICS_UPDATE_LOAD		;load update
 	mov eax, dword[ebp+12]
 	mov dword[ebp-8], eax	;data
 	mov dword[ebp-4], 0
 	
-	lea ecx, dword[ebp-12]
-	mov eax, dword[ebp+8]
-	add eax, 36
-	push ecx
+	;push the update
+	lea eax, [ebp-12]
 	push eax
-	call tsQueue_pushBuffer
+	push dword[ebp+8]
+	call chunkManager4d_pushGraphicsUpdate_internal_helper
 	
 	mov esp, ebp
 	pop ebp
@@ -2054,18 +2073,152 @@ chunkManager4d_pushGraphicsUnloadUpdate_internal:
 	
 	sub esp, 12		;update buffer		12
 	
-	mov dword[ebp-12], 0	;unload update
+	mov dword[ebp-12], GRAPHICS_UPDATE_UNLOAD	;unload update
 	mov eax, dword[ebp+12]
 	mov dword[ebp-8], eax	;renderable
 	mov ecx, dword[ebp+16]
 	mov dword[ebp-4], ecx	;isFantom
 	
-	lea ecx, dword[ebp-12]
+	;push the update
+	lea eax, [ebp-12]
+	push eax
+	push dword[ebp+8]
+	call chunkManager4d_pushGraphicsUpdate_internal_helper
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+;pushes the created graphics update onto the queue or adds it to an open composite update
+;void chunkManager4d_pushGraphicsUpdate_internal_helper(ChunkManager4D*, GraphicsUpdate*)
+chunkManager4d_pushGraphicsUpdate_internal_helper:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;addr of update queue	4
+	sub esp, 4			;composite update		8
+	
 	mov eax, dword[ebp+8]
 	add eax, 36
+	mov dword[ebp-4], eax
+	
+	;check if there is an unfinalized composite update at the end of the queue
+	push dword[ebp-4]
+	call tsQueue_lock
+	
+	call tsQueue_sizeNonBlocking
+	cmp eax, 0
+	jle chunkManager4d_pushGraphicsUpdate_no_composite
+		dec eax
+		push eax
+		push dword[ebp-4]
+		call tsQueue_at
+		cmp dword[eax], GRAPHICS_UPDATE_COMPOSITE
+		jne chunkManager4d_pushGraphicsUpdate_no_composite		;not composite
+			test word[eax+4], 0xffff
+			jnz chunkManager4d_pushGraphicsUpdate_no_composite		;finalized
+				;suitable composite update
+				mov dword[ebp-8], eax
+				
+				inc word[eax+6]
+				mov cx, word[eax+6]
+				movsx ecx, cx
+				imul ecx, 12
+				push ecx
+				push dword[eax+8]
+				call my_realloc
+				mov ecx, dword[ebp-8]
+				mov dword[ecx+8], eax
+				
+				mov ax, word[ecx+6]
+				movsx eax, ax
+				dec eax
+				imul eax, 12
+				add eax, dword[ecx+8]
+				push 12
+				push dword[ebp+12]
+				push eax
+				call my_memcpy
+				
+				jmp chunkManager4d_pushGraphicsUpdate_push_done
+	
+	chunkManager4d_pushGraphicsUpdate_no_composite:
+		push dword[ebp+12]
+		push dword[ebp-4]
+		call tsQueue_pushBuffer
+	
+	chunkManager4d_pushGraphicsUpdate_push_done:
+	push dword[ebp-4]
+	call tsQueue_unlock
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+;creates an unfinalized composite update and pushes it at the end of the graphics queue
+;also locks the queue, which can be released by finalizing the update (by calling endGraphicsCompositeUpdate)
+;void chunkManager4d_beginGraphicsCompositeUpdate(ChunkManager4D*)
+chunkManager4d_beginGraphicsCompositeUpdate:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 12			;update buffer		12
+	
+	mov dword[ebp-12], GRAPHICS_UPDATE_COMPOSITE
+	mov word[ebp-8], 0		;unfinalized
+	mov word[ebp-6], 0		;zero subupdates so far
+	
+	push 12
+	call my_malloc
+	mov dword[ebp-4], eax
+	
+	mov eax, dword[ebp+8]
+	add eax, 36
+	lea ecx, [ebp-12]
 	push ecx
 	push eax
+	call tsQueue_lock
 	call tsQueue_pushBuffer
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;if the last update on the graphics queue is an unfinalized composite update, it gets finalized
+;also releases the lock created by beginGraphicsCompositeUpdate
+;void chunkManager4d_endGraphicsCompositeUpdate(ChunkManager4D*)
+chunkManager4d_endGraphicsCompositeUpdate:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4		;addr of update queue	4
+	
+	mov eax, dword[ebp+8]
+	add eax, 36
+	mov dword[ebp-4], eax
+	
+	push dword[ebp-4]
+	call tsQueue_lock
+	
+	call tsQueue_sizeNonBlocking
+	cmp eax, 0
+	jle chunkManager4d_endGraphicsCompositeUpdate_end
+		dec eax
+		push eax
+		push dword[ebp-4]
+		call tsQueue_at
+		cmp dword[eax], GRAPHICS_UPDATE_COMPOSITE
+		jne chunkManager4d_endGraphicsCompositeUpdate_end	;not composite update
+			test word[eax+4], 0xffff
+			jnz chunkManager4d_endGraphicsCompositeUpdate_end	;already finalized
+				;release the previous lock
+				push dword[ebp-4]
+				call tsQueue_unlock
+	
+	chunkManager4d_endGraphicsCompositeUpdate_end:
+	push dword[ebp-4]
+	call tsQueue_unlock
 	
 	mov esp, ebp
 	pop ebp
