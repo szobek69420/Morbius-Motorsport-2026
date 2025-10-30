@@ -23,8 +23,8 @@
 ;	int updateType;			0
 ;	union{					4
 ;		struct LoadData{ Chunk4D*; };
-;		struct UnloadData{ Renderable*, int isFantom;};
-;		struct CompositeData { short isFinalized, short numUpdates, GraphicsUpdate** updates; };
+;		struct UnloadData{ Renderable*; int isFantom; };
+;		struct CompositeData { short isFinalized, short numUpdates, GraphicsUpdate* updates; };
 ;		struct IgnoredUpdate{ NULL; };
 ;	}
 ;}	12 bytes
@@ -163,6 +163,7 @@ section .text use32
 	extern tsQueue_push
 	extern tsQueue_pushFront
 	extern tsQueue_pushBuffer
+	extern tsQueue_pushBufferFront
 	extern tsQueue_pushArray
 	extern tsQueue_pop
 	extern tsQueue_at
@@ -768,6 +769,7 @@ chunkManager4d_load:
 	jz chunkManager4d_load_end
 	
 		;generate chunk
+		push 69						;push graphics update
 		push dword[ebp-24]			;chunkw
 		push dword[ebp-20]			;chunkz
 		push dword[ebp-16]			;chunkx
@@ -1031,7 +1033,7 @@ chunkManager4d_processGraphicsUpdate:
 				chunkManager4d_processGraphicsUpdate_unload_update_fantom_comparator_end:
 				ret
 		chunkManager4d_processGraphicsUpdate_unload_update_not_fantom:
-		
+	
 		;destroy renderable
 		push dword[ebp-8]
 		call renderable_destroy
@@ -1040,6 +1042,48 @@ chunkManager4d_processGraphicsUpdate:
 		
 	chunkManager4d_processGraphicsUpdate_composite_update:
 		;composite update
+		mov eax, dword[ebp+8]
+		add eax, 36
+		push eax
+		call tsQueue_lock
+		add esp, 4
+		
+		push esi					;save esi
+		push edi					;save edi
+		
+		mov esi, dword[ebp-4]		;current subupdate in esi
+		mov di, word[ebp-6]
+		movsx edi, di				;index in edi
+		cmp edi, 0
+		jle chunkManager4d_processGraphicsUpdate_composite_update_loop_end
+		chunkManager4d_processGraphicsUpdate_composite_update_loop_start:
+			push esi
+			mov eax, dword[ebp+8]
+			add eax, 36
+			push eax
+			call tsQueue_pushBufferFront
+			
+			push dword[ebp+8]
+			call chunkManager4d_processGraphicsUpdate
+			add esp, 12
+			
+			add esi, 12
+			dec edi
+			jnz chunkManager4d_processGraphicsUpdate_composite_update_loop_start
+		chunkManager4d_processGraphicsUpdate_composite_update_loop_end:
+		
+		pop edi						;restore edi
+		pop esi						;restore esi
+		
+		mov eax, dword[ebp+8]
+		add eax, 36
+		push eax
+		call tsQueue_unlock
+		add esp, 4
+		
+		;free the subupdate buffer
+		push dword[ebp-4]
+		call my_free
 		
 		jmp chunkManager4d_processGraphicsUpdate_end
 	
@@ -1340,13 +1384,6 @@ chunkManager4d_processChangedBlocks:
 		push dword[ebp+20]
 		call chunkManager4d_registerChunkReloadUpdate_internal
 		add esp, 12
-	
-		push dword[esi+8]
-		push dword[esi+4]
-		push dword[esi]
-		push dword[ebp+20]
-		;call chunkManager4d_reloadChunkByPosition_internal
-		add esp, 16
 		
 		add esi, 16
 		dec edi
@@ -1575,7 +1612,7 @@ chunkManager4d_applyHyperPlane_internal:
 
 
 ;returns NULL, if the the chunk is already loaded
-;Chunk4D* chunkManager4d_loadChunk_internal(ChunkManager4D* cm, ivec3 chunkPos)
+;Chunk4D* chunkManager4d_loadChunk_internal(ChunkManager4D* cm, ivec3 chunkPos, int pushGraphicsData)
 chunkManager4d_loadChunk_internal:
 	push ebp
 	push esi
@@ -1727,6 +1764,8 @@ chunkManager4d_loadChunk_internal:
 	mov eax, dword[ebp-4]
 	test dword[eax+52], 0xffffffff
 	jz chunkManager4d_loadChunk_internal_graphics_update_no_update
+	test dword[ebp+36], 0xffffffff
+	jz chunkManager4d_loadChunk_internal_graphics_update_update_but_no_push
 		;there is graphics data, push graphics update and put the chunk into the loaded chunks vector as unprocessed
 		push 0
 		push dword[ebp-4]
@@ -1739,6 +1778,20 @@ chunkManager4d_loadChunk_internal:
 		push dword[ebp-4]
 		push dword[ebp+20]
 		call chunkManager4d_pushGraphicsLoadUpdate_internal
+		
+		jmp chunkManager4d_loadChunk_internal_graphics_update_done
+		
+	chunkManager4d_loadChunk_internal_graphics_update_update_but_no_push:
+		;there is a graphics update, but it shall not be pushed
+		;mark the chunk as not processed
+		push 0
+		push dword[ebp-4]
+		call chunk4d_setProcessed
+		
+		;register the chunk
+		push dword[ebp-4]
+		push dword[ebp+20]
+		call tsVector_pushBack
 		
 		jmp chunkManager4d_loadChunk_internal_graphics_update_done
 	
@@ -1865,7 +1918,7 @@ chunkManager4d_unloadChunk_internal:
 		test dword[ebp-4], 0xffffffff
 		jz chunkManager4d_unloadChunk_internal_renderable_done
 			;create graphics update for the renderable
-			push 0			;not fantom
+			push 0
 			push dword[ebp-4]
 			push dword[ebp+20]
 			call chunkManager4d_pushGraphicsUnloadUpdate_internal
@@ -1907,10 +1960,10 @@ chunkManager4d_reloadChunkByPosition_internal:
 	push ebx
 	mov ebp, esp
 	
-	sub esp, 4			;chunk				4
+	sub esp, 4			;chunk (old and new)	4
 	sub esp, 12			;unused
-	sub esp, 4			;renderable buffer	20
-	sub esp, 4			;debug helper		24
+	sub esp, 4			;renderable buffer		20
+	sub esp, 4			;debug helper			24
 	
 	mov dword[ebp-4], 0	
 	mov dword[ebp-20], 0
@@ -1933,7 +1986,20 @@ chunkManager4d_reloadChunkByPosition_internal:
 	test eax, eax
 	jnz chunkManager4d_reloadChunkByPosition_internal_end		;problems
 	
-	;create fantom update if necessary
+	;load chunk
+	push 0					;don't push graphics update
+	push dword[ebp+32]
+	push dword[ebp+28]
+	push dword[ebp+24]
+	push dword[ebp+20]
+	call chunkManager4d_loadChunk_internal
+	mov dword[ebp-4], eax
+	
+	;begin composite update
+	push dword[ebp+20]
+	call chunkManager4d_beginGraphicsCompositeUpdate
+	
+	;register fantom chunk and push unload update if necessary
 	test dword[ebp-20], 0xffffffff
 	jz chunkManager4d_reloadChunkByPosition_internal_no_fantom
 		;push fantom chunk
@@ -1945,8 +2011,8 @@ chunkManager4d_reloadChunkByPosition_internal:
 		add ecx, 28
 		push ecx
 		call tsVector_pushBack
-	
-		;create unload update
+		
+		;register unload update
 		push 69
 		push dword[ebp-20]
 		push dword[ebp+20]
@@ -1954,13 +2020,20 @@ chunkManager4d_reloadChunkByPosition_internal:
 		
 	chunkManager4d_reloadChunkByPosition_internal_no_fantom:
 	
-	;load chunk
-	push dword[ebp+32]
-	push dword[ebp+28]
-	push dword[ebp+24]
-	push dword[ebp+20]
-	call chunkManager4d_loadChunk_internal
+	;push load update if necessary
+	mov eax, dword[ebp-4]
+	test dword[eax+52], 0xffffffff
+	jz chunkManager4d_reloadChunkByPosition_internal_no_load
+		;push load update
+		push dword[ebp-4]
+		push dword[ebp+20]
+		call chunkManager4d_pushGraphicsLoadUpdate_internal
 	
+	chunkManager4d_reloadChunkByPosition_internal_no_load:
+	
+	;end composite update
+	push dword[ebp+20]
+	call chunkManager4d_endGraphicsCompositeUpdate
 	
 	chunkManager4d_reloadChunkByPosition_internal_end:
 	mov esp, ebp
@@ -2015,31 +2088,23 @@ chunkManager4d_getLoadedChunk:
 	;int chunkManager4d_getLoadedChunk_loaded_chunks_comparator(Chunk4D** gu, ivec3* chunkPos)
 	chunkManager4d_getLoadedChunk_loaded_chunks_comparator:
 		push ebp
-		mov ebp, esp
 		
-		sub esp, 4			;return value	4
-		mov dword[ebp-4], 69
+		xor eax, eax
 		
-		mov eax, dword[ebp+8]
-		mov eax, dword[eax]
-		mov ecx, dword[ebp+12]
+		mov ebp, dword[esp+8]
+		mov ebp, dword[ebp]
+		mov ecx, dword[esp+12]
 		
-		mov edx, dword[eax]
-		cmp edx, dword[ecx]
-		jne chunkManager4d_getLoadedChunk_loaded_chunks_comparator_end
-		mov edx, dword[eax+4]
-		cmp edx, dword[ecx+4]
-		jne chunkManager4d_getLoadedChunk_loaded_chunks_comparator_end
-		mov edx, dword[eax+8]
-		cmp edx, dword[ecx+8]
-		jne chunkManager4d_getLoadedChunk_loaded_chunks_comparator_end
+		mov edx, dword[ebp]
+		sub edx, dword[ecx]
+		or eax, edx
+		mov edx, dword[ebp+4]
+		sub edx, dword[ecx+4]
+		or eax, edx
+		mov edx, dword[ebp+8]
+		sub edx, dword[ecx+8]
+		or eax, edx
 		
-		mov dword[ebp-4], 0
-		
-		chunkManager4d_getLoadedChunk_loaded_chunks_comparator_end:
-		mov eax, dword[ebp-4]
-		
-		mov esp, ebp
 		pop ebp
 		ret
 		
@@ -2065,7 +2130,7 @@ chunkManager4d_pushGraphicsLoadUpdate_internal:
 	pop ebp
 	ret
 	
-	
+
 ;void chunkManager4d_pushGraphicsUnloadUpdate_internal(ChunkManager4D* cm, Renderable* renderable, int isFantom)
 chunkManager4d_pushGraphicsUnloadUpdate_internal:
 	push ebp
@@ -2077,7 +2142,7 @@ chunkManager4d_pushGraphicsUnloadUpdate_internal:
 	mov eax, dword[ebp+12]
 	mov dword[ebp-8], eax	;renderable
 	mov ecx, dword[ebp+16]
-	mov dword[ebp-4], ecx	;isFantom
+	mov dword[ebp-4], ecx	;fantom
 	
 	;push the update
 	lea eax, [ebp-12]
