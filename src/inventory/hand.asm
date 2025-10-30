@@ -1,0 +1,378 @@
+[BITS 32]
+
+%macro dll_import 2
+    import %2 %1
+    extern %2
+%endmacro
+
+section .rodata use32
+	vertex_shader_path db "shaders/hand/hand.vag",0
+	geometry_shader_path db "shaders/hand/hand.gag",0
+	fragment_shader_path db "shaders/hand/hand.fag",0
+	
+	WORLD_UP dd 0.0, 1.0, 0.0
+	HYPERCUBE_POSITION dd 0.6, 0.6, 0.6, 0.6
+	
+	CUM_OFFSET dd 1.5, 1.3, -3.0
+	
+	FOV dd 60.0
+	NEAR_CLIP dd 0.1
+	FAR_CLIP dd 10.0
+	
+	uniform_name_uvZ db "uv_z",0
+	uniform_name_viewMat db "view_mat",0
+	uniform_name_normalMat db "normal_mat",0
+	
+	TIME_CONVERTER dd 0.001
+	CUBE_ROTATION_RATE dd 150.0
+	ROTATION_PLANE_VEC_11 dd 0.828671, -0.435052, 0.165734, 0.310752
+	ROTATION_PLANE_VEC_12 dd 0.316183, 0.469005, -0.790458, 0.235028
+	
+	test_text db "fyodor brostoevsky",10,0
+
+section .data use32
+	initialized dd 0
+
+	held_block dd 1.0			;(float)blockId
+
+	cube_renderable dd 0
+	cube_shader dd 0
+	
+	time_of_previous_hyperplane_update dd 0			;float seconds
+	hyperplane:
+	dd 0.0, 0.0, 0.0, 0.0,
+	dd 1.0, 0.0, 0.0, 0.0,
+	dd 0.0, 1.0, 0.0, 0.0,
+	dd 0.0, 0.0, 1.0, 0.0
+	
+	previous_screen_width dd -1
+	previous_screen_height dd -1
+	projection_matrix:
+	dd 1.1, 1.1, 1.1, 0.0,
+	dd 1.1, 0.0, 1.1, 1.1,
+	dd 1.1, 1.1, 1.1, 1.1,
+	dd 1.1, 0.0, 1.1, 0.0
+
+section .text use32
+
+	global hand_init			;void hand_init()
+	global hand_deinit			;void hand_deinit()
+	
+	global hand_render			;void hand_render(GLuint blockTextureArray, const vec3* viewDir)
+	
+	dll_import kernel32.dll, GetTickCount
+	
+	extern my_printf
+	
+	extern vec3_add
+	extern vec3_scale
+	extern vec3_normalize
+	extern vec3_cross
+	extern vec3_mulWithMat
+	extern mat3_transpose
+	extern mat4_mul
+	extern mat4_viewGlm
+	extern mat4_perspectiveGlm
+	
+	extern hyperCubeRenderable_create
+	extern hyperCubeRenderable_destroy
+	extern hyperCubeRenderable_render
+	extern renderable_destroy
+	extern renderable_createShader
+	extern renderable_destroyShader
+	extern renderable_useShader
+	extern renderable_setUniform
+	extern renderable_enableDepthTest
+	extern renderable_setDepthFunc
+	extern renderable_calculateNormalMatrix
+	extern RENDERABLE_UNIFORM_1F
+	extern RENDERABLE_UNIFORM_MAT3
+	extern RENDERABLE_UNIFORM_MAT4
+	extern GL_ALWAYS
+	extern GL_LEQUAL
+	
+	extern textureHandler_bindArray
+	
+	extern hyperPlane_create
+	extern hyperPlane_rotate
+	extern hyperPlane_positionTo3d
+	
+	extern WINDOW_SIZE_X
+	extern WINDOW_SIZE_Y
+	
+hand_init:
+	push ebp
+	mov ebp, esp
+	
+	;check if the system is already initialized
+	test dword[initialized], 0xffffffff
+	jz hand_init_not_initialized
+		push hand_init_error_already_initialized
+		call my_printf
+		jmp hand_init_end
+		
+		hand_init_error_already_initialized db "hand_init: the system is already initialized",10,0
+	hand_init_not_initialized:
+	
+	;create things
+	push hyperplane
+	call hyperPlane_create
+	
+	push geometry_shader_path
+	push fragment_shader_path
+	push vertex_shader_path
+	call renderable_createShader
+	mov dword[cube_shader], eax
+	
+	;initialize things
+	call hyperCubeRenderable_create
+	mov dword[cube_renderable], eax
+	
+	mov dword[previous_screen_width], -1
+	mov dword[previous_screen_height], -1
+	
+	;set initialized flag
+	mov dword[initialized], 69
+	
+	hand_init_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+	
+hand_deinit:
+	push ebp
+	mov ebp, esp
+	
+	;check if the system is not yet initialized
+	test dword[initialized], 0xffffffff
+	jnz hand_deinit_initialized
+		push hand_deinit_error_not_initialized
+		call my_printf
+		jmp hand_deinit_end
+		
+		hand_deinit_error_not_initialized db "hand_deinit: the system is not initialized",10,0
+	hand_deinit_initialized:
+	
+	;destroy things
+	push dword[cube_renderable]
+	call hyperCubeRenderable_destroy
+	
+	push dword[cube_shader]
+	call renderable_destroyShader
+	
+	;unset the initialized flag
+	mov dword[initialized], 0
+	
+	hand_deinit_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+hand_render:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 64			;view matrix				64
+	sub esp, 64			;pv matrix					128
+	sub esp, 36			;view normal matrix			164
+	sub esp, 12			;camera forward				176
+	sub esp, 12			;camera up					188
+	sub esp, 12			;camera right				200
+	sub esp, 12			;view position				212
+	sub esp, 12			;helper						224
+	
+	;check if the system is initialized
+	test dword[initialized], 0xffffffff
+	jz hand_render_end
+	
+	;update the projection matrix if necessary
+	mov ebx, dword[previous_screen_width]
+	sub ebx, dword[WINDOW_SIZE_X]
+	mov edx, dword[previous_screen_height]
+	sub edx, dword[WINDOW_SIZE_Y]
+	or ebx, edx
+	test ebx, ebx
+	jz hand_render_skip_projection
+		mov eax, dword[WINDOW_SIZE_X]
+		mov dword[previous_screen_width], eax
+		mov ecx, dword[WINDOW_SIZE_Y]
+		mov dword[previous_screen_height], ecx
+		
+		cvtsi2ss xmm0, eax
+		cvtsi2ss xmm1, ecx
+		divss xmm0, xmm1			;aspect ratio in xmm0
+		
+		push dword[FAR_CLIP]
+		push dword[NEAR_CLIP]
+		sub esp, 4
+		movss dword[esp], xmm0
+		push dword[FOV]
+		push projection_matrix
+		call mat4_perspectiveGlm
+		
+	hand_render_skip_projection:
+	
+	;rotate the hyperplane
+	call [GetTickCount]
+	cvtsi2ss xmm0, eax
+	mulss xmm0, dword[TIME_CONVERTER]
+	movss xmm1, xmm0
+	subss xmm1, dword[time_of_previous_hyperplane_update]
+	mulss xmm1, dword[CUBE_ROTATION_RATE]
+	movss dword[time_of_previous_hyperplane_update], xmm0		;update the time
+	
+	sub esp, 4
+	movss dword[esp], xmm1
+	push ROTATION_PLANE_VEC_12
+	push ROTATION_PLANE_VEC_11
+	push hyperplane
+	call hyperPlane_rotate
+	
+	;get the view basis
+	mov esi, dword[ebp+24]
+	lea edi, [ebp-176]
+	cld
+	movsd
+	movsd
+	movsd
+	lea eax, [ebp-176]
+	push eax
+	call vec3_normalize			;camera forward
+	
+	lea eax, [ebp-176]
+	lea ecx, [ebp-200]
+	push eax
+	push WORLD_UP
+	push ecx
+	call vec3_cross				;camera left
+	
+	lea eax, [ebp-200]
+	lea ecx, [ebp-176]
+	lea edx, [ebp-188]
+	push eax
+	push ecx
+	push edx
+	call vec3_cross				;camera right
+	
+	;calculate the view position
+	
+	mov esi, CUM_OFFSET
+	lea edi, [ebp-212]
+	cld
+	movsd
+	movsd
+	movsd
+	
+		lea eax, [ebp-200]
+		push eax
+		call mat3_transpose		;we need column vectors instead of row vectors
+		
+		lea eax, [ebp-200]
+		lea ecx, [ebp-212]
+		push eax
+		push ecx
+		call vec3_mulWithMat
+		
+		lea eax, [ebp-200]
+		push eax
+		call mat3_transpose
+	
+	lea eax, [ebp-224]
+	push eax
+	push HYPERCUBE_POSITION
+	push hyperplane
+	call hyperPlane_positionTo3d
+	
+	lea eax, [ebp-224]
+	lea ecx, [ebp-212]
+	push eax
+	push ecx
+	push ecx
+	call vec3_add
+	
+	;calculate the matices
+	lea eax, [ebp-176]
+	lea ecx, [ebp-212]
+	lea edx, [ebp-64]
+	push WORLD_UP
+	push eax
+	push ecx
+	push edx
+	call mat4_viewGlm			;view matrx
+	
+	lea eax, [ebp-64]
+	lea ecx, [ebp-164]
+	push eax
+	push ecx
+	call renderable_calculateNormalMatrix	;view normal matrix
+	
+	lea eax, [ebp-64]
+	lea ecx, [ebp-128]
+	push eax
+	push projection_matrix
+	push ecx
+	call mat4_mul				;pv matrix
+	
+	;prepare uniforms
+	push dword[cube_shader]
+	call renderable_useShader
+	
+	push dword[held_block]
+	push dword[RENDERABLE_UNIFORM_1F]
+	push uniform_name_uvZ
+	push dword[cube_shader]
+	call renderable_setUniform
+	
+	lea eax, [ebp-64]
+	push eax
+	push dword[RENDERABLE_UNIFORM_MAT4]
+	push uniform_name_viewMat
+	push dword[cube_shader]
+	call renderable_setUniform
+	
+	lea eax, [ebp-164]
+	push eax
+	push dword[RENDERABLE_UNIFORM_MAT3]
+	push uniform_name_normalMat
+	push dword[cube_shader]
+	call renderable_setUniform
+	
+	;bind block textures
+	push 0
+	push dword[ebp+20]
+	call textureHandler_bindArray
+	
+	;enable depth test and set depth func
+	push 69
+	call renderable_enableDepthTest
+	
+	push dword[GL_ALWAYS]
+	call renderable_setDepthFunc
+	
+	;render the cube
+	push dword[cube_shader]
+	push HYPERCUBE_POSITION
+	push hyperplane
+	lea eax, [ebp-128]
+	push eax
+	push dword[cube_renderable]
+	call hyperCubeRenderable_render
+	
+	;reset depth func
+	push dword[GL_LEQUAL]
+	call renderable_setDepthFunc
+	
+	
+	hand_render_end:
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret

@@ -1,0 +1,17 @@
+#version 460 core
+layout (location=0) in vec4 hypercubePos;
+layout (location=1) in uint hypercubeCellData;
+
+//cellData:
+//upper 2 bytes for the block type
+//lower 2 bytes for determining which side of the hypercube this is
+
+out uint cellData;
+
+uniform vec4 position;
+
+void main()
+{
+	cellData=hypercubeCellData;
+	gl_Position=hypercubePos+position;
+}

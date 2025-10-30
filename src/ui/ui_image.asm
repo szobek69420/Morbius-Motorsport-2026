@@ -92,7 +92,7 @@ section .text use32
 	extern renderable_useShader
 	extern renderable_setUniform
 	extern renderable_setExtraTexture2D
-	extern RENDERABLE_UNIFORM_FLOAT
+	extern RENDERABLE_UNIFORM_1F
 	extern RENDERABLE_UNIFORM_VEC2
 	extern RENDERABLE_UNIFORM_VEC4_ARRAY
 	extern RENDERABLE_UNIFORM_MAT4
@@ -388,7 +388,7 @@ uiImage_render:
 	
 	mov eax, dword[ebp+8]
 	push dword[eax+212]
-	push dword[RENDERABLE_UNIFORM_FLOAT]
+	push dword[RENDERABLE_UNIFORM_1F]
 	push uniform_name_cornerRadius
 	push dword[shader]
 	call renderable_setUniform

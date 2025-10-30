@@ -1,7 +1,7 @@
 [BITS 32]
 
 ;layout:
-;struct camera{
+;struct Camera{
 ;	vec3 position;				;0
 ;	float pitchInDegrees, yawInDegrees;	;12
 ;	float nearClip, farClip;		;20

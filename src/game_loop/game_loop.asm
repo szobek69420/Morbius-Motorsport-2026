@@ -100,6 +100,7 @@ section .bss use32
 	view_matrix resb 64
 	projection_matrix resb 64
 	pv_matrix resb 64
+	view_dir resb 12
 	
 	projection_matrix_ui resb 64
 	
@@ -365,6 +366,10 @@ section .text use32
 	
 	extern sky_getColour
 	
+	extern hand_init
+	extern hand_deinit
+	extern hand_render
+	
 	extern perlin3d_init
 	extern perlin3d_sample
 	
@@ -479,6 +484,9 @@ gameLoop_main:
 	
 	;init sun
 	call sun_init
+	
+	;init hand
+	call hand_init
 	
 	;init memory usage diagram
 	call memoryUsageDiagram_init
@@ -616,7 +624,7 @@ gameLoop_main:
 		call hyperPlane_directionTo3d
 		add esp, 12
 		
-		;get camera view, projection and pv matrix
+		;get camera view, projection, pv and view dir
 		push view_matrix
 		push camera
 		call camera_view
@@ -628,7 +636,11 @@ gameLoop_main:
 		push pv_matrix
 		push camera
 		call camera_viewProjection
-		add esp, 24
+		
+		push view_dir
+		push camera
+		call camera_forward
+		add esp, 32
 		
 		;update memory diagram if necessary
 		mov eax, dword[delta_time_milliseconds]
@@ -677,6 +689,13 @@ gameLoop_main:
 		push dword[chunk_manager_4d]
 		call chunkManager4d_render
 		add esp, 12
+		
+		;render the hand
+		mov eax, dword[chunk_manager_4d]
+		push view_dir
+		push dword[eax+204]
+		call hand_render
+		add esp, 8
 		
 		;disable depth test
 		push 0
@@ -854,6 +873,9 @@ gameLoop_main:
 	
 	;deinit memory usage diagram
 	call memoryUsageDiagram_deinit
+	
+	;deinit hand
+	call hand_deinit
 	
 	;deinit sun
 	call sun_deinit

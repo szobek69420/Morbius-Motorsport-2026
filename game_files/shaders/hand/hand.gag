@@ -4,7 +4,7 @@ layout (triangle_strip, max_vertices = 6) out;
 
 in uint cellData[1];
 
-out vec3 uv;
+out vec2 uv;
 out vec3 viewSpace_position;
 out vec3 viewSpace_normal;
 
@@ -327,8 +327,6 @@ void main()
 	uint cell= cellData[0];
 	cell &= 0xFFFFu;
 	
-	uint blockUvZ = cellData[0] >> 16;
-	
 	uint startIndex=24*cell;
 	uint endIndex=startIndex+24;
 
@@ -470,14 +468,14 @@ void main()
 	{
 		if(i%2==1)
 		{
-			uv=vec3(intersectionsUV[sortedIndices[i/2]], float(blockUvZ));
+			uv=intersectionsUV[sortedIndices[i/2]];
 			viewSpace_position=vec3(view_mat*vec4(intersections3D[sortedIndices[i/2]],1.0));
 			
 			gl_Position=pv*vec4(intersections3D[sortedIndices[i/2]],1.0);
 		}
 		else
 		{
-			uv=vec3(intersectionsUV[sortedIndices[intersectionCount-i/2-1]], float(blockUvZ));
+			uv=intersectionsUV[sortedIndices[intersectionCount-i/2-1]];
 			viewSpace_position=vec3(view_mat*vec4(intersections3D[sortedIndices[intersectionCount-i/2-1]],1.0));
 			
 			gl_Position=pv*vec4(intersections3D[sortedIndices[intersectionCount-i/2-1]],1.0);

@@ -1,0 +1,20 @@
+#version 460 core
+in vec2 uv;
+in vec3 viewSpace_normal;
+in vec3 viewSpace_position;
+
+layout (location = 0) out vec4 gPosition; //vec4, because the w value decides whether the texel has been shaded
+layout (location = 1) out vec3 gNormal;
+layout (location = 2) out vec3 gAlbedo;
+
+layout (binding=0) uniform sampler2DArray blockTextures;
+uniform float uv_z;
+
+void main()
+{
+	gPosition=vec4(viewSpace_position.xyz, 1.0);
+	gNormal=viewSpace_normal.xyz;
+	gAlbedo=texture(blockTextures, vec3(uv, uv_z)).rgb;
+	
+	gl_FragDepth=0.0;
+}
