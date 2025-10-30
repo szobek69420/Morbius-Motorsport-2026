@@ -663,22 +663,13 @@ gameLoop_main:
 		call renderable_enableBlending
 		add esp, 8
 		
-		;render sun (this should be drawn first)
+		;calculate the sun direction
 		fld dword[TIME_OF_DAY]
 		fmul dword[D360]
 		sub esp, 4
 		fstp dword[esp]
 		call sun_setAngle
 		add esp, 4
-		
-		mov eax, dword[pplayer]
-		push dword[eax+24]
-		push dword[chunk_manager_4d]
-		call chunkManager4d_getHyperPlane
-		mov dword[esp], eax
-		push pv_matrix
-		;call sun_render
-		add esp, 12
 		
 		;render 4d chunks
 		push projection_matrix
@@ -687,6 +678,10 @@ gameLoop_main:
 		call chunkManager4d_render
 		add esp, 12
 		
+		;disable depth test
+		push 0
+		call renderable_enableDepthTest
+		add esp, 4
 		
 		;bind the ssao fbo
 		push dword[framebuffer_ssao]
@@ -728,6 +723,16 @@ gameLoop_main:
 		push 69
 		call renderable_enableDepthTest
 		add esp, 4
+		
+		;render the sun
+		mov eax, dword[pplayer]
+		push dword[eax+24]
+		push dword[chunk_manager_4d]
+		call chunkManager4d_getHyperPlane
+		mov dword[esp], eax
+		push pv_matrix
+		call sun_render
+		add esp, 12
 		
 		;draw the raycast hypercube
 		push pv_matrix

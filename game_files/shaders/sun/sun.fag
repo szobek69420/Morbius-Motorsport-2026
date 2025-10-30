@@ -1,0 +1,13 @@
+#version 460 core
+in vec2 uv;
+
+out vec4 fragmentColour;
+
+uniform sampler2D albedo;
+uniform sampler2D specular;
+
+void main()
+{
+	fragmentColour=texture(albedo, uv);
+	gl_FragDepth=1.0;			//to force it behind everything else
+}

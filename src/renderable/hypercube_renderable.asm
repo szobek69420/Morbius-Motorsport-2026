@@ -47,7 +47,10 @@ section .text use32
 	
 	global hyperCubeRenderable_create		;Renderable* hyperCubeRenderable_create()
 	global hyperCubeRenderable_destroy		;void hyperCubeRenderable_destroy(Renderable* hyperCubeRenderable)
-	global hyperCubeRenderable_render		;void hyperCubeRenderable_render(Renderable* hypercube, mat4* pv, HyperPlane* hp, vec4* position)
+	
+	;if a custom shader is used, the default uniforms are still set
+	;void hyperCubeRenderable_render(Renderable* hypercube, mat4* pv, HyperPlane* hp, vec4* position, GLuint nullableShader)
+	global hyperCubeRenderable_render
 	
 	extern my_printf
 	
@@ -136,6 +139,7 @@ hyperCubeRenderable_render:
 	mov ebp, esp
 	
 	sub esp, 16					;hyperplane normal		16
+	sub esp, 4					;used shader			20
 	
 	;calculate hyperplane normal
 	lea eax, [ebp-16]
@@ -144,11 +148,20 @@ hyperCubeRenderable_render:
 	call hyperPlane_getNormal
 	add esp, 8
 	
+	;select shader
+	mov eax, dword[shader]
+	mov dword[ebp-20], eax
+	test dword[ebp+24], 0xffffffff
+	jz hyperCubeRenderable_render_no_custom_shader
+		mov ecx, dword[ebp+24]
+		mov dword[ebp-20], ecx
+	hyperCubeRenderable_render_no_custom_shader:
+	
+	
 	;use shader
-	push dword[shader]
+	push dword[ebp-20]
 	call renderable_useShader
 	add esp, 4
-	
 	
 	;set position
 	mov eax, dword[ebp+20]
@@ -158,7 +171,7 @@ hyperCubeRenderable_render:
 	push dword[eax]
 	push dword[RENDERABLE_UNIFORM_VEC4]
 	push uniform_position_name
-	push dword[shader]
+	push dword[ebp-20]
 	call renderable_setUniform
 	add esp, 28
 	
@@ -170,7 +183,7 @@ hyperCubeRenderable_render:
 	push dword[eax]
 	push dword[RENDERABLE_UNIFORM_VEC4]
 	push uniform_hyperPlanePos_name
-	push dword[shader]
+	push dword[ebp-20]
 	call renderable_setUniform
 	add esp, 28
 	
@@ -181,7 +194,7 @@ hyperCubeRenderable_render:
 	push dword[eax+16]
 	push dword[RENDERABLE_UNIFORM_VEC4]
 	push uniform_hyperPlaneDir1_name
-	push dword[shader]
+	push dword[ebp-20]
 	call renderable_setUniform
 	add esp, 28
 	
@@ -192,7 +205,7 @@ hyperCubeRenderable_render:
 	push dword[eax+32]
 	push dword[RENDERABLE_UNIFORM_VEC4]
 	push uniform_hyperPlaneDir2_name
-	push dword[shader]
+	push dword[ebp-20]
 	call renderable_setUniform
 	add esp, 28
 	
@@ -203,7 +216,7 @@ hyperCubeRenderable_render:
 	push dword[eax+48]
 	push dword[RENDERABLE_UNIFORM_VEC4]
 	push uniform_hyperPlaneDir3_name
-	push dword[shader]
+	push dword[ebp-20]
 	call renderable_setUniform
 	add esp, 28
 	
@@ -213,13 +226,13 @@ hyperCubeRenderable_render:
 	push dword[ebp-16]
 	push dword[RENDERABLE_UNIFORM_VEC4]
 	push uniform_hyperPlaneNormal_name
-	push dword[shader]
+	push dword[ebp-20]
 	call renderable_setUniform
 	add esp, 28
 	
 	;render
 	push 69
-	push dword[shader]
+	push dword[ebp-20]
 	push dword[ebp+12]
 	push dword[ebp+8]
 	call renderable_renderCustom

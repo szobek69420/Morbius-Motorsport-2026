@@ -3,6 +3,10 @@
 section .rodata use32
 	texture_path db "sprites/sun.bmp",0
 	
+	vertex_shader_path db "shaders/hypercube/hypercube.vag",0
+	geometry_shader_path db "shaders/hypercube/hypercube.gag",0
+	fragment_shader_path db "shaders/sun/sun.fag",0
+	
 	sun_rotational_plane_1 dd -0.16013, 0.80064, 0.32026, -0.48038
 	sun_rotational_plane_2 dd 0.27975, 0.0, 0.83925, 0.46626
 	
@@ -16,6 +20,7 @@ section .rodata use32
 section .data use32
 	is_initialized dd 0
 	renderable dd 0
+	shader dd 0
 	
 	direction dd 0.0, 1.0, 0.0, 0.0
 	distance dd 5.0
@@ -42,12 +47,17 @@ section .text use32
 	extern hyperCubeRenderable_render
 	extern renderable_setAlbedo
 	extern renderable_enableDepthTest
+	extern renderable_setDepthFunc
 	extern renderable_setPrimitive
+	extern renderable_createShader
+	extern renderable_destroyShader
 	
 	extern camera_viewProjection
 	
 	extern GL_POINTS
 	extern GL_TRIANGLES
+	extern GL_LESS
+	extern GL_LEQUAL
 	extern glGetError
 	
 sun_init:
@@ -57,6 +67,13 @@ sun_init:
 	;create renderable
 	call hyperCubeRenderable_create
 	mov dword[renderable], eax
+	
+	;create shader
+	push geometry_shader_path
+	push fragment_shader_path
+	push vertex_shader_path
+	call renderable_createShader
+	mov dword[shader], eax
 	
 	;attach texture
 	push texture_path
@@ -83,6 +100,10 @@ sun_deinit:
 	
 	;set initialized flag
 	mov dword[is_initialized], 0
+	
+	;destroy shader
+	push dword[shader]
+	call renderable_destroyShader
 	
 	;destroy renderable
 	push dword[renderable]
@@ -120,10 +141,14 @@ sun_render:
 	call vec4_add
 	add esp, 12
 	
-	;disable depth test
-	push 0
+	;enable depth test
+	push 69
 	call renderable_enableDepthTest
 	add esp, 4
+	
+	;set depth func to lequal (to permit fragments with 1.0 to be written)
+	push dword[GL_LEQUAL]
+	call renderable_setDepthFunc
 
 	;set render primitive to points
 	push dword[GL_POINTS]
@@ -132,6 +157,7 @@ sun_render:
 
 	;render the sun
 	lea eax, [ebp-16]
+	push dword[shader]
 	push eax
 	push dword[ebp+12]
 	push dword[ebp+8]
@@ -144,10 +170,9 @@ sun_render:
 	call renderable_setPrimitive
 	add esp, 4
 	
-	;re-enable depth test
-	push 69
-	call renderable_enableDepthTest
-	add esp, 4
+	;reset depth func to less
+	push dword[GL_LESS]
+	call renderable_setDepthFunc
 	
 	sun_render_end:
 	mov esp, ebp

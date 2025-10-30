@@ -493,6 +493,7 @@ player_drawRaycastHypercube:
 	
 	;draw the hypercube
 	mov eax, dword[ebp+8]
+	push 0					;use default shader
 	push dword[eax+56]
 	push dword[ebp-4]
 	push dword[ebp+12]
