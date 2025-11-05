@@ -1,0 +1,44 @@
+#version 330 core
+layout (triangles) in;
+layout (triangle_strip, max_vertices=3) out;
+
+in V_OUT{
+	vec3 pos;
+	vec2 uv;
+} g_in[3];
+
+out vec2 uv;
+out vec3 viewSpace_normal;
+out vec3 viewSpace_position;
+
+uniform mat4 pv;
+uniform mat4 view_mat;
+
+void main()
+{
+	vec4 positions[3];
+	positions[0]=view_mat*vec4(g_in[0].pos,1);
+	positions[1]=view_mat*vec4(g_in[1].pos,1);
+	positions[2]=view_mat*vec4(g_in[2].pos,1);
+	
+	
+	viewSpace_normal=normalize(cross(positions[2].xyz-positions[1].xyz, positions[0].xyz-positions[1].xyz));
+	
+	
+	viewSpace_position=positions[0].xyz;
+	uv=g_in[0].uv;
+	gl_Position=pv*vec4(g_in[0].pos,1);
+	EmitVertex();
+	
+	viewSpace_position=positions[1].xyz;
+	uv=g_in[1].uv;
+	gl_Position=pv*vec4(g_in[1].pos,1);
+	EmitVertex();
+	
+	viewSpace_position=positions[2].xyz;
+	uv=g_in[2].uv;
+	gl_Position=pv*vec4(g_in[2].pos,1);
+	EmitVertex();
+	
+	EndPrimitive();
+}

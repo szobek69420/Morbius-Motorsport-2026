@@ -369,6 +369,7 @@ section .text use32
 	extern hand_init
 	extern hand_deinit
 	extern hand_render
+	extern hand_renderArm
 	
 	extern perlin3d_init
 	extern perlin3d_sample
@@ -692,10 +693,15 @@ gameLoop_main:
 		
 		;render the hand
 		mov eax, dword[chunk_manager_4d]
+		push projection_matrix
 		push view_dir
 		push dword[eax+204]
 		call hand_render
-		add esp, 8
+		
+		push pv_matrix
+		push camera
+		call hand_renderArm
+		add esp, 20
 		
 		;disable depth test
 		push 0

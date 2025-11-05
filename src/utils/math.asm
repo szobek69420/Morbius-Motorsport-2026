@@ -27,6 +27,7 @@ section .text use32
 	global math_smoothstep	;float math_smoothstep(float val, float lower, float upper)	//pushes the result onto the fpu stack
 	
 	global math_acos		;float math_acos(float val)				//pushes the return value onto the FPU stack
+	global math_atan2		;float math_atan2(float a, float b)		//pushes the return value onto the FPU stack
 	
 	extern my_printf
 	
@@ -265,5 +266,63 @@ math_acos:
 	fld dword[ebp-8]
 	
 	mov esp, ebp
+	pop ebp
+	ret
+	
+
+;with taylor series	
+math_atan2:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 4			;(a/b)^2			4
+	sub esp, 4			;current power		8
+	sub esp, 4			;current divisor	12
+	sub esp, 4			;return value		16
+	
+	;init values
+	movss xmm0, dword[ebp+20]
+	divss xmm0, dword[ebp+24]
+	
+	movss dword[ebp-8], xmm0
+	mulss xmm0, xmm0
+	movss dword[ebp-4], xmm0
+	
+	mov eax, dword[ONE]
+	mov dword[ebp-12], eax
+	
+	mov dword[ebp-16], 0
+	
+	mov edi, 20					;iteration count
+	math_atan2_loop_start:
+		movss xmm0, dword[ebp-8]
+		divss xmm0, dword[ebp-12]
+		movss xmm1, dword[ebp-16]
+		addss xmm1, xmm0
+		movss dword[ebp-16], xmm1
+		
+		;continue
+		movss xmm0, dword[ebp-8]
+		mulss xmm0, dword[ebp-4]
+		movss dword[ebp-8], xmm0
+		
+		movss xmm1, dword[ebp-12]
+		addss xmm1, dword[TWO]
+		movss dword[ebp-12], xmm1
+		xor dword[ebp-12], 0x80000000
+		
+		dec edi
+		jnz math_atan2_loop_start
+		
+	;set return value
+	fld dword[ebp-16]
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
 	pop ebp
 	ret

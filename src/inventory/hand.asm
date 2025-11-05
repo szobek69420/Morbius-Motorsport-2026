@@ -6,14 +6,21 @@
 %endmacro
 
 section .rodata use32
+	;shaders for the hypercube
 	vertex_shader_path db "shaders/hand/hand.vag",0
 	geometry_shader_path db "shaders/hand/hand.gag",0
 	fragment_shader_path db "shaders/hand/hand.fag",0
 	
+	;shaders for the 3d arm
+	arm_vs_path db "shaders/hand/arm.vag",0
+	arm_gs_path db "shaders/hand/arm.gag",0
+	arm_fs_path db "shaders/hand/arm.fag",0
+	arm_model_path db "models/hand.geometry",0
+	
 	WORLD_UP dd 0.0, 1.0, 0.0
 	HYPERCUBE_POSITION dd 0.6, 0.6, 0.6, 0.6
 	
-	CUM_OFFSET dd 1.5, 1.3, -3.0
+	CUM_OFFSET dd 1.5, 1.3, -6.0
 	
 	FOV dd 60.0
 	NEAR_CLIP dd 0.1
@@ -22,11 +29,17 @@ section .rodata use32
 	uniform_name_uvZ db "uv_z",0
 	uniform_name_viewMat db "view_mat",0
 	uniform_name_normalMat db "normal_mat",0
+	uniform_name_modelMat db "model_mat",0
 	
 	TIME_CONVERTER dd 0.001
 	CUBE_ROTATION_RATE dd 150.0
 	ROTATION_PLANE_VEC_11 dd 0.828671, -0.435052, 0.165734, 0.310752
 	ROTATION_PLANE_VEC_12 dd 0.316183, 0.469005, -0.790458, 0.235028
+	
+	DEG2RAD dd 0.01745329252
+	
+	ONE dd 1.0
+	THREE dd 3.0
 	
 	test_text db "fyodor brostoevsky",10,0
 
@@ -52,24 +65,31 @@ section .data use32
 	dd 1.1, 0.0, 1.1, 1.1,
 	dd 1.1, 1.1, 1.1, 1.1,
 	dd 1.1, 0.0, 1.1, 0.0
+	
+	arm_renderable dd 0
+	arm_shader dd 0
 
 section .text use32
 
 	global hand_init			;void hand_init()
 	global hand_deinit			;void hand_deinit()
 	
-	global hand_render			;void hand_render(GLuint blockTextureArray, const vec3* viewDir)
+	global hand_render			;void hand_render(GLuint blockTextureArray, const vec3* viewDir, const mat4* projection_mat)
+	global hand_renderArm		;void hand_renderArm(const camera* cum, const mat4* pv)
 	
 	dll_import kernel32.dll, GetTickCount
 	
 	extern my_printf
+	extern my_memset
 	
 	extern vec3_add
+	extern vec3_sub
 	extern vec3_scale
 	extern vec3_normalize
 	extern vec3_cross
 	extern vec3_mulWithMat
 	extern mat3_transpose
+	extern mat4_transpose
 	extern mat4_mul
 	extern mat4_viewGlm
 	extern mat4_perspectiveGlm
@@ -77,6 +97,7 @@ section .text use32
 	extern hyperCubeRenderable_create
 	extern hyperCubeRenderable_destroy
 	extern hyperCubeRenderable_render
+	extern renderable_renderCustom
 	extern renderable_destroy
 	extern renderable_createShader
 	extern renderable_destroyShader
@@ -85,11 +106,17 @@ section .text use32
 	extern renderable_enableDepthTest
 	extern renderable_setDepthFunc
 	extern renderable_calculateNormalMatrix
+	extern renderable_setPosition
+	extern renderable_setRotation
+	extern renderable_setPrimitive
 	extern RENDERABLE_UNIFORM_1F
 	extern RENDERABLE_UNIFORM_MAT3
 	extern RENDERABLE_UNIFORM_MAT4
 	extern GL_ALWAYS
 	extern GL_LEQUAL
+	extern GL_LESS
+	extern GL_POINTS
+	extern GL_TRIANGLES
 	
 	extern textureHandler_bindArray
 	
@@ -99,6 +126,13 @@ section .text use32
 	
 	extern WINDOW_SIZE_X
 	extern WINDOW_SIZE_Y
+	
+	extern geometryImporter_import
+	
+	extern camera_forward
+	extern camera_up
+	extern camera_right
+	extern camera_view
 	
 hand_init:
 	push ebp
@@ -123,6 +157,16 @@ hand_init:
 	push vertex_shader_path
 	call renderable_createShader
 	mov dword[cube_shader], eax
+	
+	push arm_model_path
+	call geometryImporter_import
+	mov dword[arm_renderable], eax
+	
+	push arm_gs_path
+	push arm_fs_path
+	push arm_vs_path
+	call renderable_createShader
+	mov dword[arm_shader], eax
 	
 	;initialize things
 	call hyperCubeRenderable_create
@@ -158,8 +202,12 @@ hand_deinit:
 	;destroy things
 	push dword[cube_renderable]
 	call hyperCubeRenderable_destroy
-	
 	push dword[cube_shader]
+	call renderable_destroyShader
+	
+	push dword[arm_renderable]
+	call renderable_destroy
+	push dword[arm_shader]
 	call renderable_destroyShader
 	
 	;unset the initialized flag
@@ -186,6 +234,7 @@ hand_render:
 	sub esp, 12			;camera right				200
 	sub esp, 12			;view position				212
 	sub esp, 12			;helper						224
+	sub esp, 64			;arm model matrix			288
 	
 	;check if the system is initialized
 	test dword[initialized], 0xffffffff
@@ -315,9 +364,9 @@ hand_render:
 	lea eax, [ebp-64]
 	lea ecx, [ebp-128]
 	push eax
-	push projection_matrix
+	push dword[ebp+28]
 	push ecx
-	call mat4_mul				;pv matrix
+	call mat4_mul
 	
 	;prepare uniforms
 	push dword[cube_shader]
@@ -355,6 +404,10 @@ hand_render:
 	push dword[GL_ALWAYS]
 	call renderable_setDepthFunc
 	
+	;set primitive
+	push dword[GL_POINTS]
+	call renderable_setPrimitive
+	
 	;render the cube
 	push dword[cube_shader]
 	push HYPERCUBE_POSITION
@@ -364,12 +417,101 @@ hand_render:
 	push dword[cube_renderable]
 	call hyperCubeRenderable_render
 	
+	;reset primitive
+	push dword[GL_TRIANGLES]
+	call renderable_setPrimitive
+	
 	;reset depth func
 	push dword[GL_LEQUAL]
 	call renderable_setDepthFunc
 	
 	
 	hand_render_end:
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+	
+hand_renderArm:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 64				;model matrix			64
+	sub esp, 64				;view matrix			128
+	
+	;calculate the model matrix
+	lea eax, [ebp-64]
+	push eax
+	push dword[ebp+20]
+	call camera_right
+	add dword[esp+4], 16
+	call camera_up
+	add dword[esp+4], 16
+	call camera_forward
+	
+	mov esi, dword[ebp+20]
+	lea edi, [ebp-16]
+	movsd
+	movsd
+	movsd
+	mov eax, dword[ONE]
+	mov dword[ebp-4], eax
+	
+	lea eax, [ebp-64]
+	push eax
+	call mat4_transpose
+	
+	;calculate the view matrix
+	lea eax, [ebp-128]
+	push eax
+	push dword[ebp+20]
+	call camera_view
+	
+	
+	;set uniforms
+	push dword[arm_shader]
+	call renderable_useShader
+	
+	lea eax, [ebp-64]
+	push eax
+	push dword[RENDERABLE_UNIFORM_MAT4]
+	push uniform_name_modelMat
+	push dword[arm_shader]
+	call renderable_setUniform
+	
+	lea eax, [ebp-128]
+	push eax
+	push dword[RENDERABLE_UNIFORM_MAT4]
+	push uniform_name_viewMat
+	push dword[arm_shader]
+	call renderable_setUniform
+	
+	;set depth fun
+	push dword[GL_LESS]
+	call renderable_setDepthFunc
+	
+	;set primitive
+	push dword[GL_TRIANGLES]
+	call renderable_setPrimitive
+	
+	;render arm
+	push 0
+	push dword[arm_shader]
+	push dword[ebp+24]
+	push dword[arm_renderable]
+	call renderable_renderCustom
+	
+	;reset depth fun
+	push dword[GL_LEQUAL]
+	call renderable_setDepthFunc
+	
 	mov esp, ebp
 	pop ebx
 	pop edi

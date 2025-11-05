@@ -55,6 +55,7 @@ mkdir build
 ..\build_tools\nasm.exe -fobj player/player.asm -o build/player.o
 ..\build_tools\nasm.exe -fobj hypershapes/hyperplane.asm -o build/hyperplane.o
 ..\build_tools\nasm.exe -fobj renderable/hypercube_renderable.asm -o build/hypercube_renderable.o
+..\build_tools\nasm.exe -fobj renderable/geometry_importer.asm -o build/geometry_importer.o
 ..\build_tools\nasm.exe -fobj renderable/renderable.asm -o build/renderable.o
 ..\build_tools\nasm.exe -fobj renderer/text/font.asm -o build/font.o
 ..\build_tools\nasm.exe -fobj renderer/text/text_renderer.asm -o build/text_renderer.o
@@ -87,6 +88,7 @@ build/image.o ^
 build/text_renderer.o ^
 build/font.o ^
 build/hypercube_renderable.o ^
+build/geometry_importer.o ^
 build/renderable.o ^
 build/opengl.o ^
 build/shader.o ^
