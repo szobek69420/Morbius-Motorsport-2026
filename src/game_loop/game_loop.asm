@@ -698,10 +698,9 @@ gameLoop_main:
 		push dword[eax+204]
 		call hand_render
 		
-		push pv_matrix
-		push camera
+		push projection_matrix
 		call hand_renderArm
-		add esp, 20
+		add esp, 16
 		
 		;disable depth test
 		push 0

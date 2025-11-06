@@ -11,7 +11,7 @@ void main()
 {
 	gPosition=vec4(viewSpace_position.xyz, 1.0);
 	gNormal=viewSpace_normal.xyz;
-	gAlbedo=vec3(0,1,1);
+	gAlbedo=vec3(0.96,0.72,0.6);
 	
 	gl_FragDepth=0.0;
 }

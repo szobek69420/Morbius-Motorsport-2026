@@ -19,8 +19,11 @@ section .rodata use32
 	
 	WORLD_UP dd 0.0, 1.0, 0.0
 	HYPERCUBE_POSITION dd 0.6, 0.6, 0.6, 0.6
+	FORWARD dd 0.0, 0.0, -1.0
+	ORIGO dd 0.0, 0.0, 0.0
 	
-	CUM_OFFSET dd 1.5, 1.3, -6.0
+	CUM_OFFSET dd 2.5, 1.0, -6.0
+	ARM_OFFSET dd 2.5, -1.3, -6.0
 	
 	FOV dd 60.0
 	NEAR_CLIP dd 0.1
@@ -29,12 +32,14 @@ section .rodata use32
 	uniform_name_uvZ db "uv_z",0
 	uniform_name_viewMat db "view_mat",0
 	uniform_name_normalMat db "normal_mat",0
-	uniform_name_modelMat db "model_mat",0
+	uniform_name_armOffset db "arm_offset",0
 	
 	TIME_CONVERTER dd 0.001
 	CUBE_ROTATION_RATE dd 150.0
 	ROTATION_PLANE_VEC_11 dd 0.828671, -0.435052, 0.165734, 0.310752
 	ROTATION_PLANE_VEC_12 dd 0.316183, 0.469005, -0.790458, 0.235028
+	
+	CUBE_HOVER_AMPLITUDE dd 0.3
 	
 	DEG2RAD dd 0.01745329252
 	
@@ -66,6 +71,12 @@ section .data use32
 	dd 1.1, 1.1, 1.1, 1.1,
 	dd 1.1, 0.0, 1.1, 0.0
 	
+	view_matrix:
+	dd 1.0, 0.0, 0.0, 0.0
+	dd 0.0, 1.0, 0.0, 0.0
+	dd 0.0, 0.0, -1.0, 0.0
+	dd 0.0, 0.0, 0.0, 1.0
+	
 	arm_renderable dd 0
 	arm_shader dd 0
 
@@ -75,7 +86,7 @@ section .text use32
 	global hand_deinit			;void hand_deinit()
 	
 	global hand_render			;void hand_render(GLuint blockTextureArray, const vec3* viewDir, const mat4* projection_mat)
-	global hand_renderArm		;void hand_renderArm(const camera* cum, const mat4* pv)
+	global hand_renderArm		;void hand_renderArm(const mat4* projection)
 	
 	dll_import kernel32.dll, GetTickCount
 	
@@ -110,6 +121,7 @@ section .text use32
 	extern renderable_setRotation
 	extern renderable_setPrimitive
 	extern RENDERABLE_UNIFORM_1F
+	extern RENDERABLE_UNIFORM_VEC3
 	extern RENDERABLE_UNIFORM_MAT3
 	extern RENDERABLE_UNIFORM_MAT4
 	extern GL_ALWAYS
@@ -174,6 +186,12 @@ hand_init:
 	
 	mov dword[previous_screen_width], -1
 	mov dword[previous_screen_height], -1
+	
+	push WORLD_UP
+	push FORWARD
+	push ORIGO
+	push view_matrix
+	call mat4_viewGlm
 	
 	;set initialized flag
 	mov dword[initialized], 69
@@ -318,6 +336,13 @@ hand_render:
 	movsd
 	movsd
 	
+	fld dword[time_of_previous_hyperplane_update]
+	fmul dword[THREE]
+	fsin
+	fmul dword[CUBE_HOVER_AMPLITUDE]
+	fadd dword[ebp-208]
+	fstp dword[ebp-208]			;add the hover animation
+	
 		lea eax, [ebp-200]
 		push eax
 		call mat3_transpose		;we need column vectors instead of row vectors
@@ -443,51 +468,29 @@ hand_renderArm:
 	push ebx
 	mov ebp, esp
 	
-	sub esp, 64				;model matrix			64
-	sub esp, 64				;view matrix			128
+	sub esp, 64			;pv mat				64
 	
-	;calculate the model matrix
+	;calculate the pv mat
 	lea eax, [ebp-64]
-	push eax
+	push view_matrix
 	push dword[ebp+20]
-	call camera_right
-	add dword[esp+4], 16
-	call camera_up
-	add dword[esp+4], 16
-	call camera_forward
-	
-	mov esi, dword[ebp+20]
-	lea edi, [ebp-16]
-	movsd
-	movsd
-	movsd
-	mov eax, dword[ONE]
-	mov dword[ebp-4], eax
-	
-	lea eax, [ebp-64]
 	push eax
-	call mat4_transpose
-	
-	;calculate the view matrix
-	lea eax, [ebp-128]
-	push eax
-	push dword[ebp+20]
-	call camera_view
-	
+	call mat4_mul
 	
 	;set uniforms
 	push dword[arm_shader]
 	call renderable_useShader
 	
-	lea eax, [ebp-64]
-	push eax
-	push dword[RENDERABLE_UNIFORM_MAT4]
-	push uniform_name_modelMat
+	mov eax, ARM_OFFSET
+	push dword[eax+8]
+	push dword[eax+4]
+	push dword[eax]
+	push dword[RENDERABLE_UNIFORM_VEC3]
+	push uniform_name_armOffset
 	push dword[arm_shader]
 	call renderable_setUniform
 	
-	lea eax, [ebp-128]
-	push eax
+	push view_matrix
 	push dword[RENDERABLE_UNIFORM_MAT4]
 	push uniform_name_viewMat
 	push dword[arm_shader]
@@ -504,7 +507,8 @@ hand_renderArm:
 	;render arm
 	push 0
 	push dword[arm_shader]
-	push dword[ebp+24]
+	lea eax, [ebp-64]
+	push eax
 	push dword[arm_renderable]
 	call renderable_renderCustom
 	
