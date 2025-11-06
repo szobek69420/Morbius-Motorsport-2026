@@ -11,6 +11,7 @@ out vec3 viewSpace_normal;
 uniform mat4 pv;
 uniform mat4 view_mat;
 uniform mat3 normal_mat;
+uniform vec3 hand_offset;
 
 //all of deez should be normalized
 uniform vec4 hyperPlanePos;
@@ -469,16 +470,16 @@ void main()
 		if(i%2==1)
 		{
 			uv=intersectionsUV[sortedIndices[i/2]];
-			viewSpace_position=vec3(view_mat*vec4(intersections3D[sortedIndices[i/2]],1.0));
+			viewSpace_position=vec3(view_mat*vec4(intersections3D[sortedIndices[i/2]]+hand_offset,1.0));
 			
-			gl_Position=pv*vec4(intersections3D[sortedIndices[i/2]],1.0);
+			gl_Position=pv*vec4(intersections3D[sortedIndices[i/2]]+hand_offset,1.0);
 		}
 		else
 		{
 			uv=intersectionsUV[sortedIndices[intersectionCount-i/2-1]];
-			viewSpace_position=vec3(view_mat*vec4(intersections3D[sortedIndices[intersectionCount-i/2-1]],1.0));
+			viewSpace_position=vec3(view_mat*vec4(intersections3D[sortedIndices[intersectionCount-i/2-1]]+hand_offset,1.0));
 			
-			gl_Position=pv*vec4(intersections3D[sortedIndices[intersectionCount-i/2-1]],1.0);
+			gl_Position=pv*vec4(intersections3D[sortedIndices[intersectionCount-i/2-1]]+hand_offset,1.0);
 		}
 		EmitVertex();
 	}

@@ -22,8 +22,8 @@ section .rodata use32
 	FORWARD dd 0.0, 0.0, -1.0
 	ORIGO dd 0.0, 0.0, 0.0
 	
-	CUM_OFFSET dd 2.5, 1.0, -6.0
 	ARM_OFFSET dd 2.5, -1.3, -6.0
+	HAND_OFFSET dd 2.5, -1.0, -6.0
 	
 	FOV dd 60.0
 	NEAR_CLIP dd 0.1
@@ -32,6 +32,7 @@ section .rodata use32
 	uniform_name_uvZ db "uv_z",0
 	uniform_name_viewMat db "view_mat",0
 	uniform_name_normalMat db "normal_mat",0
+	uniform_name_handOffset db "hand_offset",0
 	uniform_name_armOffset db "arm_offset",0
 	
 	TIME_CONVERTER dd 0.001
@@ -77,6 +78,11 @@ section .data use32
 	dd 0.0, 0.0, -1.0, 0.0
 	dd 0.0, 0.0, 0.0, 1.0
 	
+	normal_matrix:
+	dd 0.0, 0.0, 0.0
+	dd 0.0, 0.0, 0.0
+	dd 0.0, 0.0, 0.0
+	
 	arm_renderable dd 0
 	arm_shader dd 0
 
@@ -85,7 +91,7 @@ section .text use32
 	global hand_init			;void hand_init()
 	global hand_deinit			;void hand_deinit()
 	
-	global hand_render			;void hand_render(GLuint blockTextureArray, const vec3* viewDir, const mat4* projection_mat)
+	global hand_render			;void hand_render(GLuint blockTextureArray, const mat4* projection_mat)
 	global hand_renderArm		;void hand_renderArm(const mat4* projection)
 	
 	dll_import kernel32.dll, GetTickCount
@@ -193,6 +199,10 @@ hand_init:
 	push view_matrix
 	call mat4_viewGlm
 	
+	push view_matrix
+	push normal_matrix
+	call renderable_calculateNormalMatrix
+	
 	;set initialized flag
 	mov dword[initialized], 69
 	
@@ -244,15 +254,8 @@ hand_render:
 	push ebx
 	mov ebp, esp
 	
-	sub esp, 64			;view matrix				64
-	sub esp, 64			;pv matrix					128
-	sub esp, 36			;view normal matrix			164
-	sub esp, 12			;camera forward				176
-	sub esp, 12			;camera up					188
-	sub esp, 12			;camera right				200
-	sub esp, 12			;view position				212
-	sub esp, 12			;helper						224
-	sub esp, 64			;arm model matrix			288
+	sub esp, 64			;pv matrix				64
+	sub esp, 12			;adjusted hand offset	76
 	
 	;check if the system is initialized
 	test dword[initialized], 0xffffffff
@@ -300,97 +303,32 @@ hand_render:
 	push ROTATION_PLANE_VEC_11
 	push hyperplane
 	call hyperPlane_rotate
-	
-	;get the view basis
-	mov esi, dword[ebp+24]
-	lea edi, [ebp-176]
-	cld
-	movsd
-	movsd
-	movsd
-	lea eax, [ebp-176]
-	push eax
-	call vec3_normalize			;camera forward
-	
-	lea eax, [ebp-176]
-	lea ecx, [ebp-200]
-	push eax
-	push WORLD_UP
-	push ecx
-	call vec3_cross				;camera left
-	
-	lea eax, [ebp-200]
-	lea ecx, [ebp-176]
-	lea edx, [ebp-188]
-	push eax
-	push ecx
-	push edx
-	call vec3_cross				;camera right
-	
-	;calculate the view position
-	
-	mov esi, CUM_OFFSET
-	lea edi, [ebp-212]
-	cld
-	movsd
-	movsd
-	movsd
-	
-	fld dword[time_of_previous_hyperplane_update]
-	fmul dword[THREE]
-	fsin
-	fmul dword[CUBE_HOVER_AMPLITUDE]
-	fadd dword[ebp-208]
-	fstp dword[ebp-208]			;add the hover animation
-	
-		lea eax, [ebp-200]
-		push eax
-		call mat3_transpose		;we need column vectors instead of row vectors
-		
-		lea eax, [ebp-200]
-		lea ecx, [ebp-212]
-		push eax
-		push ecx
-		call vec3_mulWithMat
-		
-		lea eax, [ebp-200]
-		push eax
-		call mat3_transpose
-	
-	lea eax, [ebp-224]
+
+	;calculate the adjusted hand offset
+	lea eax, [ebp-76]
 	push eax
 	push HYPERCUBE_POSITION
 	push hyperplane
 	call hyperPlane_positionTo3d
 	
-	lea eax, [ebp-224]
-	lea ecx, [ebp-212]
+	lea eax, [ebp-76]
 	push eax
-	push ecx
-	push ecx
-	call vec3_add
+	push HAND_OFFSET
+	push eax
+	call vec3_sub
+	
+	fld dword[time_of_previous_hyperplane_update]
+	fmul dword[THREE]
+	fsin
+	fmul dword[CUBE_HOVER_AMPLITUDE]
+	fadd dword[ebp-72]
+	fstp dword[ebp-72]					;hover animation
 	
 	;calculate the matices
-	lea eax, [ebp-176]
-	lea ecx, [ebp-212]
-	lea edx, [ebp-64]
-	push WORLD_UP
-	push eax
-	push ecx
-	push edx
-	call mat4_viewGlm			;view matrx
-	
 	lea eax, [ebp-64]
-	lea ecx, [ebp-164]
+	push view_matrix
+	push dword[ebp+24]
 	push eax
-	push ecx
-	call renderable_calculateNormalMatrix	;view normal matrix
-	
-	lea eax, [ebp-64]
-	lea ecx, [ebp-128]
-	push eax
-	push dword[ebp+28]
-	push ecx
 	call mat4_mul
 	
 	;prepare uniforms
@@ -403,17 +341,23 @@ hand_render:
 	push dword[cube_shader]
 	call renderable_setUniform
 	
-	lea eax, [ebp-64]
-	push eax
+	push view_matrix
 	push dword[RENDERABLE_UNIFORM_MAT4]
 	push uniform_name_viewMat
 	push dword[cube_shader]
 	call renderable_setUniform
 	
-	lea eax, [ebp-164]
-	push eax
+	push normal_matrix
 	push dword[RENDERABLE_UNIFORM_MAT3]
 	push uniform_name_normalMat
+	push dword[cube_shader]
+	call renderable_setUniform
+	
+	push dword[ebp-68]
+	push dword[ebp-72]
+	push dword[ebp-76]
+	push dword[RENDERABLE_UNIFORM_VEC3]
+	push uniform_name_handOffset
 	push dword[cube_shader]
 	call renderable_setUniform
 	
@@ -437,7 +381,7 @@ hand_render:
 	push dword[cube_shader]
 	push HYPERCUBE_POSITION
 	push hyperplane
-	lea eax, [ebp-128]
+	lea eax, [ebp-64]
 	push eax
 	push dword[cube_renderable]
 	call hyperCubeRenderable_render

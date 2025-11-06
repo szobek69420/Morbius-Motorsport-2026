@@ -694,13 +694,13 @@ gameLoop_main:
 		;render the hand
 		mov eax, dword[chunk_manager_4d]
 		push projection_matrix
-		push view_dir
 		push dword[eax+204]
 		call hand_render
+		add esp, 8
 		
 		push projection_matrix
 		call hand_renderArm
-		add esp, 16
+		add esp, 4
 		
 		;disable depth test
 		push 0
