@@ -81,12 +81,14 @@ section .rodata use32
 	
 	
 	test_text db "kim dong un",10,0
+	test_text2 db "albert epstein",10,0
 	
 	error_create_invalid_type db "uiElement_create: %d is not a valid element type",10,0
 	error_render_not_initialized db "uiElement_render: call uiElement_init first fucko",10,0
 	
 	print_int_nl db "%d",10,0
 	print_two_ints_nl db "%d %d",10,0
+	print_four_ints_nl db  "%d %d %d %d",10,0
 	print_two_floats_nl db "%f %f",10,0
 	print_six_floats_nl db "%f %f %f %f %f %f",10,0
 	
@@ -183,6 +185,7 @@ section .text use32
 	extern vector_destroy
 	extern vector_push_back
 	extern vector_remove
+	extern vector_at
 	
 	extern mat4_ortho
 	
@@ -506,14 +509,20 @@ uiElement_destroy:
 	;do a jeffrey epstein (destroy the children)
 	;descending order is necessary
 	mov eax, dword[ebp+16]
-	mov esi, dword[eax+36]			;element array in esi
+	lea esi, [eax+24]				;island vector in esi
 	mov edi, dword[eax+24]			;index in edi
 	cmp edi, 0
 	jle uiElement_destroy_loop_end
 	uiElement_destroy_loop_start:
-		push dword[esi+4*edi-4]		;last element
+		lea eax, [edi-1]
+		push eax
+		push esi
+		call vector_at
+		add esp, 8
+		
+		push dword[eax]
 		call uiElement_destroy
-		add esp, 4
+		add esp, 4		
 		
 		dec edi
 		test edi, edi
@@ -761,7 +770,6 @@ uiElement_setParent:
 	push eax
 	call uiElement_calculateCurrentPosition
 	add esp, 8
-	
 	
 	uiElement_setParent_end:
 	mov esp, ebp

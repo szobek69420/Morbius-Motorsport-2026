@@ -502,7 +502,7 @@ vector_remove:		;int vector_remove(vector*, <element> element)
 	
 	mov eax, dword[ebp+20]
 	cmp dword[eax], 0
-	je _remove_compare_loop_end		;is the vector empty?
+	jle _remove_compare_loop_end		;is the vector empty?
 	_remove_compare_loop_start:
 		
 		push ebx

@@ -862,6 +862,7 @@ gameLoop_main:
 	;yeet sounds
 	push dword[sound_music]
 	call sigmaudio_stop
+	add esp, 4
 	
 	push music_path
 	call sigmaudio_deport
@@ -934,7 +935,6 @@ gameLoop_main:
 	push dword[return_value]
 	call tsValue_destroy
 	add esp, 4
-	
 	
 	mov dword[current_window], 0
 	
