@@ -11,7 +11,11 @@ layout (binding=0) uniform sampler2DArray blockTextures;
 
 void main()
 {
+	vec4 albedo=texture(blockTextures, uv);
+	if(albedo.w<0.01)
+		discard;
+		
 	gPosition=vec4(viewSpace_position.xyz, 1.0);
 	gNormal=viewSpace_normal.xyz;
-	gAlbedo=texture(blockTextures, uv).rgb;
+	gAlbedo=albedo.rgb;
 }
