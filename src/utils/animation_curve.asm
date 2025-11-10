@@ -1,19 +1,19 @@
 [BITS 32]
 
 ;struct AnimationCurve{
-;	vector<struct{float key, float value, float param}> points;		0 //param is used if an additional parameter is necessary (e.g. velocity in case of hermite)
+;	vector<struct{float key, float value }> points;		0 
 ;	int interpolationType;		16	//linear by default
 ;	int minKey, maxKey;			20
 ;}	28 bytes overall
 
 section .rodata use32
 	INTERPOLATION_LINEAR dd 0
-	INTERPOLATION_BEZIER dd 1
-	INTERPOLATION_HERMITE dd 2
+	INTERPOLATION_SMOOTHSTEP dd 1
 	
 	global INTERPOLATION_LINEAR
-	global INTERPOLATION_BEZIER
-	global INTERPOLATION_HERMITE
+	global INTERPOLATION_SMOOTHSTEP
+	
+	ONE dd 1.0
 
 section .text use32
 	
@@ -29,7 +29,7 @@ section .text use32
 	;inserts a new entry based on the value of the key
 	;no duplicate keys are allowed
 	;the place of the entry is chosen so that the keys are in an ascending order
-	;void animationCurve_add(AnimationCurve* curve, float key, float value, float param)
+	;void animationCurve_add(AnimationCurve* curve, float key, float value)
 	global animationCurve_add
 	
 	;void animationCurve_removeByKey(AnimationCurve* curve, float key)
@@ -38,12 +38,11 @@ section .text use32
 	;void animationCurve_removeByIndex(AnimationCurve* curve, int index)
 	global animationCurve_removeByIndex
 	
-	
-	global animationCurve
-	
 	extern my_printf
 	extern my_malloc
 	extern my_free
+	
+	extern math_smoothstep1
 	
 	extern vector_init
 	extern vector_destroy
@@ -62,7 +61,7 @@ animationCurve_create:
 	call my_malloc
 	mov dword[ebp-4], eax
 	
-	push 12
+	push 8
 	push eax
 	call vector_init
 	
@@ -124,7 +123,7 @@ animationCurve_sample:
 	jb animationCurve_smaple_i_is_below_max
 		mov ecx, dword[eax]
 		dec ecx
-		imul ecx, 12
+		shl ecx, 3
 		add ecx, dword[eax+12]
 		fld dword[ecx+4]
 		jmp animationCurve_sample_end
@@ -134,28 +133,19 @@ animationCurve_sample:
 	;call the chosen sampler
 	mov eax, dword[ebp+8]
 	mov eax, dword[eax+16]
-	cmp eax, dword[INTERPOLATION_BEZIER]
-	je animationCurve_sample_bezier
-	cmp eax, dword[INTERPOLATION_HERMITE]
-	je animationCurve_sample_hermite
+	cmp eax, dword[INTERPOLATION_SMOOTHSTEP]
+	je animationCurve_sample_smoothstep
 		;linear interpolation
 		push dword[ebp+12]
 		push dword[ebp+8]
 		call animationCurve_sampleLinear_internal
 		jmp animationCurve_sample_end
 		
-	animationCurve_sample_bezier:
-		;bezier interpolation
+	animationCurve_sample_smoothstep:
+		;smoothstep interpolation
 		push dword[ebp+12]
 		push dword[ebp+8]
-		call animationCurve_sampleBezier_internal
-		jmp animationCurve_sample_end
-		
-	animationCurve_sample_hermite:
-		;hermite interpolation
-		push dword[ebp+12]
-		push dword[ebp+8]
-		call animationCurve_sampleHermite_internal
+		call animationCurve_sampleSmoothstep_internal
 		jmp animationCurve_sample_end
 	
 	animationCurve_sample_end:
@@ -194,7 +184,7 @@ animationCurve_add:
 	call my_printf
 	jmp animationCurve_add_end
 	
-		;int animationCurve_add_search_comparator(struct{float,float,float}* pelement, float key)
+		;int animationCurve_add_search_comparator(struct{float,float}* pelement, float key)
 		animationCurve_add_search_comparator:
 			mov eax, dword[esp+8]
 			mov ecx, dword[esp+4]
@@ -216,7 +206,7 @@ animationCurve_add:
 		ucomiss xmm0, dword[esi]
 		jb animationCurve_add_loop_end
 		
-		add esi, 12
+		add esi, 8
 		inc edi
 		cmp edi, dword[ebx]
 		jl animationCurve_add_loop_start
@@ -225,7 +215,6 @@ animationCurve_add:
 	mov dword[ebp-4], edi
 	
 	;register the new entry
-	push dword[ebp+32]
 	push dword[ebp+28]
 	push dword[ebp+24]
 	push dword[ebp-4]
@@ -261,7 +250,7 @@ animationCurve_removeByKey:
 	mov esp, ebp
 	pop ebp
 	ret
-	;int animationCurve_removeByKey_comparator(struct{float,float,float}* pelement, float key)
+	;int animationCurve_removeByKey_comparator(struct{float,float}* pelement, float key)
 	animationCurve_removeByKey_comparator:
 		mov eax, dword[esp+8]
 		mov ecx, dword[esp+4]
@@ -335,7 +324,7 @@ animationCurve_recalculateLimits_internal:
 		minss xmm0, dword[esi]
 		maxss xmm1, dword[edi]
 	
-		add esi, 12
+		add esi, 8
 		dec edi
 		jnz animationCurve_recalculateLimits_internal_loop_start
 		
@@ -374,10 +363,88 @@ animationCurve_sampleLinear_internal:
 		jb animationCurve_sampleLinear_internal_index_loop_end
 		
 		inc dword[ebp-4]
-		add esi, 12
+		add esi, 8
 		jmp animationCurve_sampleLinear_internal_index_loop_start
 		
 	animationCurve_sampleLinear_internal_index_loop_end:
+	
+	;interpolate
+	movss xmm0, dword[ebp+24]
+	movss xmm1, dword[esi+12]
+	subss xmm0, dword[esi]
+	subss xmm1, dword[esi]
+	divss xmm0, xmm1
+	
+	movss xmm1, dword[ONE]
+	subss xmm1, xmm0
+	
+	mulss xmm0, dword[esi+16]
+	mulss xmm1, dword[esi+4]
+	addss xmm0, xmm1
+	
+	;set return value
+	movss dword[ebp-4], xmm0
+	fld dword[ebp-4]
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+;curve needs to have at least 2 entries
+;i must be in (minKey; maxKey)
+;pushes the return value onto the FPU stack
+;float animationCurve_sampleSmoothstep_internal(AnimationCurve* curve, float i)
+animationCurve_sampleSmoothstep_internal:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 4			;index of lower entry	4
+	mov dword[ebp-4], -1
+	
+	;search for the entry index
+	mov ebx, dword[ebp+20]
+	mov esi, dword[ebx+12]
+	movss xmm0, dword[ebp+24]
+	animationCurve_sampleSmoothstep_internal_index_loop_start:		
+		ucomiss xmm0, dword[esi]
+		jb animationCurve_sampleSmoothstep_internal_index_loop_end
+		
+		inc dword[ebp-4]
+		add esi, 8
+		jmp animationCurve_sampleSmoothstep_internal_index_loop_start
+		
+	animationCurve_sampleSmoothstep_internal_index_loop_end:
+	
+	;interpolate
+	movss xmm0, dword[ebp+24]
+	movss xmm1, dword[esi+12]
+	subss xmm0, dword[esi]
+	subss xmm1, dword[esi]
+	divss xmm0, xmm1
+	
+	sub esp, 4
+	movss dword[esp], xmm0
+	call math_smoothstep1
+	fstp dword[esp]
+	movss xmm0, dword[esp]
+	
+	movss xmm1, dword[ONE]
+	subss xmm1, xmm0
+	
+	mulss xmm0, dword[esi+16]
+	mulss xmm1, dword[esi+4]
+	addss xmm0, xmm1
+	
+	;set return value
+	movss dword[ebp-4], xmm0
+	fld dword[ebp-4]
 	
 	mov esp, ebp
 	pop ebx

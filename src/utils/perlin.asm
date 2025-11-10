@@ -13,6 +13,20 @@ section .rodata use32
 	PERLIN3D_SCALER dd 0.000030517578125		;1/2^15 for scaling the random value
 	PERLIN3D_INTERPOLATOR_SCALER dd 10.0		;PERLIN3D_VECTOR_GRID_WIDTH-1
 	
+	
+	PERLIN4D_VECTOR_GRID_WIDTH dd 11
+	PERLIN4D_VECTOR_GRID_WIDTH_SQUARED dd 121
+	PERLIN4D_VECTOR_GRID_WIDTH_CUBED dd 1331
+	PERLIN4D_VECTOR_GRID_WIDTH_TESSERACTED dd 14641
+	
+	PERLIN4D_VECTOR_GRID_WIDTH_BYTES dd 176
+	PERLIN4D_VECTOR_GRID_WIDTH_SQUARED_BYTES dd 1936
+	PERLIN4D_VECTOR_GRID_WIDTH_CUBED_BYTES dd 21296
+	PERLIN4D_VECTOR_GRID_WIDTH_TESSERACTED_BYTES dd 234256
+	
+	PERLIN4D_SCALER dd 0.000030517578125		;1/2^15 for scaling the random value
+	PERLIN4D_INTERPOLATOR_SCALER dd 10.0		;PERLIN4D_VECTOR_GRID_WIDTH-1
+	
 	print_two_ints_nl db "%d %d",10,0
 	print_three_ints_nl db "%d %d %d",10,0
 	print_eight_ints_nl db "%d %d %d %d %d %d %d %d",10,0
@@ -31,16 +45,24 @@ section .bss use32
 
 	;vec4[] instead of vec3[], so that i can use the vec4 library
 	;x,y,z order
-	;5342=sizeof(vec4)*PERLIN3D_VECTOR_GRID_WIDTH_CUBED
+	;21296=sizeof(vec4)*PERLIN3D_VECTOR_GRID_WIDTH_CUBED
 	PERLIN3D_VECTOR_GRID resb 21296
+	
+	;x,y,z,w order
+	;234256=sizeof(vec4)*PERLIN4D_VECTOR_GRID_WIDTH_TESSERACTED
+	PERLIN3D_VECTOR_GRID resb 234256
 	
 section .data use32
 	PERLIN3D_INITIALIZED dd 0
+	PERLIN4D_INITIALIZED dd 0
 	
 section .text use32
 
 	global perlin3d_init		;void perlin3d_init()
 	global perlin3d_sample		;float perlin3d_sample(float x, float y, float z)	//pushes the result onto the FPU stack
+	
+	global perlin4d_init		;void perlin4d_init()
+	global perlin4d_sample		;float perlin4d_sample(float x, float y, float z)	//pushes the result onto the FPU stack
 	
 	extern my_printf
 	
@@ -329,6 +351,199 @@ perlin3d_sample:
 	perlin3d_sample_end:
 	;set return value
 	fld dword[ebp-80]
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+perlin4d_init:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 16			;random helper		16
+	
+	;create the random vectors
+	movss xmm0, dword[PERLIN4D_SCALER]
+	shufps xmm0, xmm0, 0b00000000
+	mov ebx, 69420			;random seed in ebx
+	mov esi, PERLIN4D_VECTOR_GRID
+	mov edi, dword[PERLIN4D_VECTOR_GRID_WIDTH_CUBED]
+	perlin4d_init_generate_loop_start:
+		;generate and scale random values
+		imul ebx, 1103515245 
+		add ebx, 12345
+		
+		mov ecx, ebx
+		movsx eax, cx			;[-2^15; 2^15-1]
+		mov dword[ebp-16], eax
+		rol ecx, 16
+		movsx edx, cx
+		mov dword[ebp-12], edx
+		
+		imul ebx, 1103515245 
+		add ebx, 12345
+		
+		mov ecx, ebx
+		movsx eax, cx			;[-2^15; 2^15-1]
+		mov dword[ebp-8], eax
+		rol ecx, 16
+		movsx edx, cx
+		mov dword[ebp-4], edx
+		
+		cvtpi2ps xmm1, qword[ebp-16]
+		movq qword[ebp-16], xmm1
+		cvtpi2ps xmm2, qword[ebp-8]
+		movq dword[ebp-8], xmm2
+		
+		movss xmm0, dword[PERLIN4D_SCALER]
+		shufps xmm0, xmm0, 0b00000000
+		movups xmm1, [ebp-16]
+		mulps xmm1, xmm0
+		movups [esi], xmm1
+		
+		push esi
+		call vec4_normalize
+		add esp, 4
+		
+		add esi, 16
+		dec edi
+		jnz perlin4d_init_generate_loop_start
+		
+	;make the marginal vectors the same
+	mov edi, PERLIN4D_VECTOR_GRID
+	mov esi, dword[PERLIN4D_VECTOR_GRID_WIDTH_BYTES]
+	sub esi, 16
+	add esi, PERLIN4D_VECTOR_GRID
+	mov ebx, dword[PERLIN4D_VECTOR_GRID_WIDTH]
+	perlin4d_init_marginal_w_outer_loop_start:			;iterates the x axis
+		push ebx
+		mov ebx, dword[PERLIN4D_VECTOR_GRID_WIDTH]
+		perlin4d_init_marginal_w_middle_loop_start:			;iterates the y axis
+			push ebx
+			mov ebx, dword[PERLIN4D_VECTOR_GRID_WIDTH]
+			perlin4d_init_marginal_w_inner_loop_start:			;iterates the z axis
+				movsd
+				movsd
+				movsd
+				movsd
+				
+				sub esi, 16
+				sub edi, 16
+				add esi, dword[PERLIN4D_VECTOR_GRID_WIDTH_BYTES]
+				add edi, dword[PERLIN4D_VECTOR_GRID_WIDTH_BYTES]
+				
+				dec ebx
+				jnz perlin4d_init_marginal_w_inner_loop_start
+			
+			pop ebx
+			dec ebx
+			jnz perlin4d_init_marginal_w_middle_loop_start
+		
+		pop ebx
+		dec ebx
+		jnz perlin4d_init_marginal_w_outer_loop_start
+	
+	
+	mov edi, PERLIN4D_VECTOR_GRID
+	mov esi, dword[PERLIN4D_VECTOR_GRID_WIDTH_SQUARED_BYTES]
+	sub esi, dword[PERLIN4D_VECTOR_GRID_WIDTH_BYTES]
+	add esi, PERLIN4D_VECTOR_GRID
+	mov ebx, dword[PERLIN4D_VECTOR_GRID_WIDTH]
+	perlin4d_init_marginal_z_outer_loop_start:			;iterates the x axis
+		push ebx
+		mov ebx, dword[PERLIN4D_VECTOR_GRID_WIDTH]
+		perlin4d_init_marginal_z_middle_loop_start:			;iterates the y axis
+			push ebx
+			mov ebx, dword[PERLIN4D_VECTOR_GRID_WIDTH]
+			perlin4d_init_marginal_z_inner_loop_start:			;iterates the w axis
+				movsd
+				movsd
+				movsd
+				movsd
+				dec ebx
+				jnz perlin4d_init_marginal_z_inner_loop_start
+			
+			pop ebx
+			sub esi, dword[PERLIN4D_VECTOR_GRID_WIDTH_BYTES]
+			sub edi, dword[PERLIN4D_VECTOR_GRID_WIDTH_BYTES]
+			add esi, dword[PERLIN4D_VECTOR_GRID_WIDTH_SQUARED_BYTES]
+			add edi, dword[PERLIN4D_VECTOR_GRID_WIDTH_SQUARED_BYTES]
+			dec ebx
+			jnz perlin4d_init_marginal_z_middle_loop_start
+		
+		pop ebx
+		dec ebx
+		jnz perlin4d_init_marginal_z_outer_loop_start
+	
+	
+	mov edi, PERLIN4D_VECTOR_GRID
+	mov esi, dword[PERLIN4D_VECTOR_GRID_WIDTH_CUBED_BYTES]
+	sub esi, dword[PERLIN4D_VECTOR_GRID_WIDTH_SQUARED_BYTES]
+	add esi, PERLIN4D_VECTOR_GRID
+	mov ebx, dword[PERLIN4D_VECTOR_GRID_WIDTH]
+	perlin4d_init_marginal_y_outer_loop_start:			;iterates the x axis
+		push ebx
+		mov ebx, dword[PERLIN4D_VECTOR_GRID_WIDTH]
+		perlin4d_init_marginal_y_middle_loop_start:			;iterates the z axis
+			push ebx
+			mov ebx, dword[PERLIN4D_VECTOR_GRID_WIDTH]
+			perlin4d_init_marginal_y_inner_loop_start:			;iterates the w axis
+				movsd
+				movsd
+				movsd
+				movsd
+				dec ebx
+				jnz perlin4d_init_marginal_y_inner_loop_start
+			
+			pop ebx
+			dec ebx
+			jnz perlin4d_init_marginal_y_middle_loop_start
+		
+		pop ebx
+		sub esi, dword[PERLIN4D_VECTOR_GRID_WIDTH_SQUARED_BYTES]
+		sub edi, dword[PERLIN4D_VECTOR_GRID_WIDTH_SQUARED_BYTES]
+		add esi, dword[PERLIN4D_VECTOR_GRID_WIDTH_CUBED_BYTES]
+		add edi, dword[PERLIN4D_VECTOR_GRID_WIDTH_CUBED_BYTES]
+		dec ebx
+		jnz perlin4d_init_marginal_y_outer_loop_start
+		
+		
+	mov edi, PERLIN4D_VECTOR_GRID
+	mov esi, dword[PERLIN4D_VECTOR_GRID_WIDTH_TESSERACTED_BYTES]
+	sub esi, dword[PERLIN4D_VECTOR_GRID_WIDTH_CUBED_BYTES]
+	add esi, PERLIN4D_VECTOR_GRID
+	mov ebx, dword[PERLIN4D_VECTOR_GRID_WIDTH]
+	perlin4d_init_marginal_x_outer_loop_start:			;iterates the y axis
+		push ebx
+		mov ebx, dword[PERLIN4D_VECTOR_GRID_WIDTH]
+		perlin4d_init_marginal_x_middle_loop_start:			;iterates the z axis
+			push ebx
+			mov ebx, dword[PERLIN4D_VECTOR_GRID_WIDTH]
+			perlin4d_init_marginal_x_inner_loop_start:			;iterates the w axis
+				movsd
+				movsd
+				movsd
+				movsd
+				dec ebx
+				jnz perlin4d_init_marginal_x_inner_loop_start
+			
+			pop ebx
+			dec ebx
+			jnz perlin4d_init_marginal_x_middle_loop_start
+		
+		pop ebx
+		dec ebx
+		jnz perlin4d_init_marginal_x_outer_loop_start
+		
+	;set initialized flag
+	mov dword[PERLIN4D_INITIALIZED], 69
 	
 	mov esp, ebp
 	pop ebx
