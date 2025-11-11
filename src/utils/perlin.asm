@@ -62,7 +62,7 @@ section .text use32
 	global perlin3d_sample		;float perlin3d_sample(float x, float y, float z)	//pushes the result onto the FPU stack
 	
 	global perlin4d_init		;void perlin4d_init()
-	global perlin4d_sample		;float perlin4d_sample(float x, float y, float z)	//pushes the result onto the FPU stack
+	global perlin4d_sample		;float perlin4d_sample(float x, float y, float z, float w)	//pushes the result onto the FPU stack
 	
 	extern my_printf
 	
@@ -544,6 +544,187 @@ perlin4d_init:
 		
 	;set initialized flag
 	mov dword[PERLIN4D_INITIALIZED], 69
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+perlin4d_sample:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 16			;pos mod 1			16
+	sub esp, 16			;index (int)		32
+	sub esp, 16			;interpolator		48	//interpolate between grid vectors
+	sub esp, 64			;values				112
+	sub esp, 4			;0,0,0,0 offset		116
+	sub esp, 16			;helper				132
+	
+	;calculate values
+	push dword[ONE]
+	push dword[ebp+20]
+	call math_repeat
+	fstp dword[ebp-16]
+	mov eax, dword[ebp+24]
+	mov dword[esp], eax
+	call math_repeat
+	fstp dword[ebp-12]
+	mov eax, dword[ebp+28]
+	mov dword[esp], eax
+	call math_repeat
+	fstp dword[ebp-8]
+	mov eax, dword[ebp+32]
+	mov dword[esp], eax
+	call math_repeat
+	fstp dword[ebp-4]
+	
+	movss xmm0, dword[PERLIN4D_INTERPOLATOR_SCALER]
+	shufps xmm0, xmm0, 0b00000000
+	movups xmm1, [ebp+20]
+	mulps xmm1, xmm0			;(input mod 1)*scaler
+	
+	movaps xmm0, xmm1
+	roundps xmm1, xmm1, 0b0001	;round towards -inf
+	
+	subps xmm0, xmm1			;interpolator
+	movups [ebp-48], xmm0
+	
+	cvtps2pi mm0, xmm1
+	movq qword[ebp-32], mm0	;x,y indices
+	shufps xmm1, xmm1, 0b00001110
+	cvtps2pi mm0, xmm1
+	movq qword[ebp-24], mm0	;z,w indices
+	emms
+	
+	;calculate the base offset
+	mov eax, dword[ebp-32]
+	imul eax, dword[PERLIN4D_VECTOR_GRID_WIDTH_CUBED_BYTES]
+	mov ebx, dword[ebp-28]
+	imul ebx, dword[PERLIN4D_VECTOR_GRID_WIDTH_SQUARED_BYTES]
+	mov ecx, dword[ebp-24]
+	imul ecx, dword[PERLIN4D_VECTOR_GRID_WIDTH_BYTES]
+	mov edx, dword[ebp-20]
+	shl edx, 4
+	add eax, ebx
+	add ecx, edx
+	add eax, ecx
+	add eax, PERLIN4D_VECTOR_GRID
+	mov dword[ebp-116], eax
+	
+	;initialize helper
+	mov ecx, dword[ebp-40]
+	mov dword[ebp-124], ecx
+	mov edx, dword[ebp-36]
+	mov dword[ebp-120], edx
+	
+	;calculate values
+	mov eax, dword[ebp-48]
+	mov dword[ebp-132], eax				;init x interpolator helper
+	xor ebx, ebx						;x index in ebx
+	perlin4d_sample_value_x_loop_start:
+		push ebx
+		
+		mov eax, dword[ebp-44]
+		mov dword[ebp-128], eax				;init y interpolator helper
+		xor ebx, ebx						;y index in ebx
+		perlin4d_sample_value_y_loop_start:
+			push ebx
+			
+			mov eax, dword[ebp-40]
+			mov dword[ebp-124], eax				;init z interpolator helper
+			xor ebx, ebx						;z index in ebx
+			perlin4d_sample_value_z_loop_start:
+				push ebx
+				
+				mov eax, dword[ebp-36]
+				mov dword[ebp-120], eax				;init w interpolator helper
+				xor ebx, ebx						;w index in ebx
+				perlin4d_sample_value_w_loop_start:
+					;calculate the vector offset
+					mov esi, dword[esp+8]
+					sub esi, 1
+					not esi
+					and esi, dword[PERLIN4D_VECTOR_GRID_WIDTH_CUBED_BYTES]		;vector offset x
+					
+					mov edx, dword[esp+4]
+					sub edx, 1
+					not edx
+					and edx, dword[PERLIN4D_VECTOR_GRID_WIDTH_SQUARED_BYTES]	;vector offset y
+					
+					mov ecx, dword[esp]
+					sub ecx, 1
+					not ecx
+					and ecx, dword[PERLIN4D_VECTOR_GRID_WIDTH_BYTES]	;vector offset z
+					
+					mov eax, ebx
+					sub eax, 1
+					not eax				;0xffffffff if ebx==1, otherwise 0x00000000
+					and eax, 16			;vector offset w
+					
+					
+					add esi, edx
+					add ecx, eax
+					add esi, ecx
+					add esi, dword[ebp-116]
+					
+					lea eax, [ebp-132]
+					push eax
+					push esi
+					call vec4_dot
+					add esp, 8
+					
+					;calculate value offset and store value
+					mov edi, dword[esp+8]
+					rol edi, 1
+					or edi, dword[esp+4]
+					rol edi, 1
+					or edi, dword[esp]
+					rol edi, 1
+					or edi, ebx
+					rol edi, 2
+					
+					fstp dword[ebp-112+edi]
+					
+				
+					movss xmm0, dword[ebp-120]
+					subss xmm0, dword[ONE]
+					movss dword[ebp-120], xmm0		;update w interpolator helper
+					inc ebx
+					cmp ebx, 2
+					jl perlin4d_sample_value_w_loop_start
+				
+				pop ebx
+				movss xmm0, dword[ebp-124]
+				subss xmm0, dword[ONE]
+				movss dword[ebp-124], xmm0		;update z interpolator helper
+				inc ebx
+				cmp ebx, 2
+				jl perlin4d_sample_value_z_loop_start
+			
+			pop ebx
+			movss xmm0, dword[ebp-128]
+			subss xmm0, dword[ONE]
+			movss dword[ebp-128], xmm0		;update y interpolator helper
+			inc ebx
+			cmp ebx, 2
+			jl perlin4d_sample_value_y_loop_start
+		
+		pop ebx
+		
+		movss xmm0, dword[ebp-132]
+		subss xmm0, dword[ONE]
+		movss dword[ebp-132], xmm0		;update x interpolator helper
+		inc ebx
+		cmp ebx, 2
+		jl perlin4d_sample_value_x_loop_start
+	
 	
 	mov esp, ebp
 	pop ebx
