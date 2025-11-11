@@ -1,5 +1,5 @@
 # Morbius-Motorsport-2026
-MM26 is a 4D clone of Minecraft written entirely in x86 assembly with a purpose yet to discover.<br>
+MM26 is a 4D clone of Minecraft written entirely in x86 assembly with a purpose that is yet to be discovered.<br>
 <br>
 If you want to try it out yourself, you can do so by executing <br>
 ```test.exe```<br>
