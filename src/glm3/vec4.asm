@@ -48,6 +48,8 @@ section .text use32
 	;smoothstep(0,1,x) on each element of the vector
 	global vec4_smoothstep1		;void vec4_smoothstep1(vec4* vec)
 	
+	global vec4_lerp			;void vec4_lerp(vec4* buffer, vec4* a, vec4* b, vec4* i)
+	
 vec4_print:
 	push ebp
 	mov ebp, esp
@@ -576,6 +578,27 @@ vec4_smoothstep1:
 	
 	;save the vector
 	movups [eax], xmm1
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+vec4_lerp:
+	push ebp
+	mov ebp, esp
+	
+	mov eax, dword[ebp+12]
+	mov ecx, dword[ebp+16]
+	mov edx, dword[ebp+20]
+	movups xmm0, [eax]
+	movups xmm1, [ecx]
+	movups xmm2, [edx]
+	
+	subps xmm1, xmm0
+	vfmadd231ps xmm0, xmm1, xmm2
+	mov eax, dword[ebp+8]
+	movups [eax], xmm0
 	
 	mov esp, ebp
 	pop ebp

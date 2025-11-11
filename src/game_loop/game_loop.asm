@@ -373,6 +373,8 @@ section .text use32
 	
 	extern perlin3d_init
 	extern perlin3d_sample
+	extern perlin4d_init
+	extern perlin4d_sample
 	
 	extern mat4_viewGlm
 	extern mat4_perspective
@@ -439,6 +441,7 @@ gameLoop_main:
 	
 	;init perlin noise
 	call perlin3d_init
+	call perlin4d_init
 	
 	;init physics
 	call physics4d_init

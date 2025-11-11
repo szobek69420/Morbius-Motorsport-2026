@@ -29,6 +29,7 @@ section .rodata use32
 	
 	print_two_ints_nl db "%d %d",10,0
 	print_three_ints_nl db "%d %d %d",10,0
+	print_four_ints_nl db "%d %d %d %d",10,0
 	print_eight_ints_nl db "%d %d %d %d %d %d %d %d",10,0
 	print_float_nl db "%f",10,0
 	print_two_floats_nl db "%f %f",10,0
@@ -50,7 +51,7 @@ section .bss use32
 	
 	;x,y,z,w order
 	;234256=sizeof(vec4)*PERLIN4D_VECTOR_GRID_WIDTH_TESSERACTED
-	PERLIN3D_VECTOR_GRID resb 234256
+	PERLIN4D_VECTOR_GRID resb 234256
 	
 section .data use32
 	PERLIN3D_INITIALIZED dd 0
@@ -70,7 +71,10 @@ section .text use32
 	extern vec3_print
 	extern vec4_dot
 	extern vec4_smoothstep1
+	extern vec4_normalize
+	extern vec4_print
 	extern math_lerp
+	extern math_repeat
 	extern math_smoothstep1
 	
 perlin3d_init:
@@ -374,7 +378,7 @@ perlin4d_init:
 	shufps xmm0, xmm0, 0b00000000
 	mov ebx, 69420			;random seed in ebx
 	mov esi, PERLIN4D_VECTOR_GRID
-	mov edi, dword[PERLIN4D_VECTOR_GRID_WIDTH_CUBED]
+	mov edi, dword[PERLIN4D_VECTOR_GRID_WIDTH_TESSERACTED]
 	perlin4d_init_generate_loop_start:
 		;generate and scale random values
 		imul ebx, 1103515245 
@@ -400,7 +404,7 @@ perlin4d_init:
 		cvtpi2ps xmm1, qword[ebp-16]
 		movq qword[ebp-16], xmm1
 		cvtpi2ps xmm2, qword[ebp-8]
-		movq dword[ebp-8], xmm2
+		movq qword[ebp-8], xmm2
 		
 		movss xmm0, dword[PERLIN4D_SCALER]
 		shufps xmm0, xmm0, 0b00000000
@@ -587,7 +591,7 @@ perlin4d_sample:
 	
 	movss xmm0, dword[PERLIN4D_INTERPOLATOR_SCALER]
 	shufps xmm0, xmm0, 0b00000000
-	movups xmm1, [ebp+20]
+	movups xmm1, [ebp-16]
 	mulps xmm1, xmm0			;(input mod 1)*scaler
 	
 	movaps xmm0, xmm1
@@ -724,7 +728,62 @@ perlin4d_sample:
 		inc ebx
 		cmp ebx, 2
 		jl perlin4d_sample_value_x_loop_start
+		
+	;smoothstep the interpolators
+	lea eax, [ebp-48]
+	push eax
+	call vec4_smoothstep1
 	
+	;interpolate along the x axis
+	movss xmm0, dword[ebp-48]
+	shufps xmm0, xmm0, 0b00000000
+	
+	movups xmm1, [ebp-112]
+	movups xmm2, [ebp-80]
+	subps xmm2, xmm1
+	vfmadd213ps xmm2, xmm0, xmm1
+	movups [ebp-112], xmm2
+	
+	movups xmm1, [ebp-96]
+	movups xmm2, [ebp-64]
+	subps xmm2, xmm1
+	vfmadd213ps xmm2, xmm0, xmm1
+	movups [ebp-96], xmm2
+	
+	;interpolate along the y axis
+	movss xmm0, dword[ebp-44]
+	shufps xmm0, xmm0, 0b00000000
+	movups xmm1, [ebp-112]
+	movups xmm2, [ebp-96]
+	subps xmm2, xmm1
+	vfmadd213ps xmm2, xmm0, xmm1
+	movups [ebp-112], xmm2
+	
+	;interpolate along the z axis
+	movss xmm0, dword[ebp-40]
+	
+	movss xmm1, dword[ebp-112]
+	movss xmm2, dword[ebp-104]
+	subss xmm2, xmm1
+	vfmadd213ss xmm2, xmm0, xmm1
+	movss dword[ebp-112], xmm2
+	
+	movss xmm1, dword[ebp-108]
+	movss xmm2, dword[ebp-100]
+	subss xmm2, xmm1
+	vfmadd213ss xmm2, xmm0, xmm1
+	movss dword[ebp-108], xmm2
+	
+	;interpolate along the w axis
+	movss xmm0, dword[ebp-36]
+	movss xmm1, dword[ebp-112]
+	movss xmm2, dword[ebp-108]
+	subss xmm2, xmm1
+	vfmadd213ss xmm2, xmm0, xmm1
+	movss dword[ebp-112], xmm2
+	
+	;push return value
+	fld dword[ebp-112]
 	
 	mov esp, ebp
 	pop ebx
