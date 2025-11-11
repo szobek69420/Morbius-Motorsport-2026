@@ -50,6 +50,11 @@ section .rodata use32
 	CHUNK_HEIGHT_MAP_SCALE1 dd 40.0
 	CHUNK_HEIGHT_MAP_BASE dd 80.0
 	
+	CHUNK_DENSITY_MAP_OCTAVE1_X dd 0.013
+	CHUNK_DENSITY_MAP_OCTAVE1_Y dd 0.01
+	CHUNK_DENSITY_MAP_OCTAVE1_Z dd 0.013
+	CHUNK_DENSITY_MAP_OCTAVE1_W dd 0.013
+	
 	AABB_SCALE dd 0.5, 0.5, 0.5, 0.5
 	
 	print_int_nl db "%d",10,0
@@ -60,6 +65,7 @@ section .rodata use32
 	
 	test_text db "stalinkin park",10,0
 	
+	HALF dd 0.5
 	ONE dd 1.0
 	THREE dd 3.0
 	
@@ -110,6 +116,7 @@ section .text use32
 	extern physics4d_unregisterColliderGroup
 	
 	extern perlin3d_sample
+	extern perlin4d_sample
 	
 chunk4d_vec4ToBlockPos:
 	push ebp
@@ -378,6 +385,12 @@ chunk4d_generate:
 		inc edi
 		cmp edi, dword[CHUNK_HEIGHT_PLUS_TWO]
 		jl chunk4d_generate_block_types_y_loop_start
+		
+	;carve caves
+	push dword[ebp-8]
+	push dword[ebp-4]
+	push dword[ebp-12]
+	;call chunk4d_carveCaves
 		
 	;generate trees (only if it's the first generation)
 	cmp dword[ebp+36], 0
@@ -1185,6 +1198,137 @@ chunk4d_generateHeightMap:
 		jnz chunk4d_generateHeightMap_loop_x_start
 	
 	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+
+;void chunk4d_carveCaves(unsigned char* blocks, const ivec3* chunkPos, const unsigned char* heightMap)
+chunk4d_carveCaves:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 16			;start noise coords				16
+	sub esp, 16			;current noise coords			32
+	sub esp, 4			;current height map element		36
+	sub esp, 4			;helper							40
+	
+	;calculate the start noise coords
+	mov eax, dword[ebp+24]
+	
+	mov ebx, dword[eax]
+	cvtsi2ss xmm0, ebx
+	mulss xmm0, dword[CHUNK_DENSITY_MAP_OCTAVE1_X]
+	movss dword[ebp-16], xmm0
+	
+	mov dword[ebp-12], 0
+	
+	mov ecx, dword[eax+4]
+	cvtsi2ss xmm1, ecx
+	mulss xmm1, dword[CHUNK_DENSITY_MAP_OCTAVE1_Z]
+	movss dword[ebp-8], xmm1
+	
+	mov edx, dword[eax+8]
+	cvtsi2ss xmm2, edx
+	mulss xmm2, dword[CHUNK_DENSITY_MAP_OCTAVE1_W]
+	movss dword[ebp-4], xmm2
+	
+	;carve caves
+	mov ebx, dword[ebp+20]			;current block in ebx
+	
+	mov eax, dword[ebp-12]
+	mov dword[ebp-28], eax			;set noise coord y
+	xor esi, esi					;y index in esi
+	chunk4d_carveCaves_y_loop_start:
+		;reset current heightmap element
+		mov eax, dword[ebp+28]
+		mov dword[ebp-36], eax
+		
+		push esi
+		mov eax, dword[ebp-16]
+		mov dword[ebp-32], eax						;set noise coord x
+		mov esi, dword[CHUNK_HEIGHT_MAP_WIDTH]	;x index in esi
+		chunk4d_carveCaves_x_loop_start:
+			push esi
+			mov eax, dword[ebp-8]
+			mov dword[ebp-24], eax						;set noise coord z
+			mov esi, dword[CHUNK_HEIGHT_MAP_WIDTH]		;z index in esi
+			chunk4d_carveCaves_z_loop_start:
+				push esi
+				mov eax, dword[ebp-4]
+				mov dword[ebp-20], eax						;set noise coord w
+				mov esi, dword[CHUNK_HEIGHT_MAP_WIDTH]		;w index in esi
+				chunk4d_carveCaves_w_loop_start:
+					;calculate density
+					sub esp, 16
+					mov eax, dword[ebp-32]
+					mov ecx, dword[ebp-28]
+					mov edx, dword[ebp-24]
+					mov edi, dword[ebp-20]
+					mov dword[esp], eax
+					mov dword[esp+4], ecx
+					mov dword[esp+8], edx
+					mov dword[esp+12], edi
+					call perlin4d_sample
+					add esp, 16
+					fstp dword[ebp-40]
+					movss xmm0, dword[ebp-40]
+					
+					mov eax, dword[ebp-36]
+					cmp bl, byte[eax]
+					jle chunk4d_carveCaves_w_loop_below_heightmap
+						;decrease density if the block is above the heightmap
+						subss xmm0, dword[HALF]
+					chunk4d_carveCaves_w_loop_below_heightmap:
+					movss dword[ebp-40], xmm0
+					
+					test dword[ebp-40], 0x80000000
+					jz chunk4d_carveCaves_w_loop_no_demolition
+						mov cl, byte[BLOCK_AIR]
+						mov byte[ebx], cl
+					chunk4d_carveCaves_w_loop_no_demolition:
+				
+					inc ebx				;step block
+					inc dword[ebp-36]	;step current height map element
+				
+					movss xmm3, dword[ebp-20]
+					addss xmm3, dword[CHUNK_DENSITY_MAP_OCTAVE1_W]
+					movss dword[ebp-20], xmm3
+					
+					dec esi
+					jnz chunk4d_carveCaves_w_loop_start
+				
+				pop esi
+				movss xmm2, dword[ebp-24]
+				addss xmm2, dword[CHUNK_DENSITY_MAP_OCTAVE1_Z]
+				movss dword[ebp-24], xmm2
+				
+				dec esi
+				jnz chunk4d_carveCaves_z_loop_start
+			
+			pop esi
+			movss xmm1, dword[ebp-32]
+			addss xmm1, dword[CHUNK_DENSITY_MAP_OCTAVE1_X]
+			movss dword[ebp-32], xmm1
+			
+			dec esi
+			jnz chunk4d_carveCaves_x_loop_start
+		
+		pop esi
+		movss xmm0, dword[ebp-28]
+		addss xmm0, dword[CHUNK_DENSITY_MAP_OCTAVE1_Y]
+		movss dword[ebp-28], xmm0
+		
+		inc esi
+		cmp esi, dword[CHUNK_HEIGHT_PLUS_TWO]
+		jl chunk4d_carveCaves_y_loop_start
+	
+	mov esp, ebp
+	pop ebx
 	pop edi
 	pop esi
 	pop ebp

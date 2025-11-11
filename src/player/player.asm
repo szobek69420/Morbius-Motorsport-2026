@@ -1155,6 +1155,8 @@ player_breakBlock:
 	add esp, 20
 	
 	;play the sound
+	push 0
+	push 1
 	push block_break_sound_path
 	call sigmaudio_play
 	
@@ -1289,6 +1291,8 @@ player_placeBlock:
 	add esp, 20
 	
 	;play the sound
+	push 0
+	push 1
 	push block_place_sound_path
 	call sigmaudio_play
 	
