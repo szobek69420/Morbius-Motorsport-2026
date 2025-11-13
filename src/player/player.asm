@@ -14,7 +14,8 @@
 ;	int lastRaycastDirection		60	//it's for example AABB_POS_X
 ;	Renderable* debugNormal			64
 ;	GLuint debugNormalShader		68
-;}		72 bytes
+;	float hyperPlaneRotationLeft	72	//the remaining rotation in angles that needs to be completed
+;}		76 bytes
 
 section .rodata use32
 	ZERO dd 0.0
@@ -49,6 +50,9 @@ section .rodata use32
 	HYPERPLANE_ROTATION_VECTOR_1 dd 0.466323, 0.0, 0.768061, 0.438892
 	HYPERPLANE_ROTATION_VECTOR_2 dd 0.5833265, 0.0, -0.639972, 0.5001663
 	HYPERPLANE_ROTATION_ANGLE dd 2.0
+	
+	HYPERPLANE_MIN_ROTATION_ANGLE dd 0.05
+	HYPERPLANE_ROTATION_ANGLE_INTERPOLATOR dd 0.1
 	
 	RAYCAST_MAX_DISTANCE dd 5.0
 	
@@ -97,6 +101,7 @@ section .rodata use32
 	
 	print_int_nl db "%d",10,0
 	print_four_ints_nl db "%d %d %d %d",10,0
+	print_float_nl db "%f",10,0
 	print_two_floats db "%f %f",10,0
 	test_text db "big chungus",10,0
 	
@@ -121,6 +126,7 @@ section .text use32
 	extern math_clamp
 	extern math_repeat
 	extern math_basedLerp
+	extern math_lerp
 	
 	extern vec3_normalize
 	extern vec3_scale
@@ -221,7 +227,7 @@ player_init:
 	
 	sub esp, 4		;player*
 	
-	push 72
+	push 76
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
@@ -309,6 +315,10 @@ player_init:
 	mov dword[eax+56], 0
 	mov dword[eax+60], 0
 	
+	;init hyperplane rotation vector
+	mov eax, dword[ebp-4]
+	mov dword[eax+72], 0
+	
 	;import sounds
 	push block_break_sound_path
 	call sigmaudio_import
@@ -374,9 +384,10 @@ player_update:
 	add esp, 4
 	
 	;check for hyperplane rotation
+	push dword[ebp+12]
 	push dword[ebp+8]
 	call player_rotatePlane
-	add esp, 4
+	add esp, 8
 	
 	;process mouse movement
 	push dword[ebp+12]
@@ -938,7 +949,7 @@ player_look:		;void player_look(player* pplayer, float deltaTime)
 	
 	
 	
-;void player_rotatePlane(Player* player)
+;void player_rotatePlane(Player* player, float deltaTime)
 player_rotatePlane:
 	push ebp
 	mov ebp, esp
@@ -960,13 +971,46 @@ player_rotatePlane:
 	
 	;is the delta scroll 0?
 	cmp dword[ebp-8], 0
-	je player_rotatePlane_end
+	je player_rotatePlane_rotate_plane
 	
-	;calculate rotation angle
+	;calculate the delta rotation
 	fild dword[ebp-8]
 	fld dword[HYPERPLANE_ROTATION_ANGLE]
 	fmulp
 	fstp dword[ebp-12]
+	
+	;update the remaining rotation
+	mov eax, dword[ebp+8]
+	movss xmm0, dword[eax+72]
+	addss xmm0, dword[ebp-12]
+	movss dword[eax+72], xmm0
+	
+	;check if the remaining rotation is significant enough
+	player_rotatePlane_rotate_plane:
+	mov eax, dword[ebp+8]
+	mov ecx, dword[eax+72]
+	and ecx, 0x7fffffff
+	cmp ecx, dword[HYPERPLANE_MIN_ROTATION_ANGLE]
+	jb player_rotatePlane_end
+	
+	;calculate the rotation that needs to be done in this frame
+	;also update the remaining rotation
+	mov eax, dword[ebp+8]
+	
+	mov edx, dword[eax+72]
+	mov dword[ebp-12], edx		;reuse this variable
+	
+	push dword[ebp+12]
+	push dword[HYPERPLANE_ROTATION_ANGLE_INTERPOLATOR]
+	push 0
+	push dword[eax+72]
+	call math_lerp
+	mov eax, dword[ebp+8]
+	fstp dword[eax+72]
+	movss xmm0, dword[eax+72]
+	subss xmm0, dword[ebp-12]
+	movss dword[ebp-12], xmm0
+	
 	
 	;update the hyperplane point
 	;the hyperplane's new center is the players position in 4d, which is the players movement since the last rotation event
@@ -1008,7 +1052,6 @@ player_rotatePlane:
 	mov dword[ecx+4], edx
 	mov edx, dword[eax+8]
 	mov dword[ecx+8], edx
-	
 	
 	;rotate plane
 	push dword[ebp-12]
