@@ -38,7 +38,7 @@ geometryImporter_import:
 	sub esp, 4		;vertex count		12
 	sub esp, 16		;vertex vector		28
 	sub esp, 20		;vertex buffer		48
-	sub esp, 16		;index vector		64
+	sub esp, 16		;index vector		64 (unused)
 	
 	mov dword[ebp-4], 0
 	mov dword[ebp-12], -1
@@ -73,19 +73,13 @@ geometryImporter_import:
 	cmp dword[ebp-12], 0
 	jle geometryImporter_import_close_file		;-1 also counts obv
 	
-	;create vertex and index vector
+	;create vertex vector
 	push 4
 	lea eax, [ebp-28]
 	push eax
 	call vector_init
 	
-	push 4
-	lea eax, [ebp-64]
-	push eax
-	call vector_init
-	
 	;read vertex data
-	mov ebx, 0						;index vector helper in ebx
 	mov esi, dword[ebp-12]			;index in esi
 	lea eax, [ebp-32]
 	push eax
@@ -125,13 +119,6 @@ geometryImporter_import:
 		
 		add esp, 8
 		
-		push ebx
-		lea eax, [ebp-64]
-		push eax
-		call vector_push_back
-		add esp, 8
-		
-		inc ebx
 		dec esi
 		jnz geometryImporter_import_read_loop_start
 		
@@ -140,19 +127,14 @@ geometryImporter_import:
 	push 2		;uv
 	push 3		;pos
 	push 2
-	lea ecx, [ebp-64]
-	push ecx
+	push 0
 	lea eax, [ebp-28]
 	push eax
 	call renderable_createCustom
 	mov dword[ebp-4], eax
 	
-	;destroy vertex and index vector
+	;destroy vertex vector
 	lea eax, [ebp-28]
-	push eax
-	call vector_destroy
-	
-	lea eax, [ebp-64]
 	push eax
 	call vector_destroy
 	

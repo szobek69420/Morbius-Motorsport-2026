@@ -366,6 +366,10 @@ section .text use32
 	
 	extern sky_getColour
 	
+	extern inventoryAtlas_init
+	extern inventoryAtlas_deinit
+	extern inventoryAtlas_render
+	
 	extern hand_init
 	extern hand_deinit
 	extern hand_render
@@ -489,7 +493,8 @@ gameLoop_main:
 	;init sun
 	call sun_init
 	
-	;init hand
+	;init inventory things
+	call inventoryAtlas_init
 	call hand_init
 	
 	;init memory usage diagram

@@ -10,7 +10,9 @@
 ;	float colourA;				208
 ;	float cornerRadius			212
 ;	int shouldDeleteTexture;	216
-;}	220 bytes
+;	vec2 uvBottomLeft;			220
+;	vec2 uvTopRight;			228
+;}	236 bytes
 
 section .rodata use32
 	vertex_vector:
@@ -46,6 +48,7 @@ section .rodata use32
 	uniform_name_colour db "colour",0
 	uniform_name_position db "position",0
 	uniform_name_scale db "scale",0
+	uniform_name_texBounds db "texBounds",0
 	uniform_name_cornerRadius db "cornerRadius",0
 	
 	ONE dd 1.0
@@ -73,8 +76,10 @@ section .text use32
 	;a texture set this way won't get automatically deleted
 	;UIImage* uiImage_setTexture(UIImage* image, GLuint texture)
 	global uiImage_setTextureGL
-	global uiImage_setColour	;void uiImage_setColour(UIImage* image, float r, float g, float b, float a)
+	global uiImage_setColour		;void uiImage_setColour(UIImage* image, float r, float g, float b, float a)
 	global uiImage_setCornerRadius	;void uiImage_setCornerRadius(UIImage* image, float cornerRadius)
+	
+	global uiImage_setUV			;void uiImage_setUV(UIImage* image, vec2 uvBottomLeft, vec2 uvTopRight)
 	
 	extern uiElement_initGeneralPart
 	
@@ -206,7 +211,7 @@ uiImage_create:
 	sub esp, 4			;image		4
 	
 	;alloc space
-	push 220
+	push 236
 	call my_malloc
 	mov dword[ebp-4], eax
 	
@@ -235,6 +240,13 @@ uiImage_create:
 	push 0
 	push dword[ebp-4]
 	call uiImage_setCornerRadius
+	
+	mov eax, dword[ebp-4]
+	mov ecx, dword[ONE]
+	mov dword[eax+220], 0
+	mov dword[eax+224], 0
+	mov dword[eax+228], ecx
+	mov dword[eax+232], ecx
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -327,6 +339,23 @@ uiImage_setCornerRadius:
 	ret
 	
 	
+uiImage_setUV:
+	push esi
+	push edi
+	
+	lea esi, [esp+16]
+	mov edi, dword[esp+12]
+	add edi, 220
+	movsd
+	movsd
+	movsd
+	movsd
+	
+	pop edi
+	pop esi
+	ret
+	
+	
 ;internal functions	-------------------------------
 
 ;doesn't deallocate the memory region
@@ -392,6 +421,15 @@ uiImage_render:
 	push uniform_name_cornerRadius
 	push dword[shader]
 	call renderable_setUniform
+	
+	mov eax, dword[ebp+8]
+	lea eax, [eax+220]
+	push eax
+	push 1
+	push dword[RENDERABLE_UNIFORM_VEC4_ARRAY]
+	push uniform_name_texBounds
+	push dword[shader]
+	call renderable_setUniform				;texture bounds
 	
 	;set texture
 	mov eax, dword[ebp+8]

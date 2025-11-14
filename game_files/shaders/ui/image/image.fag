@@ -7,6 +7,7 @@ layout (location=0) out vec4 fragmentColour;
 uniform vec2 position;
 uniform vec2 scale;
 uniform vec4 colour;
+uniform vec4 texBounds;
 layout (binding=2) uniform sampler2D tex;
 
 uniform float cornerRadius=15.0;
@@ -30,7 +31,7 @@ void main()
 	if(pos.x>lowerRight.x && pos.y<lowerRight.y && sqrDistance(pos, lowerRight)>cornerRadiusSqr)
 		discard;
 
-	fragmentColour=colour*texture(tex, uv);
+	fragmentColour=colour*texture(tex, texBounds.xy+uv*texBounds.zw);
 	if(fragmentColour.a<0.01)
 		discard;
 }

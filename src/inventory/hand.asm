@@ -7,14 +7,14 @@
 
 section .rodata use32
 	;shaders for the hypercube
-	vertex_shader_path db "shaders/hand/hand.vag",0
-	geometry_shader_path db "shaders/hand/hand.gag",0
-	fragment_shader_path db "shaders/hand/hand.fag",0
+	vertex_shader_path db "shaders/inventory/hand.vag",0
+	geometry_shader_path db "shaders/inventory/hypercube.gag",0
+	fragment_shader_path db "shaders/inventory/hand.fag",0
 	
 	;shaders for the 3d arm
-	arm_vs_path db "shaders/hand/arm.vag",0
-	arm_gs_path db "shaders/hand/arm.gag",0
-	arm_fs_path db "shaders/hand/arm.fag",0
+	arm_vs_path db "shaders/inventory/arm.vag",0
+	arm_gs_path db "shaders/inventory/arm.gag",0
+	arm_fs_path db "shaders/inventory/arm.fag",0
 	arm_model_path db "models/hand.geometry",0
 	
 	WORLD_UP dd 0.0, 1.0, 0.0
@@ -32,7 +32,7 @@ section .rodata use32
 	uniform_name_uvZ db "uv_z",0
 	uniform_name_viewMat db "view_mat",0
 	uniform_name_normalMat db "normal_mat",0
-	uniform_name_handOffset db "hand_offset",0
+	uniform_name_handOffset db "offset",0
 	uniform_name_armOffset db "arm_offset",0
 	
 	TIME_CONVERTER dd 0.001

@@ -1,0 +1,12 @@
+#version 460 core
+in vec2 uv;
+in vec3 viewSpace_normal;
+
+out vec3 fragUV;
+
+const vec3 sunDirection = vec3(0.42679, 0.853579, 0.298753);
+
+void main()
+{
+	fragUV=vec3(uv, 0.2+0.8*max(0, dot(sunDirection, viewSpace_normal))); //z coordinate is the albedo intensity
+}
