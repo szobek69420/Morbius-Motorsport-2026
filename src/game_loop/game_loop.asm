@@ -772,6 +772,12 @@ gameLoop_main:
 		call player_drawRaycastHypercube
 		add esp, 8
 		
+		;update the inventory atlas
+		;overrides bound framebuffer and viewport size, also disables depth test
+		mov eax, dword[chunk_manager_4d]
+		push dword[eax+204]
+		call inventoryAtlas_render
+		add esp, 4
 		
 		;set viewport
 		push dword[WINDOW_SIZE_Y]
@@ -888,8 +894,9 @@ gameLoop_main:
 	;deinit memory usage diagram
 	call memoryUsageDiagram_deinit
 	
-	;deinit hand
+	;deinit inventory stuff
 	call hand_deinit
+	call inventoryAtlas_deinit
 	
 	;deinit sun
 	call sun_deinit

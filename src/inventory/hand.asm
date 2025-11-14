@@ -91,7 +91,7 @@ section .text use32
 	global hand_init			;void hand_init()
 	global hand_deinit			;void hand_deinit()
 	
-	global hand_render			;void hand_render(GLuint blockTextureArray, const mat4* projection_mat)
+	global hand_render			;void hand_render(TextureArrayInfo* blockTextureArray, const mat4* projection_mat)
 	global hand_renderArm		;void hand_renderArm(const mat4* projection)
 	
 	dll_import kernel32.dll, GetTickCount

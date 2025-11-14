@@ -2,6 +2,9 @@
 
 section .rodata use32
 
+	test_text db "amogus among us",10,0
+	print_int_nl db "%d",10,0
+
 	INVENTORY_ATLAS_ROW_SLOTS dd 8
 	INVENTORY_ATLAS_COLUMN_SLOTS dd 8
 	INVENTORY_ATLAS_SLOT_SIZE dd 64
@@ -36,6 +39,7 @@ section .rodata use32
 	
 	uniform_name_viewMat db "view_mat",0
 	uniform_name_normalMat db "normal_mat",0
+	uniform_name_offset db "offset",0
 	
 	MINUS_ONE dd -1.0
 	ONE dd 1.0
@@ -43,6 +47,18 @@ section .rodata use32
 	VIEW_DIR dd 0.0, 0.0, -1.0
 	VIEW_POS dd 0.0, 0.0, 0.0
 	VIEW_UP dd 0.0, 1.0, 0.0
+	
+	HYPERCUBE_POSITION dd 0.6, 0.6, 0.6, 0.6
+	
+	INVENTORY_CONTENT_DEFAULT:
+	dd 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+	dd 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+	dd 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+	dd 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+	dd 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+	dd 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+	dd 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+	dd 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
 	
 section .data use32
 	initialized dd 0
@@ -76,12 +92,17 @@ section .data use32
 	dd 0.0, 0.0, 0.0
 	dd 0.0, 0.0, 0.0
 	
+section .bss use32
+	inventory_content resb 256			;slot_count*sizeof(float)
+	
 section .text use32
 
 	global inventoryAtlas_init			;void inventoryAtlas_init()
 	global inventoryAtlas_deinit		;void inventoryAtlas_deinit()
+	global inventoryAtlas_render		;void inventoryAtlas_render(TextureArrayInfo* blockTextures)
 	
 	extern my_printf
+	extern my_memcpy
 	
 	extern mat4_viewGlm
 	extern mat4_ortho
@@ -95,14 +116,27 @@ section .text use32
 	extern renderable_useShader
 	extern renderable_calculateNormalMatrix
 	extern renderable_setUniform
+	extern renderable_setExtraTexture2D
+	extern renderable_enableDepthTest
+	extern RENDERABLE_UNIFORM_VEC3
 	extern RENDERABLE_UNIFORM_MAT3
 	extern RENDERABLE_UNIFORM_MAT4
+	extern RENDERABLE_UNIFORM_FLOAT_ARRAY
+	extern glClear
+	extern glClearColor
+	extern glViewport
+	extern glGetError
+	extern GL_COLOR_BUFFER_BIT
 	
 	extern hyperCubeRenderable_create
 	extern hyperCubeRenderable_destroy
+	extern hyperCubeRenderable_render
+	
+	extern textureHandler_bindArray
 	
 	extern framebuffer_create
 	extern framebuffer_destroy
+	extern framebuffer_bind
 	extern framebuffer_colourAttachment
 	extern framebuffer_isComplete
 	extern FRAMEBUFFER_RGB
@@ -234,6 +268,15 @@ inventoryAtlas_init:
 	;init hyperplane
 	push hyperplane
 	call hyperPlane_create
+	
+	;init inventory
+	mov eax, dword[INVENTORY_ATLAS_ROW_SLOTS]
+	imul eax, dword[INVENTORY_ATLAS_COLUMN_SLOTS]
+	shl eax, 2
+	push eax
+	push INVENTORY_CONTENT_DEFAULT
+	push inventory_content
+	call my_memcpy
 
 	;set initialized flag
 	mov dword[initialized], 69
@@ -291,6 +334,101 @@ inventoryAtlas_render:
 	push ebp
 	mov ebp, esp
 	
+	push test_text
+	call my_printf
+	
+	call [glGetError]
+	push eax
+	push print_int_nl
+	call my_printf
+	
+	;geometry pass	---------------------------------------------
+	push dword[texcoord_framebuffer]
+	call framebuffer_bind
+	
+	push dword[INVENTORY_ATLAS_SLOT_SIZE]
+	push dword[INVENTORY_ATLAS_SLOT_SIZE]
+	push 0
+	push 0
+	call [glViewport]
+	
+	push 0
+	push 0
+	push 0
+	push 0
+	call [glClearColor]
+	
+	push dword[GL_COLOR_BUFFER_BIT]
+	call [glClear]
+	
+	push 0
+	call renderable_enableDepthTest
+	
+	push dword[geometry_pass_shader]
+	call renderable_useShader
+	
+	push 0
+	push 0
+	push 0
+	push dword[RENDERABLE_UNIFORM_VEC3]
+	push uniform_name_offset
+	push dword[geometry_pass_shader]
+	call renderable_setUniform
+	
+	call [glGetError]
+	push eax
+	push print_int_nl
+	call my_printf
+	
+	push dword[geometry_pass_shader]
+	push HYPERCUBE_POSITION
+	push hyperplane
+	push geometry_pass_pv_matrix
+	push dword[hypercube_renderable]
+	call hyperCubeRenderable_render
+	
+	call [glGetError]
+	push eax
+	push print_int_nl
+	call my_printf
+	
+	;shading pass	-------------------------------------
+	push dword[atlas_framebuffer]
+	call framebuffer_bind
+	
+	push dword[INVENTORY_ATLAS_HEIGHT]
+	push dword[INVENTORY_ATLAS_WIDTH]
+	push 0
+	push 0
+	call [glViewport]
+	
+	push dword[GL_COLOR_BUFFER_BIT]
+	call [glClear]
+	
+	mov eax, dword[texcoord_framebuffer]
+	push dword[eax+4]		;colour attachment 0
+	push 2
+	push dword[rectangle_renderable]
+	call renderable_setExtraTexture2D
+	
+	push 3
+	push dword[ebp+8]
+	call textureHandler_bindArray
+	
+	push dword[shading_pass_shader]
+	call renderable_useShader
+	
+	push inventory_content
+	push dword[RENDERABLE_UNIFORM_FLOAT_ARRAY]
+	push dword[shading_pass_shader]
+	push dword[rectangle_renderable]
+	call renderable_setUniform
+	
+	push 69
+	push dword[rectangle_renderable]
+	push geometry_pass_pv_matrix			;only as a placeholder
+	push dword[rectangle_renderable]
+	call renderable_renderCustom
 	
 	mov esp, ebp
 	pop ebp
