@@ -42,12 +42,17 @@ section .rodata use32
 	uniform_name_offset db "offset",0
 	uniform_name_blockUVZ db "blockUVZ",0
 	
-	MINUS_ONE dd -1.0
-	ONE dd 1.0
+	MINUS_ANDERTHALB dd -1.5
+	ANDERTHALB dd 1.5
 	
 	VIEW_DIR dd 0.0, 0.0, -1.0
 	VIEW_POS dd 0.0, 0.0, 0.0
 	VIEW_UP dd 0.0, 1.0, 0.0
+	
+	FOV dd 60.0
+	NEAR_CLIP dd 0.1
+	FAR_CLIP dd 10.0
+	ASPECT_XY dd 1.0
 	
 	HYPERCUBE_POSITION dd 0.6, 0.6, 0.6, 0.6
 	
@@ -103,11 +108,13 @@ section .text use32
 	global inventoryAtlas_render		;void inventoryAtlas_render(TextureArrayInfo* blockTextures)
 	
 	global inventoryAtlas_getAtlas		;GLuint inventoryAtlas_getAtlas()
+	global inventoryAtlas_setHyperplane	;void inventoryAtlas_setHyperplane(const Hyperplane* plane)
 	
 	extern my_printf
 	extern my_memcpy
 	
 	extern mat4_viewGlm
+	extern mat4_perspectiveGlm
 	extern mat4_ortho
 	extern mat4_mul
 	
@@ -120,6 +127,7 @@ section .text use32
 	extern renderable_calculateNormalMatrix
 	extern renderable_setUniform
 	extern renderable_setExtraTexture2D
+	extern renderable_setPrimitive
 	extern renderable_enableDepthTest
 	extern RENDERABLE_UNIFORM_VEC3
 	extern RENDERABLE_UNIFORM_MAT3
@@ -130,6 +138,7 @@ section .text use32
 	extern glViewport
 	extern glGetError
 	extern GL_COLOR_BUFFER_BIT
+	extern GL_TRIANGLES
 	
 	extern hyperCubeRenderable_create
 	extern hyperCubeRenderable_destroy
@@ -146,6 +155,7 @@ section .text use32
 	extern FRAMEBUFFER_RGBA
 	
 	extern hyperPlane_create
+	extern hyperPlane_positionTo3d
 	
 inventoryAtlas_init:
 	push ebp
@@ -168,12 +178,18 @@ inventoryAtlas_init:
 	push geometry_pass_view_matrix
 	call mat4_viewGlm
 	
-	push dword[ONE]
-	push dword[MINUS_ONE]
-	push dword[ONE]
-	push dword[MINUS_ONE]
-	push dword[ONE]
-	push dword[MINUS_ONE]
+	push dword[FAR_CLIP]
+	push dword[NEAR_CLIP]
+	push dword[ASPECT_XY]
+	push dword[FOV]
+	push geometry_pass_pv_matrix
+	call mat4_perspectiveGlm
+	push dword[ANDERTHALB]
+	push dword[MINUS_ANDERTHALB]
+	push dword[ANDERTHALB]
+	push dword[MINUS_ANDERTHALB]
+	push dword[ANDERTHALB]
+	push dword[MINUS_ANDERTHALB]
 	push geometry_pass_pv_matrix
 	call mat4_ortho
 	push geometry_pass_view_matrix
@@ -337,13 +353,6 @@ inventoryAtlas_render:
 	push ebp
 	mov ebp, esp
 	
-	push test_text
-	call my_printf
-	call [glGetError]
-	push eax
-	push print_int_nl
-	call my_printf
-	
 	;geometry pass	---------------------------------------------
 	push dword[texcoord_framebuffer]
 	call framebuffer_bind
@@ -369,18 +378,20 @@ inventoryAtlas_render:
 	push dword[geometry_pass_shader]
 	call renderable_useShader
 	
-	push 0
-	push 0
-	push 0
+	sub esp, 12
+	mov eax, esp
+	push eax
+	push HYPERCUBE_POSITION
+	push hyperplane
+	call hyperPlane_positionTo3d
+	add esp, 12
+	xor dword[esp+8], 0x80000000
+	xor dword[esp+4], 0x80000000
+	xor dword[esp], 0x80000000
 	push dword[RENDERABLE_UNIFORM_VEC3]
 	push uniform_name_offset
 	push dword[geometry_pass_shader]
 	call renderable_setUniform
-	
-	call [glGetError]
-	push eax
-	push print_int_nl
-	call my_printf
 	
 	push dword[geometry_pass_shader]
 	push HYPERCUBE_POSITION
@@ -388,11 +399,6 @@ inventoryAtlas_render:
 	push geometry_pass_pv_matrix
 	push dword[hypercube_renderable]
 	call hyperCubeRenderable_render
-	
-	call [glGetError]
-	push eax
-	push print_int_nl
-	call my_printf
 	
 	;shading pass	-------------------------------------
 	push dword[atlas_framebuffer]
@@ -429,8 +435,11 @@ inventoryAtlas_render:
 	push dword[shading_pass_shader]
 	call renderable_setUniform
 	
+	push dword[GL_TRIANGLES]
+	call renderable_setPrimitive			;set back the primitive to triangle
+	
 	push 69
-	push dword[rectangle_renderable]
+	push dword[shading_pass_shader]
 	push geometry_pass_pv_matrix			;only as a placeholder
 	push dword[rectangle_renderable]
 	call renderable_renderCustom
@@ -442,6 +451,15 @@ inventoryAtlas_render:
 	
 inventoryAtlas_getAtlas:
 	mov eax, dword[atlas_framebuffer]
-	mov eax, dword[texcoord_framebuffer]
 	mov eax, dword[eax+4]
+	ret
+	
+	
+inventoryAtlas_setHyperplane:
+	mov eax, [esp+4]
+	push 64
+	push eax
+	push hyperplane
+	call my_memcpy
+	add esp, 12
 	ret

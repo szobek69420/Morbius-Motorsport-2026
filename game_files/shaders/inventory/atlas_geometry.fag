@@ -4,7 +4,7 @@ in vec3 viewSpace_normal;
 
 out vec3 fragUV;
 
-const vec3 sunDirection = vec3(0.42679, 0.853579, 0.298753);
+const vec3 sunDirection = vec3(0.298753, 0.853579, 0.42679);
 
 void main()
 {

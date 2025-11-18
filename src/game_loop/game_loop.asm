@@ -184,8 +184,6 @@ section .data use32
 	TEXT_MOUSE_1 dd 0
 	TEXT_MOUSE_2 dd 0
 	TEXT_MOUSE_3 dd 0
-	
-	IMAGE_ATLAS dd 0
 
 section .text use32
 
@@ -779,14 +777,8 @@ gameLoop_main:
 		;overrides bound framebuffer and viewport size, also disables depth test
 		mov eax, dword[chunk_manager_4d]
 		push dword[eax+204]
-		;call inventoryAtlas_render
+		call inventoryAtlas_render
 		add esp, 4
-		
-		;call inventoryAtlas_getAtlas
-		push eax
-		push dword[IMAGE_ATLAS]
-		;call uiImage_setTextureGL
-		add esp, 8
 		
 		;set viewport
 		push dword[WINDOW_SIZE_Y]
@@ -1662,9 +1654,6 @@ gameLoop_initInfoCanvas:
 	
 	INIT_TEXT		TEXT_MOUSE_3, CANVAS_INFO, 10, 10, UI_CENTER, UI_BOTTOM
 	FINE_TUNE_TEXT	TEXT_MOUSE_3, print_mouse_text_3, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
-	
-	;atlas test
-	INIT_IMAGE IMAGE_ATLAS, CANVAS_INFO, 0, 0, 0, 300, 300, UI_CENTER, UI_CENTER, UI_CENTER, UI_CENTER
 	
 	mov esp, ebp
 	pop ebp

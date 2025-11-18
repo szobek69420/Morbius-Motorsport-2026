@@ -19,10 +19,10 @@ void main()
 	vec2 localUV=SLOT_COUNT*(uv-textureOffset);
 	
 	vec3 blockUV=texture(uvTexture, localUV).xyz;
-	//if(blockUV.z<0.01)
-	//	discard;
+	if(blockUV.z<0.01)
+		discard;
 		
 	float uvz=blockUVZ[SLOTS_PER_ROW*int(SLOT_COUNT.x*textureOffset.x)+int(SLOT_COUNT.y*textureOffset.y)];
 	
-	fragmentColour=blockUV.z*texture(blockTextures, vec3(blockUV.xy, uvz));
+	fragmentColour=vec4(blockUV.z*texture(blockTextures, vec3(blockUV.xy, uvz)).rgb, 1.0);
 }

@@ -152,6 +152,8 @@ section .text use32
 	extern camera_right
 	extern camera_view
 	
+	extern inventoryAtlas_setHyperplane
+	
 hand_init:
 	push ebp
 	mov ebp, esp
@@ -303,6 +305,10 @@ hand_render:
 	push ROTATION_PLANE_VEC_11
 	push hyperplane
 	call hyperPlane_rotate
+	
+	;also update the inventory hyperplane
+	push hyperplane
+	call inventoryAtlas_setHyperplane
 
 	;calculate the adjusted hand offset
 	lea eax, [ebp-76]

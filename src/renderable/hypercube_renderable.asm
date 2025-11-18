@@ -63,12 +63,12 @@ section .text use32
 	extern renderable_destroyShader
 	extern renderable_useShader
 	extern renderable_setUniform
+	extern renderable_setPrimitive
 	extern RENDERABLE_UNIFORM_VEC4
 	extern glGetError
+	extern GL_POINTS
 	
 	extern hyperPlane_getNormal
-	
-	extern glGetError
 	
 hyperCubeRenderable_create:
 	push ebp
@@ -229,6 +229,10 @@ hyperCubeRenderable_render:
 	push dword[ebp-20]
 	call renderable_setUniform
 	add esp, 28
+	
+	;set primitive
+	push dword[GL_POINTS]
+	call renderable_setPrimitive
 	
 	;render
 	push 69
