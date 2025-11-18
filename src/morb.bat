@@ -14,6 +14,7 @@ mkdir build
 %COMMAND% -fobj game_loop/settings_loop.asm -o build/settings_loop.o
 %COMMAND% -fobj game_loop/menu_loop.asm -o build/menu_loop.o
 %COMMAND% -fobj game_loop/game_loop.asm -o build/game_loop.o
+%COMMAND% -fobj inventory/inventory_ui.asm -o build/inventory_ui.o
 %COMMAND% -fobj inventory/inventory_atlas.asm -o build/inventory_atlas.o
 %COMMAND% -fobj inventory/hand.asm -o build/hand.o
 %COMMAND% -fobj sun/sun.asm -o build/sun.o
@@ -34,6 +35,7 @@ mkdir build
 %COMMAND% -fobj ui/ui_text.asm -o build/ui_text.o
 %COMMAND% -fobj ui/ui_image.asm -o build/ui_image.o
 %COMMAND% -fobj ui/ui_canvas.asm -o build/ui_canvas.o
+%COMMAND% -fobj ui/ui_empty.asm -o build/ui_empty.o
 %COMMAND% -fobj ui/ui_element.asm -o build/ui_element.o
 %COMMAND% -fobj physics/physics4D.asm -o build/physics4D.o
 %COMMAND% -fobj physics/collider_group_4D.asm -o build/collider_group_4D.o
@@ -79,6 +81,7 @@ build/window.o ^
 build/settings.o ^
 build/sun.o ^
 build/sky.o ^
+build/inventory_ui.o ^
 build/inventory_atlas.o ^
 build/hand.o ^
 build/player.o ^
@@ -109,6 +112,7 @@ build/ui_button.o ^
 build/ui_text.o ^
 build/ui_image.o ^
 build/ui_canvas.o ^
+build/ui_empty.o ^
 build/ui_element.o ^
 build/physics4D.o ^
 build/collider_group_4D.o ^

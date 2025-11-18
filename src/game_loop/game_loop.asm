@@ -184,6 +184,8 @@ section .data use32
 	TEXT_MOUSE_1 dd 0
 	TEXT_MOUSE_2 dd 0
 	TEXT_MOUSE_3 dd 0
+	
+	INVENTORY_UI dd 0
 
 section .text use32
 
@@ -369,7 +371,10 @@ section .text use32
 	extern inventoryAtlas_init
 	extern inventoryAtlas_deinit
 	extern inventoryAtlas_render
+	extern inventoryAtlas_processInput
 	extern inventoryAtlas_getAtlas
+	extern inventoryUi_create
+	extern inventoryUI_update
 	
 	extern hand_init
 	extern hand_deinit
@@ -775,6 +780,7 @@ gameLoop_main:
 		
 		;update the inventory atlas
 		;overrides bound framebuffer and viewport size, also disables depth test
+		call inventoryAtlas_processInput
 		mov eax, dword[chunk_manager_4d]
 		push dword[eax+204]
 		call inventoryAtlas_render
@@ -1632,28 +1638,38 @@ gameLoop_initInfoCanvas:
 	gameLoop_initInfoCanvas_no_version:
 	
 	;controls
-	INIT_IMAGE IMAGE_KEYBOARD, CANVAS_INFO, keyboard_image_path, -10, 65, 50, 50, UI_CENTER, UI_BOTTOM, UI_RIGHT, UI_BOTTOM
+	INIT_IMAGE IMAGE_KEYBOARD, CANVAS_INFO, keyboard_image_path, -10, 65, 50, 50, UI_CENTER, UI_TOP, UI_RIGHT, UI_TOP
 	
-	INIT_TEXT		TEXT_KEYBOARD_1, CANVAS_INFO, -10, 50, UI_CENTER, UI_BOTTOM
-	FINE_TUNE_TEXT	TEXT_KEYBOARD_1, print_keyboard_text_1, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	INIT_TEXT		TEXT_KEYBOARD_1, CANVAS_INFO, -10, 50, UI_CENTER, UI_TOP
+	FINE_TUNE_TEXT	TEXT_KEYBOARD_1, print_keyboard_text_1, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
 	
-	INIT_TEXT		TEXT_KEYBOARD_2, CANVAS_INFO, -10, 30, UI_CENTER, UI_BOTTOM
-	FINE_TUNE_TEXT	TEXT_KEYBOARD_2, print_keyboard_text_2, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	INIT_TEXT		TEXT_KEYBOARD_2, CANVAS_INFO, -10, 30, UI_CENTER, UI_TOP
+	FINE_TUNE_TEXT	TEXT_KEYBOARD_2, print_keyboard_text_2, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
 	
-	INIT_TEXT		TEXT_KEYBOARD_3, CANVAS_INFO, -10, 10, UI_CENTER, UI_BOTTOM
-	FINE_TUNE_TEXT	TEXT_KEYBOARD_3, print_keyboard_text_3, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	INIT_TEXT		TEXT_KEYBOARD_3, CANVAS_INFO, -10, 10, UI_CENTER, UI_TOP
+	FINE_TUNE_TEXT	TEXT_KEYBOARD_3, print_keyboard_text_3, UI_TEXT_ALIGN_RIGHT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
 	
 	
-	INIT_IMAGE IMAGE_MOUSE, CANVAS_INFO, mouse_image_path, 0, 65, 50, 50, UI_CENTER, UI_BOTTOM, UI_LEFT, UI_BOTTOM
+	INIT_IMAGE IMAGE_MOUSE, CANVAS_INFO, mouse_image_path, 0, 65, 50, 50, UI_CENTER, UI_TOP, UI_LEFT, UI_TOP
 	
-	INIT_TEXT		TEXT_MOUSE_1, CANVAS_INFO, 10, 50, UI_CENTER, UI_BOTTOM
-	FINE_TUNE_TEXT	TEXT_MOUSE_1, print_mouse_text_1, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	INIT_TEXT		TEXT_MOUSE_1, CANVAS_INFO, 10, 50, UI_CENTER, UI_TOP
+	FINE_TUNE_TEXT	TEXT_MOUSE_1, print_mouse_text_1, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
 	
-	INIT_TEXT		TEXT_MOUSE_2, CANVAS_INFO, 10, 30, UI_CENTER, UI_BOTTOM
-	FINE_TUNE_TEXT	TEXT_MOUSE_2, print_mouse_text_2, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	INIT_TEXT		TEXT_MOUSE_2, CANVAS_INFO, 10, 30, UI_CENTER, UI_TOP
+	FINE_TUNE_TEXT	TEXT_MOUSE_2, print_mouse_text_2, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
 	
-	INIT_TEXT		TEXT_MOUSE_3, CANVAS_INFO, 10, 10, UI_CENTER, UI_BOTTOM
-	FINE_TUNE_TEXT	TEXT_MOUSE_3, print_mouse_text_3, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_BOTTOM, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	INIT_TEXT		TEXT_MOUSE_3, CANVAS_INFO, 10, 10, UI_CENTER, UI_TOP
+	FINE_TUNE_TEXT	TEXT_MOUSE_3, print_mouse_text_3, UI_TEXT_ALIGN_LEFT, UI_TEXT_ALIGN_TOP, 9, 12, dword[ONE], dword[ONE], dword[ONE], dword[ONE]
+	
+	
+	;create inventory
+	call inventoryUi_create
+	mov dword[INVENTORY_UI], eax
+	
+	push dword[CANVAS_INFO]
+	mov eax, dword[INVENTORY_UI]
+	push dword[eax]		;get root
+	call uiElement_setParent
 	
 	mov esp, ebp
 	pop ebp
@@ -1886,6 +1902,10 @@ gameLoop_updateInfoCanvas:
 	call my_sprintf
 	add esp, 12
 	SET_TEXT TEXT_PENDING_CHUNK_RELOADS
+	
+	;inventory ui
+	push dword[INVENTORY_UI]
+	call inventoryUI_update
 	
 	mov esp, ebp
 	pop ebp

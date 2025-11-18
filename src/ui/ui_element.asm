@@ -65,6 +65,7 @@ section .rodata use32
 	UI_TEXT		dd 2
 	UI_BUTTON	dd 3
 	UI_SLIDER	dd 4
+	UI_EMPTY	dd 5
 	UI_LAST:
 	
 	global UI_CANVAS
@@ -72,6 +73,7 @@ section .rodata use32
 	global UI_TEXT
 	global UI_BUTTON
 	global UI_SLIDER
+	global UI_EMPTY
 	
 	;input type masks
 	UI_MOUSE_PRESSED equ 0b0001
@@ -214,6 +216,10 @@ section .text use32
 	
 	extern uiSlider_create
 	
+	extern uiEmpty_init
+	extern uiEmpty_deinit
+	extern uiEmpty_create
+	
 uiElement_init:
 	push ebp
 	mov ebp, esp
@@ -235,6 +241,7 @@ uiElement_init:
 	call uiCanvas_init
 	call uiImage_init
 	call uiText_init
+	call uiEmpty_init
 	
 	;set initialized flag
 	mov dword[initialized], 69
@@ -275,6 +282,7 @@ uiElement_deinit:
 	call uiCanvas_deinit
 	call uiImage_deinit
 	call uiText_deinit
+	call uiEmpty_deinit
 	
 	mov esp, ebp
 	pop ebp
@@ -467,6 +475,7 @@ uiElement_create:
 	dd uiText_create
 	dd uiButton_create
 	dd uiSlider_create
+	dd uiEmpty_create
 	uiElement_create_done:
 	
 	;was the element actually created?

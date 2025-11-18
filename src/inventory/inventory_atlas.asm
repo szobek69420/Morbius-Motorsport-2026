@@ -11,6 +11,11 @@ section .rodata use32
 	INVENTORY_ATLAS_WIDTH dd 512
 	INVENTORY_ATLAS_HEIGHT dd 512
 	
+	INVENTORY_HOTBAR_SIZE dd 5
+	
+	global INVENTORY_HOTBAR_SIZE
+	global INVENTORY_ATLAS_ROW_SLOTS
+	
 	rectangle_vertex_vector:
 	dd 16
 	dd 16
@@ -100,15 +105,21 @@ section .data use32
 	
 section .bss use32
 	inventory_content resb 256			;slot_count*sizeof(float)
+	selected_hotbar_slot resb 0
 	
 section .text use32
 
 	global inventoryAtlas_init			;void inventoryAtlas_init()
 	global inventoryAtlas_deinit		;void inventoryAtlas_deinit()
 	global inventoryAtlas_render		;void inventoryAtlas_render(TextureArrayInfo* blockTextures)
+	global inventoryAtlas_processInput	;void inventoryAtlas_processInput()
 	
 	global inventoryAtlas_getAtlas		;GLuint inventoryAtlas_getAtlas()
 	global inventoryAtlas_setHyperplane	;void inventoryAtlas_setHyperplane(const Hyperplane* plane)
+	
+	global inventoryAtlas_getHotbarContent	;float[INVENTORY_HOTBAR_SIZE] inventoryAtlas_getHotbarContent()
+	global inventoryAtlas_getInventoryContent	;float[INVENTORY_ATLAS_ROW_SLOTS*(INVENTORY_ATLAS_COLUMN_SLOTS-1)] inventoryAtlas_getInventoryContent()
+	global inventoryAtlas_getSelectedHotbarSlot	;int inventoryAtlas_getSelectedHotbarSlot()
 	
 	extern my_printf
 	extern my_memcpy
@@ -156,6 +167,9 @@ section .text use32
 	
 	extern hyperPlane_create
 	extern hyperPlane_positionTo3d
+	
+	extern input_keyPressed
+	extern GLFW_KEY_1
 	
 inventoryAtlas_init:
 	push ebp
@@ -296,6 +310,8 @@ inventoryAtlas_init:
 	push INVENTORY_CONTENT_DEFAULT
 	push inventory_content
 	call my_memcpy
+	
+	mov dword[selected_hotbar_slot], 0
 
 	;set initialized flag
 	mov dword[initialized], 69
@@ -448,6 +464,41 @@ inventoryAtlas_render:
 	pop ebp
 	ret
 	
+inventoryAtlas_processInput:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	;get the current hotbar slot
+	call inventoryAtlas_getSelectedHotbarSlot
+	mov ebx, eax							;selected slot
+	xor esi, esi							;index
+	mov edi, dword[GLFW_KEY_1]				;currently tested key
+	inventoryAtlas_processInput_hotbar_loop_start:
+		push edi
+		call input_keyPressed
+		add esp, 4
+		test eax, eax
+		jz inventoryAtlas_processInput_hotbar_loop_continue
+			;pressed
+			mov ebx, esi
+		inventoryAtlas_processInput_hotbar_loop_continue:
+		inc edi
+		inc esi
+		cmp esi, dword[INVENTORY_HOTBAR_SIZE]
+		jl inventoryAtlas_processInput_hotbar_loop_start
+		
+	mov dword[selected_hotbar_slot], ebx
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
 	
 inventoryAtlas_getAtlas:
 	mov eax, dword[atlas_framebuffer]
@@ -462,4 +513,17 @@ inventoryAtlas_setHyperplane:
 	push hyperplane
 	call my_memcpy
 	add esp, 12
+	ret
+	
+inventoryAtlas_getHotbarContent:	
+	mov eax, inventory_content
+	ret
+	
+inventoryAtlas_getInventoryContent:
+	mov eax, dword[INVENTORY_ATLAS_ROW_SLOTS]
+	lea eax, [inventory_content+4*eax]
+	ret
+	
+inventoryAtlas_getSelectedHotbarSlot:
+	mov eax, dword[selected_hotbar_slot]
 	ret

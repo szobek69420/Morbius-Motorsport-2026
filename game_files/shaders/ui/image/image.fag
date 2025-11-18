@@ -31,7 +31,7 @@ void main()
 	if(pos.x>lowerRight.x && pos.y<lowerRight.y && sqrDistance(pos, lowerRight)>cornerRadiusSqr)
 		discard;
 
-	fragmentColour=colour*texture(tex, texBounds.xy+uv*texBounds.zw);
+	fragmentColour=colour*texture(tex, texBounds.xy+uv*(texBounds.zw-texBounds.xy));
 	if(fragmentColour.a<0.01)
 		discard;
 }
