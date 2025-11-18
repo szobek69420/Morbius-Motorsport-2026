@@ -364,7 +364,7 @@ hand_render:
 	;bind block textures
 	push 0
 	push dword[ebp+20]
-	call textureHandler_bindArray
+	;call textureHandler_bindArray
 	
 	;enable depth test and set depth func
 	push 69

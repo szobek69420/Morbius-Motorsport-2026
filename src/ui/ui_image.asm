@@ -71,10 +71,10 @@ section .text use32
 	global uiImage_create		;UIImage* uiImage_create()
 	
 	;path==NULL means default texture
-	;UIImage* uiImage_setTexture(UIImage* image, const char* nullableTexturePath)
+	;Uvoid uiImage_setTexture(UIImage* image, const char* nullableTexturePath)
 	global uiImage_setTexture
 	;a texture set this way won't get automatically deleted
-	;UIImage* uiImage_setTexture(UIImage* image, GLuint texture)
+	;void uiImage_setTexture(UIImage* image, GLuint texture)
 	global uiImage_setTextureGL
 	global uiImage_setColour		;void uiImage_setColour(UIImage* image, float r, float g, float b, float a)
 	global uiImage_setCornerRadius	;void uiImage_setCornerRadius(UIImage* image, float cornerRadius)

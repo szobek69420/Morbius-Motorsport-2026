@@ -21,7 +21,7 @@ section .bss use32
 	icon_buffer resb 40000			;100px*100px*4channels
 
 section .text use32
-	global window_create			;GLFWwindow* window_create(const char* name)
+	global window_create			;GLFWwindow* window_create(const char* name, int debugMode)
 	global window_destroy			;void window_destroy(GLFWwindow* pwindow)
 	
 	global window_enableVsync		;void window_enableVsync(GLFWwindow* pwindow, int enable)
@@ -46,12 +46,17 @@ section .text use32
 	extern GLFW_CONTEXT_VERSION_MAJOR
 	extern GLFW_CONTEXT_VERSION_MINOR
 	extern GLFW_OPENGL_CORE_PROFILE
+	extern GLFW_OPENGL_DEBUG_CONTEXT
 	extern GLFW_OPENGL_PROFILE
 	extern GLFW_TRUE
 	extern GLFW_CENTER_CURSOR
 	
 	extern load_gl_functions
 	extern glViewport
+	extern glEnable
+	extern glDebugMessageCallback
+	extern GL_DEBUG_OUTPUT
+	extern GL_DEBUG_OUTPUT_SYNCHRONOUS
 	
 	extern my_printf
 	extern my_malloc
@@ -87,6 +92,13 @@ window_create:
 	push dword[GLFW_CENTER_CURSOR]
 	call [glfwWindowHint]
 	add esp, 8
+	
+	test dword[ebp+12], 0xffffffff
+	jz window_create_not_debug_1
+		push dword[GLFW_TRUE]
+		push dword[GLFW_OPENGL_DEBUG_CONTEXT]
+		call [glfwWindowHint]
+	window_create_not_debug_1:
 	
 	;create window
 	push 0
@@ -146,6 +158,18 @@ window_create:
 	push 0
 	push 0
 	call [glViewport]
+	
+	;do the debug things
+	test dword[ebp+12], 0xffffffff
+	jz window_create_not_debug_2
+		push dword[GL_DEBUG_OUTPUT]
+		call [glEnable]
+		push dword[GL_DEBUG_OUTPUT_SYNCHRONOUS]
+		call [glEnable]
+		push 0
+		push window_glErrorDebugCallback_internal
+		call [glDebugMessageCallback]
+	window_create_not_debug_2:
 	
 	
 	mov eax, dword[ebp-4]
@@ -294,3 +318,28 @@ window_setIcon:
 	pop esi
 	pop ebp
 	ret
+	
+;void window_glErrorDebugCallback_internal(
+;	GLenum source,
+;	GLenum type,
+;   GLuint id,
+;   GLenum severity,
+;   GLsizei length,
+;   const GLchar *message,
+;   const void *userParam);
+window_glErrorDebugCallback_internal:
+	push ebp
+	mov ebp, esp
+	
+	push dword[ebp+20]
+	push dword[ebp+16]
+	push dword[ebp+12]
+	push dword[ebp+8]
+	push dword[ebp+28]
+	push window_glErrorDebugCallback_internal_error_format
+	call my_printf
+	
+	mov esp, ebp
+	pop ebp
+	ret 28			;it needs to be stdcall
+	window_glErrorDebugCallback_internal_error_format db "[DEBUG] OpenGL error:",10,"    %s",10,"    source: %d, type: %d, id: %d, severity: %d",10,0

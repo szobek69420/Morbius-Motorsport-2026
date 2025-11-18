@@ -64,6 +64,7 @@ section .text use32
 	extern renderable_useShader
 	extern renderable_setUniform
 	extern RENDERABLE_UNIFORM_VEC4
+	extern glGetError
 	
 	extern hyperPlane_getNormal
 	
@@ -156,7 +157,6 @@ hyperCubeRenderable_render:
 		mov ecx, dword[ebp+24]
 		mov dword[ebp-20], ecx
 	hyperCubeRenderable_render_no_custom_shader:
-	
 	
 	;use shader
 	push dword[ebp-20]

@@ -73,6 +73,8 @@ section .rodata use32
 	glDefine GL_CONSTANT_COLOR, 0x8001
 	glDefine GL_CULL_FACE, 0xb44
 	glDefine GL_CW, 0x900
+	glDefine GL_DEBUG_OUTPUT, 0x92e0
+	glDefine GL_DEBUG_OUTPUT_SYNCHRONOUS, 0x8242
 	glDefine GL_DEPTH_ATTACHMENT, 0x8d00
 	glDefine GL_DEPTH_BUFFER_BIT, 0x100
 	glDefine GL_DEPTH_COMPONENT, 0x1902
@@ -207,6 +209,7 @@ section .rodata use32
 	name_glCreateProgram db "glCreateProgram",0
 	name_glCreateShader db "glCreateShader",0
 	name_glCullFace db "glCullFace",0
+	name_glDebugMessageCallback db "glDebugMessageCallback",0
 	name_glDeleteBuffers db "glDeleteBuffers",0
 	name_glDeleteFramebuffers db "glDeleteFramebuffers",0
 	name_glDeleteProgram db "glDeleteProgram",0
@@ -302,6 +305,7 @@ section .bss use32
 	glFunc glCreateProgram
 	glFunc glCreateShader
 	glFunc glCullFace
+	glFunc glDebugMessageCallback
 	glFunc glDeleteBuffers
 	glFunc glDeleteFramebuffers
 	glFunc glDeleteProgram
@@ -405,6 +409,7 @@ load_gl_functions:
 	load dword[ebp+8], glCreateProgram
 	load dword[ebp+8], glCreateShader
 	load dword[ebp+8], glCullFace
+	load dword[ebp+8], glDebugMessageCallback
 	load dword[ebp+8], glDeleteBuffers
 	load dword[ebp+8], glDeleteFramebuffers
 	load dword[ebp+8], glDeleteProgram

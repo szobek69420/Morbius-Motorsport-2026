@@ -1,6 +1,8 @@
 #version 460 core
 const int SLOTS_PER_ROW=8;
 const int SLOTS_PER_COLUMN=8;
+
+const vec2 SLOT_COUNT = vec2(float(SLOTS_PER_ROW), float(SLOTS_PER_COLUMN));
 const vec2 SLOT_SIZE = vec2(1/float(SLOTS_PER_ROW), 1/float(SLOTS_PER_COLUMN));
 
 in vec2 uv;
@@ -13,14 +15,14 @@ uniform float blockUVZ[SLOTS_PER_ROW*SLOTS_PER_COLUMN];
 
 void main()
 {
-	vec2 textureOffset=0.1*floor(uv/SLOT_SIZE);
-	vec2 localUV=10*(uv-textureOffset);
+	vec2 textureOffset=SLOT_SIZE*floor(uv*SLOT_COUNT);
+	vec2 localUV=SLOT_COUNT*(uv-textureOffset);
 	
 	vec3 blockUV=texture(uvTexture, localUV).xyz;
-	if(blockUV.z<0.01)
-		discard;
+	//if(blockUV.z<0.01)
+	//	discard;
 		
-	float blockUVZ=SLOTS_PER_ROW*int(10*textureOffset.x)+int(10*textureOffset.y);
+	float uvz=blockUVZ[SLOTS_PER_ROW*int(SLOT_COUNT.x*textureOffset.x)+int(SLOT_COUNT.y*textureOffset.y)];
 	
-	fragmentColour=blockUV.z*texture(blockTextures, vec3(blockUV.xy, blockUVZ));
+	fragmentColour=blockUV.z*texture(blockTextures, vec3(blockUV.xy, uvz));
 }

@@ -189,10 +189,11 @@ main_init:
 	mov dword[ebp-4], eax
 	
 	;create window and opengl context
+	push 69			;debug context
 	push window_name
 	call window_create
 	mov dword[pwindow], eax
-	add esp, 4
+	add esp, 8
 	
 	cmp dword[pwindow], 0
 	jne main_init_windowCreationSuccessful

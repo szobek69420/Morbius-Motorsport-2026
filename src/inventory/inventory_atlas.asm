@@ -40,6 +40,7 @@ section .rodata use32
 	uniform_name_viewMat db "view_mat",0
 	uniform_name_normalMat db "normal_mat",0
 	uniform_name_offset db "offset",0
+	uniform_name_blockUVZ db "blockUVZ",0
 	
 	MINUS_ONE dd -1.0
 	ONE dd 1.0
@@ -100,6 +101,8 @@ section .text use32
 	global inventoryAtlas_init			;void inventoryAtlas_init()
 	global inventoryAtlas_deinit		;void inventoryAtlas_deinit()
 	global inventoryAtlas_render		;void inventoryAtlas_render(TextureArrayInfo* blockTextures)
+	
+	global inventoryAtlas_getAtlas		;GLuint inventoryAtlas_getAtlas()
 	
 	extern my_printf
 	extern my_memcpy
@@ -336,7 +339,6 @@ inventoryAtlas_render:
 	
 	push test_text
 	call my_printf
-	
 	call [glGetError]
 	push eax
 	push print_int_nl
@@ -407,7 +409,7 @@ inventoryAtlas_render:
 	
 	mov eax, dword[texcoord_framebuffer]
 	push dword[eax+4]		;colour attachment 0
-	push 2
+	push 0
 	push dword[rectangle_renderable]
 	call renderable_setExtraTexture2D
 	
@@ -418,10 +420,13 @@ inventoryAtlas_render:
 	push dword[shading_pass_shader]
 	call renderable_useShader
 	
+	mov eax, dword[INVENTORY_ATLAS_ROW_SLOTS]
+	imul eax, dword[INVENTORY_ATLAS_COLUMN_SLOTS]
 	push inventory_content
+	push eax
 	push dword[RENDERABLE_UNIFORM_FLOAT_ARRAY]
+	push uniform_name_blockUVZ
 	push dword[shading_pass_shader]
-	push dword[rectangle_renderable]
 	call renderable_setUniform
 	
 	push 69
@@ -432,4 +437,11 @@ inventoryAtlas_render:
 	
 	mov esp, ebp
 	pop ebp
+	ret
+	
+	
+inventoryAtlas_getAtlas:
+	mov eax, dword[atlas_framebuffer]
+	mov eax, dword[texcoord_framebuffer]
+	mov eax, dword[eax+4]
 	ret
