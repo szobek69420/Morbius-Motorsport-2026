@@ -88,6 +88,7 @@ section .rodata use32
 	print_float_nl db "%f",10,0
 	print_four_floats_nl db "%f %f %f %f",10,0
 	
+	KINDA_ZERO dd 0.0001
 	ONE dd 1.0
 
 section .text use32
@@ -187,6 +188,7 @@ section .text use32
 	extern mutex_unlock
 	
 	extern vec3_normalize
+	extern vec3_sqrMagnitude
 	extern vec3_print
 	extern vec4_dot
 	extern vec4_add
@@ -226,6 +228,8 @@ section .text use32
 	extern block_importTextures
 	
 	extern sun_getDirection
+	extern sun_getAngle
+	extern sun_setAngle
 	
 chunkManager4d_create:
 	push ebp
@@ -363,16 +367,8 @@ chunkManager4d_render:
 	;calculate the sun direction
 	lea eax, [ebp-40]
 	push eax
-	call sun_getDirection
-	pop eax
-	
-	push eax
-	push eax
-	push dword[ebp-24]
-	call hyperPlane_directionTo3d
-	add esp, 8
-	call vec3_normalize
-	add esp, 4
+	push dword[ebp+20]
+	call chunkManager4D_render_getSunDirection_internal
 	
 	;set renderable primitive
 	push dword[GL_POINTS]
@@ -660,6 +656,83 @@ chunkManager4d_render:
 		mov esp, ebp
 		pop ebp
 		ret
+		
+	;calculates the sun
+	;void chunkManager4D_render_getSunDirection_internal(ChunkManager4D* cm, vec3* buffer)
+	SUN_ANGLE_OFFSET dd 0.1
+	chunkManager4D_render_getSunDirection_internal:
+		push ebp
+		mov ebp, esp
+		
+		sub esp, 16			;calc buffer	16
+		
+		lea eax, [ebp-16]
+		push eax
+		call sun_getDirection
+		
+		push dword[ebp+8]
+		call chunkManager4d_getHyperPlane
+		lea ecx, [ebp-16]
+		push ecx
+		push ecx
+		push eax
+		call hyperPlane_directionTo3d
+		add esp, 4
+		call vec3_sqrMagnitude
+		fstp dword[esp+4]
+		mov eax, dword[esp+4]
+		and eax, 0x7fffffff
+		cmp eax, dword[KINDA_ZERO]
+		ja chunkManager4d_render_sun_dir_not_orthogonal
+			;add a small offset to the sun angle
+			call sun_getAngle
+			fadd dword[SUN_ANGLE_OFFSET]
+			sub esp, 4
+			fstp dword[esp]
+			call sun_setAngle
+			
+			;recalculate the direction
+			lea eax, [ebp-16]
+			push eax
+			call sun_getDirection
+			
+			push dword[ebp+8]
+			call chunkManager4d_getHyperPlane
+			lea ecx, [ebp-16]
+			push ecx
+			push ecx
+			push eax
+			call hyperPlane_directionTo3d
+			
+			;restore the sun angle
+			call sun_getAngle
+			fsub dword[SUN_ANGLE_OFFSET]
+			sub esp, 4
+			fstp dword[esp]
+			call sun_setAngle
+		chunkManager4d_render_sun_dir_not_orthogonal:
+		
+		;normalize the direction
+		lea eax, [ebp-16]
+		push eax
+		call vec3_normalize
+		
+		;write it in the buffer
+		mov eax, dword[ebp+12]
+		lea ecx, dword[ebp-16]
+		
+		mov edx, dword[ecx]
+		mov dword[eax], edx
+		mov edx, dword[ecx+4]
+		mov dword[eax+4], edx
+		mov edx, dword[ecx+8]
+		mov dword[eax+8], edx
+		
+		mov esp, ebp
+		pop ebp
+		ret
+	
+	
 	
 	
 chunkManager4d_load:

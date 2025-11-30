@@ -4,10 +4,12 @@
 section .rodata use32
 	open_mode db "r",0
 	
-	read_vertex_count db "vertex count: %d",10,0
-	read_vertex_data db "%f %f %f %f %f",10,0
+	read_vertex_count db "vertex count: %d",0
+	read_vertex_data db "%f %f %f %f %f",0
 	
 	print_import_data db "%s was successfully imported with %d vertices",10,0
+	
+	print_int_nl db "%d",10,0
 
 section .text use32
 	;returns NULL if something ist fehlgeschlagen
@@ -19,6 +21,8 @@ section .text use32
 	extern my_fopen
 	extern my_fclose
 	extern my_fscanf
+	extern my_fjmp
+	extern my_fgetc
 	
 	extern vector_init
 	extern vector_destroy
@@ -39,6 +43,7 @@ geometryImporter_import:
 	sub esp, 16		;vertex vector		28
 	sub esp, 20		;vertex buffer		48
 	sub esp, 16		;index vector		64 (unused)
+	sub esp, 4		;eol length			68
 	
 	mov dword[ebp-4], 0
 	mov dword[ebp-12], -1
@@ -73,6 +78,35 @@ geometryImporter_import:
 	cmp dword[ebp-12], 0
 	jle geometryImporter_import_close_file		;-1 also counts obv
 	
+	;determine the eol
+	mov dword[ebp-68], 0
+	push dword[ebp-8]
+	geometryImporter_import_eol_loop_start:
+		call my_fgetc
+		
+		cmp eax, 10			;line feed
+		je geometryImporter_import_eol_loop_remain
+		cmp eax, 13			;carriage return
+		je geometryImporter_import_eol_loop_remain
+		jmp geometryImporter_import_eol_loop_end
+		geometryImporter_import_eol_loop_remain:
+			inc dword[ebp-68]
+			jmp geometryImporter_import_eol_loop_start
+	geometryImporter_import_eol_loop_end:
+	push 69
+	push -1
+	push dword[ebp-8]
+	call my_fjmp
+	
+	cmp dword[ebp-68], 0
+	jg geometryImporter_import_eol_based
+		push dword[ebp+20]
+		push geometryImporter_import_error_no_eol
+		call my_printf
+		jmp geometryImporter_import_close_file
+		geometryImporter_import_error_no_eol db "geometryImporter_import: %s contains invalid end-of-line sequence",10,0
+	geometryImporter_import_eol_based:
+	
 	;create vertex vector
 	push 4
 	lea eax, [ebp-28]
@@ -94,9 +128,17 @@ geometryImporter_import:
 	push read_vertex_data
 	push dword[ebp-8]
 	geometryImporter_import_read_loop_start:
+		;read data
 		call my_fscanf
 		
+		;eat eol
+		push 69
+		push dword[ebp-68]
+		push dword[ebp-8]
+		call my_fjmp
+		add esp, 12
 		
+		;add vertex to the geometry
 		lea eax, [ebp-28]
 		sub esp, 4
 		push eax

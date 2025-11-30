@@ -24,6 +24,7 @@ section .data use32
 	
 	direction dd 0.0, 1.0, 0.0, 0.0
 	distance dd 5.0
+	angle_in_rads dd 0.0
 
 section .text use32
 
@@ -33,6 +34,7 @@ section .text use32
 	
 	;direction is multiplied by the distance when calculating the sun's position
 	global sun_setAngle		;void sun_setAngle(float angleInDegrees)
+	global sun_getAngle		;float sun_getAngle()	//pushes the angle(in degrees) onto the FPU stack
 	global sun_setDistance	;void sun_setDistance(float distance)
 	global sun_getDirection ;void sun_getDirection(vec4* buffer)
 	
@@ -193,6 +195,9 @@ sun_setAngle:
 	mulss xmm0, xmm1
 	movss dword[ebp-4], xmm0
 	
+	;save the angle
+	movss dword[angle_in_rads], xmm0
+	
 	;get the projection to the plane vector 1
 	fld dword[ebp-4]
 	fsin
@@ -224,6 +229,11 @@ sun_setAngle:
 	
 	mov esp, ebp
 	pop ebp
+	ret
+	
+	
+sun_getAngle:
+	fld dword[angle_in_rads]
 	ret
 	
 	

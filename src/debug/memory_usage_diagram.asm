@@ -266,8 +266,8 @@ memoryUsageDiagram_update:
 	call renderable_enableBlending
 	push dword[GL_POINTS]
 	call renderable_setPrimitive
-	push 0x40a00000
-	call renderable_setLineWidth
+	;push 0x40a00000
+	;call renderable_setLineWidth
 	
 	;bind and clear framebuffer
 	push dword[framebuffer]
