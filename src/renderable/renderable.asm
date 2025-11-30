@@ -131,6 +131,9 @@ section .text use32
 	
 	global renderable_render			;void renderable_render(Renderable* renderable, mat4* pv)
 	global renderable_renderCustom		;void renderable_renderCustom(Renderable* renderable, mat4* pv, GLuint shader, int texturesUsed)
+	global renderable_renderCustomInstanced		;void renderable_renderCustomInstanced(Renderable* renderable, mat4* pv, GLuint shader, int texturesUsed, int instanceCount)
+	
+	global renderable_getVAO			;GLuint renderable_getVAO(Renderable* renderable)
 
 	;both setAlbedo and setSpecular sets the textures the 0 if the path is NULL
 	global renderable_setAlbedo			;void renderable_setAlbedo(Renderable* renderable, const char* albedoMapPath)
@@ -206,6 +209,8 @@ section .text use32
 	extern glUseProgram
 	extern glDrawArrays
 	extern glDrawElements
+	extern glDrawArraysInstanced
+	extern glDrawElementsInstanced
 	extern GL_ARRAY_BUFFER
 	extern GL_ELEMENT_ARRAY_BUFFER
 	extern GL_STATIC_DRAW
@@ -868,6 +873,39 @@ renderable_renderCustom:
 	push ebp
 	mov ebp, esp
 	
+	push 1
+	push dword[ebp+20]
+	push dword[ebp+16]
+	push dword[ebp+12]
+	push dword[ebp+8]
+	call renderable_renderCustom_internal
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+renderable_renderCustomInstanced:
+	push ebp
+	mov ebp, esp
+	
+	push dword[ebp+24]
+	push dword[ebp+20]
+	push dword[ebp+16]
+	push dword[ebp+12]
+	push dword[ebp+8]
+	call renderable_renderCustom_internal
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;void renderable_renderCustom_internal(Renderable* renderable, mat4* pv, GLuint shader, int texturesUsed, int instanceCount)
+renderable_renderCustom_internal:
+	push ebp
+	mov ebp, esp
+	
 	sub esp, 64		;model matrix
 	
 	;calculate model matrix
@@ -884,7 +922,7 @@ renderable_renderCustom:
 	
 	;are textures necessary?
 	cmp dword[ebp+20], 0
-	je renderable_renderCustom_no_textures
+	je renderable_renderCustom_internal_no_textures
 		push esi			;save esi
 		push edi			;save edi
 		push ebx			;save ebx
@@ -893,9 +931,9 @@ renderable_renderCustom:
 		lea esi, [esi+56]					;current texture2d in esi
 		mov edi, uniform_names_texture2d	;current uniform name in edi
 		xor ebx, ebx						;index in ebx
-		renderable_renderCustom_texture2d_loop_start:
+		renderable_renderCustom_internal_texture2d_loop_start:
 			cmp dword[esi], 0
-			je renderable_renderCustom_texture2d_loop_continue	;is there a texture in the slot?
+			je renderable_renderCustom_internal_texture2d_loop_continue	;is there a texture in the slot?
 				
 				;bind texture
 				mov eax, dword[GL_TEXTURE0]
@@ -916,18 +954,18 @@ renderable_renderCustom:
 				add esp, 16
 				
 	
-			renderable_renderCustom_texture2d_loop_continue:
+			renderable_renderCustom_internal_texture2d_loop_continue:
 			add esi, 4
 			add edi, 4
 			inc ebx
 			cmp ebx, 6	;6 textures for albedo, specular and the 4 extra2DTextures
-			jl renderable_renderCustom_texture2d_loop_start
+			jl renderable_renderCustom_internal_texture2d_loop_start
 			
 		pop ebx				;restore ebx
 		pop edi				;restore edi
 		pop esi				;restore esi
 	
-	renderable_renderCustom_no_textures:
+	renderable_renderCustom_internal_no_textures:
 	
 	;set matrices
 	push dword[ebp+12]		;pv
@@ -952,24 +990,50 @@ renderable_renderCustom:
 	
 	mov eax, dword[ebp+8]
 	cmp dword[eax+8], NO_EBO
-	jne renderable_renderCustom_ebo
-	renderable_renderCustom_no_ebo:
-		push dword[eax+12]
-		push 0
-		push dword[renderable_primitive]
-		call [glDrawArrays]
-		jmp renderable_renderCustom_done
+	jne renderable_renderCustom_internal_ebo
+	renderable_renderCustom_internal_no_ebo:
+		cmp dword[ebp+24], 1
+		jg renderable_renderCustom_internal_no_ebo_instanced
+			;not instanced
+			push dword[eax+12]
+			push 0
+			push dword[renderable_primitive]
+			call [glDrawArrays]
+			jmp renderable_renderCustom_internal_done
 		
-	renderable_renderCustom_ebo:
-		push 0
-		push dword[GL_UNSIGNED_INT]
-		mov eax, dword[ebp+8]
-		push dword[eax+12]
-		push dword[renderable_primitive]
-		call [glDrawElements]
-		jmp renderable_renderCustom_done
+		renderable_renderCustom_internal_no_ebo_instanced:
+			;instanced
+			push dword[ebp+24]
+			push dword[eax+12]
+			push 0
+			push dword[renderable_primitive]
+			call [glDrawArraysInstanced]
+			jmp renderable_renderCustom_internal_done
 		
-	renderable_renderCustom_done:
+	renderable_renderCustom_internal_ebo:
+		cmp dword[ebp+24], 1
+		jg renderable_renderCustom_internal_ebo_instanced
+			;not instanced
+			push 0
+			push dword[GL_UNSIGNED_INT]
+			mov eax, dword[ebp+8]
+			push dword[eax+12]
+			push dword[renderable_primitive]
+			call [glDrawElements]
+			jmp renderable_renderCustom_internal_done
+			
+		renderable_renderCustom_internal_ebo_instanced:
+			;instanced
+			push dword[ebp+24]
+			push 0
+			push dword[GL_UNSIGNED_INT]
+			mov eax, dword[ebp+8]
+			push dword[eax+12]
+			push dword[renderable_primitive]
+			call [glDrawElementsInstanced]
+			jmp renderable_renderCustom_internal_done
+		
+	renderable_renderCustom_internal_done:
 	
 	push 0
 	call [glBindVertexArray]
@@ -977,6 +1041,7 @@ renderable_renderCustom:
 	mov esp, ebp
 	pop ebp
 	ret
+	
 	
 	
 ;void renderable_calculateModel(Renderable* renderable, mat4* buffer)
@@ -1044,6 +1109,12 @@ renderable_calculateModel:
 	
 	mov esp, ebp
 	pop ebp
+	ret
+	
+	
+renderable_getVAO:
+	mov eax, dword[esp+4]
+	mov eax, dword[eax]
 	ret
 	
 	

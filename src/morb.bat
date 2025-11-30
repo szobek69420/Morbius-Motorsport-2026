@@ -71,7 +71,9 @@ mkdir build
 %COMMAND% -fobj renderable/renderable.asm -o build/renderable.o
 %COMMAND% -fobj renderer/text/font.asm -o build/font.o
 %COMMAND% -fobj renderer/text/text_renderer.asm -o build/text_renderer.o
+%COMMAND% -fobj lighting/light_renderer.asm -o build/light_renderer.o
 %COMMAND% -fobj lighting/light_volume.asm -o build/light_volume.o
+%COMMAND% -fobj lighting/light.asm -o build/light.o
 %COMMAND% -fobj renderer/post_processing/post_processing.asm -o build/post_processing.o
 %COMMAND% -fobj renderer/framebuffer/framebuffer.asm -o build/framebuffer.o
 %COMMAND% -fobj image/image.asm -o build/image.o
@@ -96,7 +98,9 @@ build/block.o ^
 build/camera.o ^
 build/input.o ^
 build/glfw.o ^
+build/light_renderer.o ^
 build/light_volume.o ^
+build/light.o ^
 build/post_processing.o ^
 build/framebuffer.o ^
 build/texture_handler.o ^
