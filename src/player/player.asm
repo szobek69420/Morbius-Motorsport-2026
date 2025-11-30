@@ -221,6 +221,9 @@ section .text use32
 	extern sigmaudio_deport
 	extern sigmaudio_play
 	
+	extern inventoryAtlas_getSelectedHotbarSlot
+	extern inventoryAtlas_getHotbarContent
+	
 player_init:
 	push ebp
 	mov ebp, esp
@@ -1322,12 +1325,19 @@ player_placeBlock:
 	;register the changed block
 	push 69							;has priority
 	lea eax, [ebp-32]
-	push eax
+	push eax						;local block pos
 	lea eax, [ebp-44]
+	push eax						;chunk pos
+	
+	call inventoryAtlas_getSelectedHotbarSlot
 	push eax
-	xor ecx, ecx
-	mov cl, byte[BLOCK_STONE]
-	push ecx
+	call inventoryAtlas_getHotbarContent
+	mov ecx, dword[esp]
+	mov ecx, dword[eax+4*ecx]
+	mov dword[esp], ecx
+	fld dword[esp]
+	fistp dword[esp]				;selected block
+	
 	mov eax, dword[ebp+8]
 	push dword[eax+28]
 	call chunkManager4d_registerChangedBlock

@@ -22,7 +22,7 @@ void main()
 	if(blockUV.z<0.01)
 		discard;
 		
-	float uvz=blockUVZ[SLOTS_PER_ROW*int(SLOT_COUNT.x*textureOffset.x)+int(SLOT_COUNT.y*textureOffset.y)];
+	float uvz=blockUVZ[SLOTS_PER_ROW*int(SLOT_COUNT.y*textureOffset.y)+int(SLOT_COUNT.x*textureOffset.x)];
 	
 	fragmentColour=vec4(blockUV.z*texture(blockTextures, vec3(blockUV.xy, uvz)).rgb, 1.0);
 }

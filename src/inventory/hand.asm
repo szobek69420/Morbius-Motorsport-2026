@@ -52,8 +52,6 @@ section .rodata use32
 section .data use32
 	initialized dd 0
 
-	held_block dd 1.0			;(float)blockId
-
 	cube_renderable dd 0
 	cube_shader dd 0
 	
@@ -153,6 +151,8 @@ section .text use32
 	extern camera_view
 	
 	extern inventoryAtlas_setHyperplane
+	extern inventoryAtlas_getHotbarContent
+	extern inventoryAtlas_getSelectedHotbarSlot
 	
 hand_init:
 	push ebp
@@ -341,7 +341,12 @@ hand_render:
 	push dword[cube_shader]
 	call renderable_useShader
 	
-	push dword[held_block]
+	call inventoryAtlas_getSelectedHotbarSlot
+	push eax
+	call inventoryAtlas_getHotbarContent
+	mov ecx, dword[esp]
+	mov edx, dword[eax+4*ecx]
+	mov dword[esp], edx					;current block
 	push dword[RENDERABLE_UNIFORM_1F]
 	push uniform_name_uvZ
 	push dword[cube_shader]
