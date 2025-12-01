@@ -2,17 +2,17 @@
 
 ;struct PointLight{
 ;	vec3 position;			0
-;	vec3 colour;			12
-;	float intensity;		24
-;	float calculatedRadius;	28
+;	float calculatedRadius;	12
+;	vec3 colour;			16
+;	float intensity;		28
 ;}
 ;	32 bytes
 
 ;struct GlobalLight{
 ;	vec3 normalizedDir;		0
-;	vec3 colour;			12
-;	float intensity;		24
-;	int isDirectional;		28		//if 0, ambient
+;	float isDirectional;	12	//if 0, ambient
+;	vec3 colour;			16
+;	float intensity;		28
 ;}
 ;	32 bytes
 
@@ -81,12 +81,17 @@ light_createGlobal:
 	
 	mov eax, dword[ebp-4]
 	mov dword[eax+4], 0x3f800000
-	mov ecx, dword[ebp+8]
-	mov dword[eax+28], ecx
 	
+	mov dword[eax+12], 0x3f800000
+	test dword[ebp+8], 0xffffffff
+	jnz light_createGlobal_isDirectional
+		mov dword[eax+12], 0
+	light_createGlobal_isDirectional:
+		
 	mov esp, ebp
 	pop ebp
 	ret
+	
 	
 light_destroy:
 	mov eax, dword[esp+4]
@@ -103,10 +108,10 @@ light_calculateRadius:
 	;calculate the max intensity
 	;intensity*most intense colour component
 	mov eax, dword[ebp+8]
-	movss xmm0, dword[eax+12]
-	maxss xmm0, dword[eax+16]
+	movss xmm0, dword[eax+16]
 	maxss xmm0, dword[eax+20]
-	mulss xmm0, dword[eax+24]
+	maxss xmm0, dword[eax+24]
+	mulss xmm0, dword[eax+28]
 	movss dword[ebp-4], xmm0
 	
 	;calculate the cutoff radius
@@ -129,7 +134,7 @@ light_calculateRadius:
 	divss xmm2, xmm0
 	
 	;save the radius
-	movss dword[eax+28], xmm2
+	movss dword[eax+12], xmm2
 	
 	mov esp, ebp
 	pop ebp

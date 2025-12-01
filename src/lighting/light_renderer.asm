@@ -13,6 +13,9 @@ section .data use32
 	
 	global_instance_vbo dd 0
 	point_instance_vbo dd 0
+	
+	shader_global dd 0
+	shader_point dd 0
 
 section .text use32
 
@@ -27,7 +30,7 @@ section .text use32
 	;overwrites the currently bound framebuffer
 	;overwrites the blendfunc
 	;overwrites the blendequation
-	;void lightRenderer_renderPointLights(vector<PointLight*> lights, Framebuffer* hdrTarget, FrameBuffer* gBuffer)
+	;void lightRenderer_renderPointLights(vector<PointLight*> lights, Framebuffer* hdrTarget, FrameBuffer* gBuffer, mat4* pv)
 	global lightRenderer_renderPointLights
 	
 	extern my_printf
@@ -54,8 +57,16 @@ section .text use32
 	extern glBindBuffer
 	extern glBindVertexArray
 	extern glBufferData
+	extern glBufferSubData
+	extern glVertexAttribPointer
+	extern glVertexAttribDivisor
+	extern glEnableVertexAttribArray
+	extern glBlendFunc
 	extern GL_ARRAY_BUFFER
 	extern GL_DYNAMIC_DRAW
+	extern GL_FALSE
+	extern GL_FLOAT
+	extern GL_ONE
 	
 	
 lightRenderer_init:
@@ -100,6 +111,33 @@ lightRenderer_init:
 	push dword[GL_ARRAY_BUFFER]
 	call [glBufferData]
 	
+	push 0
+	push 16
+	push dword[GL_FALSE]
+	push dword[GL_FLOAT]
+	push 4
+	push 2
+	call [glVertexAttribPointer]
+	push 1
+	push 2
+	call [glVertexAttribDivisor]
+	push 2
+	call [glEnableVertexAttribArray]		;vec4(normalizedDir.xyz, isDirectional)
+	
+	push 16
+	push 16
+	push dword[GL_FALSE]
+	push dword[GL_FLOAT]
+	push 4
+	push 3
+	call [glVertexAttribPointer]
+	push 1
+	push 3
+	call [glVertexAttribDivisor]
+	push 3
+	call [glEnableVertexAttribArray]		;vec4(colour.rgb, intensity)
+	
+	
 	
 	push point_instance_vbo
 	push 1
@@ -121,6 +159,32 @@ lightRenderer_init:
 	push eax
 	push dword[GL_ARRAY_BUFFER]
 	call [glBufferData]
+	
+	push 0
+	push 16
+	push dword[GL_FALSE]
+	push dword[GL_FLOAT]
+	push 4
+	push 2
+	call [glVertexAttribPointer]
+	push 1
+	push 2
+	call [glVertexAttribDivisor]
+	push 2
+	call [glEnableVertexAttribArray]		;vec4(pos.xyz, radius)
+	
+	push 16
+	push 16
+	push dword[GL_FALSE]
+	push dword[GL_FLOAT]
+	push 4
+	push 3
+	call [glVertexAttribPointer]
+	push 1
+	push 3
+	call [glVertexAttribDivisor]
+	push 3
+	call [glEnableVertexAttribArray]		;vec4(colour.rgb, intensity)
 	
 	;set the initialized flag
 	mov dword[initialized], 69
@@ -232,7 +296,47 @@ lightRenderer_renderPointLights:
 	push ebx
 	mov ebp, esp
 	
+	;check if the light count is adequate
+	mov eax, dword[ebp+20]
+	mov ecx, dword[eax]
+	cmp ecx, dword[MAX_LIGHT_COUNT]
+	jbe lightRenderer_renderPointLights_valid_light_count
+		push dword[MAX_LIGHT_COUNT]
+		push ecx
+		push lightRenderer_renderPointLights_error_too_many_lights
+		call my_printf
+		jmp lightRenderer_renderPointLights_end
+		
+		lightRenderer_renderPointLights_error_too_many_lights db "lightRenderer_renderPointLights: %d is not a valid light count (should be in [0;%d])",10,0
+	lightRenderer_renderPointLights_valid_light_count:
 	
+	;fill up the instance buffer
+	push dword[point_instance_vbo]
+	push dword[GL_ARRAY_BUFFER]
+	call [glBindBuffer]
+	
+	mov eax, dword[ebp+20]
+	mov ecx, dword[eax]
+	imul ecx, dword[POINT_LIGHT_SIZE]
+	push dword[eax+12]
+	push ecx
+	push 0
+	push dword[GL_ARRAY_BUFFER]
+	call [glBufferSubData]
+	
+	;enable blending and depth test
+	push 69
+	call renderable_enableDepthTest
+	call renderable_enableBlending
+	
+	;set blend func
+	push dword[GL_ONE]
+	push dword[GL_ONE]
+	call [glBlendFunc]
+	
+	
+	
+	lightRenderer_renderPointLights_end:
 	mov esp, ebp
 	pop ebx
 	pop edi
