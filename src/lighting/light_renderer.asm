@@ -7,6 +7,15 @@ section .rodata use32
 	POINT_LIGHT_SIZE dd 32		;the size of the data of one point light in the instance vbo
 	GLOBAL_LIGHT_SIZE dd 32		;the size of the data of one global light in the instance vbo
 
+	ATTENUATION_CONSTANT dd 1.0
+	ATTENUATION_LINEAR dd 0.7
+	ATTENUATION_QUADRATIC dd 1.8
+	
+	uniform_name_viewMat db "viewMat",0
+	uniform_name_twoPerScreenSize db "twoPerScreenSize",0
+	
+	TWO dd 2.0
+
 section .data use32
 	initialized dd 0
 
@@ -39,7 +48,7 @@ section .text use32
 	;overwrites the blend equation
 	;overwrites the depth func
 	;overwrites the depth mask
-	;void lightRenderer_renderPointLights(Framebuffer* hdrTarget, FrameBuffer* gBuffer, mat4* pv)
+	;void lightRenderer_renderPointLights(Framebuffer* hdrTarget, FrameBuffer* gBuffer, mat4* pv, mat4* view)
 	global lightRenderer_renderPointLights
 	
 	extern my_printf
@@ -59,6 +68,9 @@ section .text use32
 	extern renderable_useShader
 	extern renderable_createShader
 	extern renderable_destroyShader
+	extern renderable_setUniform
+	extern RENDERABLE_UNIFORM_VEC2
+	extern RENDERABLE_UNIFORM_MAT4
 	
 	extern framebuffer_bind
 	extern glViewport
@@ -430,6 +442,8 @@ lightRenderer_renderPointLights:
 	push ebx
 	mov ebp, esp
 	
+	sub esp, 8			;two per screen size
+	
 	;check if there are any point lights
 	cmp dword[current_point_count], 0
 	jle lightRenderer_renderPointLights_end
@@ -475,6 +489,31 @@ lightRenderer_renderPointLights:
 	;use shader
 	push dword[shader_point]
 	call renderable_useShader
+	
+	;set the uniforms
+	push dword[ebp+32]
+	push dword[RENDERABLE_UNIFORM_MAT4]
+	push uniform_name_viewMat
+	push dword[shader_point]
+	call renderable_setUniform
+	
+	mov eax, dword[ebp+24]
+	cvtpi2ps xmm0, qword[eax+24]
+	movq qword[ebp-8], xmm0
+	movss xmm0, dword[TWO]
+	movss xmm2, xmm0
+	movss xmm1, dword[ebp-8]
+	movss xmm3, dword[ebp-4]
+	divss xmm0, xmm1
+	movss dword[ebp-8], xmm0
+	divss xmm2, xmm3
+	movss dword[ebp-4], xmm2
+	push dword[ebp-4]
+	push dword[ebp-8]
+	push dword[RENDERABLE_UNIFORM_VEC2]
+	push uniform_name_twoPerScreenSize
+	push dword[shader_point]
+	call renderable_setUniform
 	
 	;render all of the lights
 	push dword[current_point_count]

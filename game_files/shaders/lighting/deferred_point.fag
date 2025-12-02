@@ -1,0 +1,34 @@
+#version 460 core
+in vec3 lightColour;
+in vec3 lightViewPos;
+
+layout (location=0) out vec4 fragmentColour;
+
+uniform vec2 twoPerScreenSize;
+layout (binding=2) uniform sampler2D gPos;
+layout (binding=3) uniform sampler2D gNormal;
+layout (binding=4) uniform sampler2D gAlbedo;
+
+const float ATTENUATION_CONSTANT=1.0;
+const float ATTENUATION_LINEAR=0.7;
+const float ATTENUATION_QUADRATIC=1.8;
+
+
+void main()
+{
+	vec2 uv=twoPerScreenSize*gl_FragCoord.xy-1.0;
+	
+	vec4 viewPos=texture(gPos, uv).xyzw;
+	if(viewPos.w<0.01)
+		discard;
+	
+	vec3 viewNormal=texture(gNormal, uv).xyz;
+	vec3 albedo=texture(gAlbedo, uv).rgb;
+	
+	float distance=length(viewPos.xyz-lightViewPos);
+	float attenuation = 1.0/(ATTENUATION_CONSTANT+distance*(ATTENUATION_LINEAR+distance*ATTENUATION_QUADRATIC));
+	
+	float diffuseIntensity=max(dot(normalize(lightViewPos-viewPos.xyz), viewNormal), 0.0);
+	
+	fragmentColour=vec4(attenuation*diffuseIntensity*lightColour, 1.0);
+}

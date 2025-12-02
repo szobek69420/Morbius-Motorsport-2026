@@ -1,0 +1,18 @@
+#version 460 core
+layout (location=0) in vec3 aPos;
+layout (location=2) in vec4 aLightPos;			//pos.xyz, radius
+layout (location=3)	in vec4 aLightColour;		//colour.rgb, intensity
+
+out vec3 lightColour;
+out vec3 lightViewPos;
+
+uniform mat4 viewMat;
+uniform mat4 pv;
+
+void main()
+{
+	lightColour=aLightColour.a*aLightColour.rgb;
+	lightViewPos=(viewMat*vec4(aLightPos.xyz, 1.0)).xyz;
+
+	gl_Position=pv*(aLightPos.w*aPos+aLightPos.xyz, 1.0);
+}
