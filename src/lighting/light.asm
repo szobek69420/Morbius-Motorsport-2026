@@ -9,7 +9,7 @@
 ;	32 bytes
 
 ;struct GlobalLight{
-;	vec3 normalizedDir;		0
+;	vec3 normalizedDir;		0	//points towards the light source
 ;	float isDirectional;	12	//if 0, ambient
 ;	vec3 colour;			16
 ;	float intensity;		28

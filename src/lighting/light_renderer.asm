@@ -14,6 +14,11 @@ section .rodata use32
 	uniform_name_viewMat db "viewMat",0
 	uniform_name_twoPerScreenSize db "twoPerScreenSize",0
 	
+	global_vertex_shader_path db "shaders/lighting/deferred_global.vag",0
+	global_fragment_shader_path db "shaders/lighting/deferred_global.fag",0
+	point_vertex_shader_path db "shaders/lighting/deferred_point.vag",0
+	point_fragment_shader_path db "shaders/lighting/deferred_point.fag",0
+	
 	TWO dd 2.0
 
 section .data use32
@@ -126,6 +131,19 @@ lightRenderer_init:
 	mov dword[global_volume_renderable], eax
 	call lightVolume_createPoint
 	mov dword[point_volume_renderable], eax
+	
+	;create shaders
+	push 0
+	push global_fragment_shader_path
+	push global_vertex_shader_path
+	call renderable_createShader
+	mov dword[shader_global], eax
+	
+	push 0
+	push point_fragment_shader_path
+	push point_vertex_shader_path
+	call renderable_createShader
+	mov dword[shader_point], eax
 	
 	;create and bind the instance vbos
 	push global_instance_vbo
@@ -256,6 +274,12 @@ lightRenderer_deinit:
 	call renderable_destroy
 	push dword[point_volume_renderable]
 	call renderable_destroy
+	
+	;destroy shadres
+	push dword[shader_global]
+	call renderable_destroyShader
+	push dword[shader_point]
+	call renderable_destroyShader
 	
 	;destroy the instance vbos
 	push global_instance_vbo
