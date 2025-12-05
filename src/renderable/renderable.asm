@@ -173,6 +173,14 @@ section .text use32
 	global renderable_enableBlending	;void renderable_enableBlending(int enable)
 	
 	;it is a system state setting function
+	;enable should be 0, if the face culling should be disabled
+	global renderable_enableFaceCull	;void renderable_enableFaceCull(int enable)
+	
+	;it is a system state setting function
+	;face is for example GL_FRONT
+	global renderable_setCulledFace		;void renderable_setCulledFace(GLenum face)
+	
+	;it is a system state setting function
 	;void renderable_setPointSize(float size)
 	global renderable_setPointSize
 	;it is a system state setting function
@@ -237,6 +245,8 @@ section .text use32
 	extern GL_SRC_ALPHA
 	extern GL_ONE_MINUS_SRC_ALPHA
 	extern glBlendFunc
+	extern GL_CULL_FACE
+	extern glCullFace
 	
 	extern glPointSize
 	extern glLineWidth
@@ -1520,6 +1530,31 @@ renderable_enableBlending:
 	renderable_enableBlending_end:
 	mov esp, ebp
 	pop ebp
+	ret
+	
+	
+renderable_enableFaceCull:
+	push ebp
+	mov ebp, esp
+	
+	mov eax, dword[glEnable]
+	test dword[ebp+8], 0xffffffff
+	jnz renderable_enableFaceCull_enable
+		mov eax, dword[glDisable]
+	renderable_enableFaceCull_enable:
+	
+	push dword[GL_CULL_FACE]
+	call eax
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+renderable_setCulledFace:
+	mov eax, dword[esp+4]
+	push dword[eax]
+	call [glCullFace]
 	ret
 	
 	

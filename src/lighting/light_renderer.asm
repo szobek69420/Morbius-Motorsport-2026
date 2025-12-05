@@ -46,15 +46,25 @@ section .text use32
 	;void lightRenderer_prepareTargetFBO(Framebuffer* hdrTarget, Framebuffer* gBuffer)
 	global lightRenderer_prepareTargetFBO
 	
-	global lightRenderer_updatePointLights	;void lightRenderer_updatePointLights(vector<PointLight*> lights)
+	global lightRenderer_updateGlobalLights	;void lightRenderer_updateGlobalLights(vector<GlobalLight*>* allOfTheLights)
+	global lightRenderer_updatePointLights	;void lightRenderer_updatePointLights(vector<PointLight*>* allOfTheLights)
 	
 	;overwrites the currently bound framebuffer
 	;overwrites the blend func
 	;overwrites the blend equation
 	;overwrites the depth func
 	;overwrites the depth mask
+	;overwrites the culled face
 	;void lightRenderer_renderPointLights(Framebuffer* hdrTarget, FrameBuffer* gBuffer, mat4* pv, mat4* view)
 	global lightRenderer_renderPointLights
+	
+	;overwrites the currently bound framebuffer
+	;overwrites the blend func
+	;overwrites the blend equation
+	;overwrites the depth func
+	;overwrites the culled face
+	;void lightRenderer_renderGlobalLights(Framebuffer* hdrTarget, Framebuffer* gBuffer, mat4* view)
+	global lightRenderer_renderGlobalLights
 	
 	extern my_printf
 	extern my_malloc
@@ -66,7 +76,9 @@ section .text use32
 	extern renderable_getVAO
 	extern renderable_enableBlending
 	extern renderable_enableDepthTest
+	extern renderable_enableFaceCull
 	extern renderable_setDepthFunc
+	extern renderable_setCulledFace
 	extern renderable_renderCustomInstanced
 	extern renderable_setExtraTexture2D
 	
@@ -110,6 +122,7 @@ section .text use32
 	extern GL_ONE_MINUS_SRC_ALPHA
 	extern GL_LESS
 	extern GL_GREATER
+	extern GL_FRONT
 	
 	
 lightRenderer_init:
@@ -355,6 +368,109 @@ lightRenderer_prepareTargetFBO:
 	ret
 	
 	
+lightRenderer_updateGlobalLights:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 4			;temp buffer data			4
+	sub esp, 4			;buffer data size			8
+	
+	;check if the vector is kosher
+	mov eax, dword[ebp+20]
+	mov ecx, dword[eax]
+	cmp ecx, dword[MAX_LIGHT_COUNT]
+	jbe lightRenderer_updateGlobalLights_valid_light_count
+		push dword[MAX_LIGHT_COUNT]
+		push ecx
+		push lightRenderer_updateGlobalLights_error_too_many_lights
+		call my_printf
+		jmp lightRenderer_updateGlobalLights_end
+		
+		lightRenderer_updateGlobalLights_error_too_many_lights db "lightRenderer_updateGlobalLights: %d is not a valid light count (should be in [0;%d])",10,0
+	
+	lightRenderer_updateGlobalLights_valid_light_count:	
+	
+	;set the global count
+	mov dword[current_global_count], ecx
+	test ecx, ecx
+	jz lightRenderer_updateGlobalLights_end
+	
+	;calculate the size of the data and alloc it
+	mov ecx, dword[eax]
+	imul ecx, dword[GLOBAL_LIGHT_SIZE]
+	mov dword[ebp-4], ecx
+	
+	push ecx
+	call my_malloc
+	mov dword[ebp-4], eax
+	
+	;fill up the buffer
+	mov eax, dword[ebp+20]
+	mov ebx, dword[eax]			;index in ebx
+	mov esi, dword[eax+12]		;current light in esi
+	mov edi, dword[ebp-4]		;current pos in buffer in edi
+	cmp ebx, 0
+	jle lightRenderer_updateGlobalLights_loop_end
+	lightRenderer_updateGlobalLights_loop_start:
+		mov eax, dword[esi]
+		
+		mov ecx, dword[eax]
+		mov dword[edi], ecx
+		mov edx, dword[eax+4]
+		mov dword[edi+4], edx
+		mov ecx, dword[eax+8]
+		mov dword[edi+8], ecx
+		mov edx, dword[eax+12]
+		mov dword[edi+12], edx
+		mov ecx, dword[eax+16]
+		mov dword[edi+16], ecx
+		mov edx, dword[eax+20]
+		mov dword[edi+20], edx
+		mov ecx, dword[eax+24]
+		mov dword[edi+24], ecx
+		mov edx, dword[eax+28]
+		mov dword[edi+28], edx
+		
+		add esi, 4
+		add edi, dword[GLOBAL_LIGHT_SIZE]
+		dec ebx
+		jnz lightRenderer_updateGlobalLights_loop_start
+		
+	lightRenderer_updateGlobalLights_loop_end:
+	
+	;send the buffer data to the GL
+	push dword[global_instance_vbo]
+	push dword[GL_ARRAY_BUFFER]
+	call [glBindBuffer]
+	
+	push dword[ebp-4]
+	push dword[ebp-8]
+	push 0
+	push dword[GL_ARRAY_BUFFER]
+	call [glBufferSubData]
+	
+	push 0
+	push dword[GL_ARRAY_BUFFER]
+	call [glBindBuffer]
+	
+	
+	;free the temp buffer
+	push dword[ebp-4]
+	call my_free
+	
+	lightRenderer_updateGlobalLights_end:
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+	
 lightRenderer_updatePointLights:
 	push ebp
 	push esi
@@ -472,10 +588,11 @@ lightRenderer_renderPointLights:
 	cmp dword[current_point_count], 0
 	jle lightRenderer_renderPointLights_end
 	
-	;enable blending and depth test
+	;enable blending, depth test and face cull
 	push 69
 	call renderable_enableDepthTest
 	call renderable_enableBlending
+	call renderable_enableFaceCull
 	
 	;set blend func
 	push dword[GL_ONE]
@@ -487,6 +604,10 @@ lightRenderer_renderPointLights:
 	call renderable_setDepthFunc
 	push dword[GL_FALSE]
 	call [glDepthMask]
+	
+	;set culled face
+	push GL_FRONT
+	call renderable_setCulledFace
 	
 	;bind the target framebuffer
 	push dword[ebp+20]
@@ -558,12 +679,101 @@ lightRenderer_renderPointLights:
 	push dword[GL_SRC_ALPHA]
 	call [glBlendFunc]
 	
-	;disable blending and depth test
+	;disable blending, depth test and face cull
 	push 0
 	call renderable_enableBlending
 	call renderable_enableDepthTest
+	call renderable_enableFaceCull
 	
 	lightRenderer_renderPointLights_end:
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+	
+lightRenderer_renderGlobalLights:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	;check if there are any global lights
+	cmp dword[current_global_count], 0
+	jle lightRenderer_renderGlobalLights_end
+	
+	;enable blending
+	;disable depth test and face cull
+	push 69
+	call renderable_enableBlending
+	push 0
+	call renderable_enableDepthTest
+	call renderable_enableFaceCull
+	
+	;set blend func
+	push dword[GL_ONE]
+	push dword[GL_ONE]
+	call [glBlendFunc]
+	
+	;bind the target framebuffer
+	push dword[ebp+20]
+	call framebuffer_bind
+	
+	;set the gBuffer colour attachments as extra textures
+	mov ebx, dword[ebp+24]
+	
+	push dword[ebx+4]
+	push 0
+	push dword[global_volume_renderable]
+	call renderable_setExtraTexture2D		;position
+	
+	push dword[ebx+8]
+	push 1
+	push dword[global_volume_renderable]
+	call renderable_setExtraTexture2D		;normal
+	
+	push dword[ebx+12]
+	push 2
+	push dword[global_volume_renderable]
+	call renderable_setExtraTexture2D		;albedo
+	
+	;use shader
+	push dword[shader_global]
+	call renderable_useShader
+	
+	;set the uniforms
+	push dword[ebp+28]
+	push dword[RENDERABLE_UNIFORM_MAT4]
+	push uniform_name_viewMat
+	push dword[shader_global]
+	call renderable_setUniform
+	
+	
+	;render all of the lights
+	push dword[current_global_count]
+	push 69
+	push dword[shader_global]
+	push dword[ebp+28]		;unused in the shader
+	push dword[global_volume_renderable]
+	call renderable_renderCustomInstanced
+	
+	
+	;reset the blend func
+	push dword[GL_ONE_MINUS_SRC_ALPHA]
+	push dword[GL_SRC_ALPHA]
+	call [glBlendFunc]
+	
+	;disable blending, depth test and face cull
+	push 0
+	call renderable_enableBlending
+	call renderable_enableDepthTest
+	call renderable_enableFaceCull
+	
+	lightRenderer_renderGlobalLights_end:
 	mov esp, ebp
 	pop ebx
 	pop edi
