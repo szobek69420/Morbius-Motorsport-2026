@@ -761,10 +761,11 @@ gameLoop_main:
 		;call postProcessing_deferredLighting
 		add esp, 20
 		
+		push dword[framebuffer_ssao]
 		push dword[framebuffer_gbuffer]
 		push dword[framebuffer_pp]
 		call gameLoop_doDeferredLighting
-		add esp, 8
+		add esp, 12
 		
 		;do the forward rendering things--------------------------
 		
@@ -1367,13 +1368,14 @@ extern lightRenderer_prepareTargetFBO
 extern lightRenderer_fillEmpty
 extern lightRenderer_updateGlobalLights
 extern lightRenderer_renderGlobalLights
+extern lightRenderer_ssao
 extern light_createGlobal
 extern light_setDirection
 extern light_setColour
 extern light_setIntensity
 
 	
-;void gameLoop_doDeferredLighting(Framebuffer* hdrTarget, Framebuffer* gBuffer)
+;void gameLoop_doDeferredLighting(Framebuffer* hdrTarget, Framebuffer* gBuffer, Framebuffer* ssao)
 gameLoop_doDeferredLighting:
 	push ebp
 	mov ebp, esp
@@ -1419,6 +1421,12 @@ gameLoop_doDeferredLighting:
 	push dword[ebp+12]
 	push dword[ebp+8]
 	call lightRenderer_prepareTargetFBO
+	
+	;render the ssao albedo
+	push dword[ebp+12]
+	push dword[ebp+16]
+	push dword[ebp+8]
+	call lightRenderer_ssao
 	
 	;render the global lights
 	push view_matrix

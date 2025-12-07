@@ -21,6 +21,8 @@ section .rodata use32
 	point_fragment_shader_path db "shaders/lighting/deferred_point.fag",0
 	fill_vertex_shader_path db "shaders/lighting/deferred_fill.vag",0
 	fill_fragment_shader_path db "shaders/lighting/deferred_fill.fag",0
+	ssao_vertex_shader_path db "shaders/lighting/deferred_ssao.vag",0
+	ssao_fragment_shader_path db "shaders/lighting/deferred_ssao.fag",0
 	
 	TWO dd 2.0
 	
@@ -31,7 +33,7 @@ section .data use32
 
 	global_volume_renderable dd 0
 	point_volume_renderable dd 0
-	fill_volume_renderable dd 0		;same as global, but the instance vbo is unnecessary
+	rectangle_volume_renderable dd 0		;same as global, but the instance vbo is unnecessary
 	
 	global_instance_vbo dd 0
 	point_instance_vbo dd 0
@@ -39,6 +41,7 @@ section .data use32
 	shader_global dd 0
 	shader_point dd 0
 	shader_fill dd 0
+	shader_ssao dd 0
 	
 	current_global_count dd 0
 	current_point_count dd 0
@@ -79,6 +82,14 @@ section .text use32
 	;overwrites the culled face
 	;void lightRenderer_renderGlobalLights(Framebuffer* hdrTarget, Framebuffer* gBuffer, mat4* view)
 	global lightRenderer_renderGlobalLights
+	
+	;overwrites the currently bound framebuffer
+	;overwrites the blend func
+	;overwrites the blend equation
+	;overwrites the depth func and depth mask
+	;disables depth test, blending and face cull
+	;void lightRenderer_ssao(Framebuffer* hdrTarget, Framebuffer* ssaoBuffer, Framebuffer* gBuffer)
+	global lightRenderer_ssao
 	
 	extern my_printf
 	extern my_malloc
@@ -162,7 +173,7 @@ lightRenderer_init:
 	call lightVolume_createPoint
 	mov dword[point_volume_renderable], eax
 	call lightVolume_createGlobal
-	mov dword[fill_volume_renderable], eax
+	mov dword[rectangle_volume_renderable], eax
 	
 	;create shaders
 	push 0
@@ -182,6 +193,12 @@ lightRenderer_init:
 	push fill_vertex_shader_path
 	call renderable_createShader
 	mov dword[shader_fill], eax
+	
+	push 0
+	push ssao_fragment_shader_path
+	push ssao_vertex_shader_path
+	call renderable_createShader
+	mov dword[shader_ssao], eax
 	
 	;create and bind the instance vbos
 	push global_instance_vbo
@@ -312,11 +329,17 @@ lightRenderer_deinit:
 	call renderable_destroy
 	push dword[point_volume_renderable]
 	call renderable_destroy
+	push dword[rectangle_volume_renderable]
+	call renderable_destroy
 	
 	;destroy shadres
 	push dword[shader_global]
 	call renderable_destroyShader
 	push dword[shader_point]
+	call renderable_destroyShader
+	push dword[shader_fill]
+	call renderable_destroyShader
+	push dword[shader_ssao]
 	call renderable_destroyShader
 	
 	;destroy the instance vbos
@@ -431,7 +454,7 @@ lightRenderer_fillEmpty:
 	push 0
 	push dword[shader_fill]
 	push eax
-	push dword[fill_volume_renderable]
+	push dword[rectangle_volume_renderable]
 	call renderable_renderCustom
 	
 	;reset the state things
@@ -857,5 +880,79 @@ lightRenderer_renderGlobalLights:
 	pop ebx
 	pop edi
 	pop esi
+	pop ebp
+	ret
+	
+	
+lightRenderer_ssao:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 64			;imitated pv matrix		64
+	
+	;enable depth test and blending
+	;disable face cull
+	push 69
+	call renderable_enableBlending
+	push 0
+	call renderable_enableDepthTest
+	call renderable_enableFaceCull
+	
+	;set blend func
+	push dword[GL_ONE]
+	push dword[GL_ONE]
+	call [glBlendFunc]
+	
+	;set depth func and mask
+	push dword[GL_GREATER]
+	call renderable_setDepthFunc
+	push dword[GL_FALSE]
+	call [glDepthMask]
+	
+	;bind the target framebuffer
+	push dword[ebp+8]
+	call framebuffer_bind
+	
+	;set the texture
+	mov eax, dword[ebp+12]
+	push dword[eax+4]
+	push 0
+	push dword[rectangle_volume_renderable]
+	call renderable_setExtraTexture2D		;ssao
+	
+	mov eax, dword[ebp+16]
+	push dword[eax+12]
+	push 1
+	push dword[rectangle_volume_renderable]
+	call renderable_setExtraTexture2D		;albedo
+	
+	;use shader
+	push dword[shader_ssao]
+	call renderable_useShader
+	
+	;render
+	lea eax, [ebp-64]
+	push 69
+	push dword[shader_ssao]
+	push eax
+	push dword[rectangle_volume_renderable]
+	call renderable_renderCustom
+	
+	
+	;reset things
+	push dword[GL_ONE_MINUS_SRC_ALPHA]
+	push dword[GL_SRC_ALPHA]
+	call [glBlendFunc]
+	
+	push dword[GL_LESS]
+	call renderable_setDepthFunc
+	push dword[GL_TRUE]
+	call [glDepthMask]
+	
+	push 0
+	call renderable_enableBlending
+	call renderable_enableDepthTest
+	
+	mov esp, ebp
 	pop ebp
 	ret
