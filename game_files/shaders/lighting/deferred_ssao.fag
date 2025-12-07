@@ -1,7 +1,7 @@
 #version 460 core
 in vec2 uv;
 
-out vec4 fragmentColour;
+out vec3 fragmentColour;
 
 layout (binding=2) uniform sampler2D ssaoBuffer;
 layout (binding=3) uniform sampler2D gAlbedo;
@@ -11,5 +11,5 @@ void main()
 	float intensity=texture(ssaoBuffer, uv).r;
 	vec3 albedo=texture(gAlbedo, uv).rgb;
 	
-	fragmentColour=vec4(intensity*albedo, 1.0);
+	fragmentColour=intensity*albedo;
 }

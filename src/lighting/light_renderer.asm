@@ -27,6 +27,8 @@ section .rodata use32
 	TWO dd 2.0
 	
 	print_int_nl db "%d",10,0
+	
+	print_eight_floats_nl db "%f %f %f %f %f %f %f %f",10,0
 
 section .data use32
 	initialized dd 0
@@ -152,6 +154,8 @@ section .text use32
 	extern GL_GREATER
 	extern GL_FRONT
 	
+	extern vec4_print
+	
 	
 lightRenderer_init:
 	push ebp
@@ -223,7 +227,7 @@ lightRenderer_init:
 	call [glBufferData]
 	
 	push 0
-	push 16
+	push 32
 	push dword[GL_FALSE]
 	push dword[GL_FLOAT]
 	push 4
@@ -236,7 +240,7 @@ lightRenderer_init:
 	call [glEnableVertexAttribArray]		;vec4(normalizedDir.xyz, isDirectional)
 	
 	push 16
-	push 16
+	push 32
 	push dword[GL_FALSE]
 	push dword[GL_FLOAT]
 	push 4
@@ -272,7 +276,7 @@ lightRenderer_init:
 	call [glBufferData]
 	
 	push 0
-	push 16
+	push 32
 	push dword[GL_FALSE]
 	push dword[GL_FLOAT]
 	push 4
@@ -285,7 +289,7 @@ lightRenderer_init:
 	call [glEnableVertexAttribArray]		;vec4(pos.xyz, radius)
 	
 	push 16
-	push 16
+	push 32
 	push dword[GL_FALSE]
 	push dword[GL_FLOAT]
 	push 4
@@ -537,6 +541,7 @@ lightRenderer_updateGlobalLights:
 		mov edx, dword[eax+28]
 		mov dword[edi+28], edx
 		
+		
 		add esi, 4
 		add edi, dword[GLOBAL_LIGHT_SIZE]
 		dec ebx
@@ -554,10 +559,6 @@ lightRenderer_updateGlobalLights:
 	push 0
 	push dword[GL_ARRAY_BUFFER]
 	call [glBufferSubData]
-	
-	push 0
-	push dword[GL_ARRAY_BUFFER]
-	call [glBindBuffer]
 	
 	;free the temp buffer
 	push dword[ebp-4]

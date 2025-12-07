@@ -1426,7 +1426,7 @@ gameLoop_doDeferredLighting:
 	push dword[ebp+12]
 	push dword[ebp+16]
 	push dword[ebp+8]
-	call lightRenderer_ssao
+	;call lightRenderer_ssao
 	
 	;render the global lights
 	push view_matrix

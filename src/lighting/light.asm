@@ -186,20 +186,18 @@ light_setDirection:
 	
 light_setColour:
 	push ebp
-	push esi
-	push edi
 	mov ebp, esp
 	
-	lea esi, [ebp+12]
-	mov edi, dword[ebp+8]
-	lea edi, [edi+16]
-	movsd
-	movsd
-	movsd
+	mov eax, dword[ebp+8]
+	
+	mov ecx, dword[ebp+12]
+	mov dword[eax+16], ecx
+	mov edx, dword[ebp+16]
+	mov dword[eax+20], edx
+	mov ecx, dword[ebp+20]
+	mov dword[eax+24], ecx
 	
 	mov esp, ebp
-	pop edi
-	pop esi
 	pop ebp
 	ret
 	
@@ -207,7 +205,7 @@ light_setColour:
 light_setIntensity:
 	mov eax, dword[esp+4]
 	mov ecx, dword[esp+8]
-	mov dword[eax+24], ecx
+	mov dword[eax+28], ecx
 	ret
 	
 light_setIsDirectional:
