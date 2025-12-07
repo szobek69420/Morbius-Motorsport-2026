@@ -177,7 +177,7 @@ section .text use32
 	global renderable_enableFaceCull	;void renderable_enableFaceCull(int enable)
 	
 	;it is a system state setting function
-	;face is for example GL_FRONT
+	;face is for example dword[GL_FRONT]
 	global renderable_setCulledFace		;void renderable_setCulledFace(GLenum face)
 	
 	;it is a system state setting function
@@ -1553,7 +1553,7 @@ renderable_enableFaceCull:
 	
 renderable_setCulledFace:
 	mov eax, dword[esp+4]
-	push dword[eax]
+	push eax
 	call [glCullFace]
 	ret
 	

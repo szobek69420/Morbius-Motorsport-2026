@@ -6,10 +6,12 @@ out vec3 fragmentColour;
 layout (binding=2) uniform sampler2D ssaoBuffer;
 layout (binding=3) uniform sampler2D gAlbedo;
 
+const float SSAO_INTENSITY_SCALER = 0.4;
+
 void main()
 {
 	float intensity=texture(ssaoBuffer, uv).r;
 	vec3 albedo=texture(gAlbedo, uv).rgb;
 	
-	fragmentColour=intensity*albedo;
+	fragmentColour=SSAO_INTENSITY_SCALER*intensity*albedo;
 }

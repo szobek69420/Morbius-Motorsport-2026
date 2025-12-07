@@ -140,6 +140,7 @@ section .text use32
 	extern renderable_setExtraTexture2D
 	extern renderable_setPrimitive
 	extern renderable_enableDepthTest
+	extern renderable_enableFaceCull
 	extern RENDERABLE_UNIFORM_VEC3
 	extern RENDERABLE_UNIFORM_MAT3
 	extern RENDERABLE_UNIFORM_MAT4
@@ -390,6 +391,8 @@ inventoryAtlas_render:
 	
 	push 0
 	call renderable_enableDepthTest
+	push 69
+	call renderable_enableFaceCull
 	
 	push dword[geometry_pass_shader]
 	call renderable_useShader

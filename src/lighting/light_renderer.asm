@@ -152,6 +152,7 @@ section .text use32
 	extern GL_LESS
 	extern GL_LEQUAL
 	extern GL_GREATER
+	extern GL_BACK
 	extern GL_FRONT
 	
 	extern vec4_print
@@ -709,7 +710,7 @@ lightRenderer_renderPointLights:
 	call [glDepthMask]
 	
 	;set culled face
-	push GL_FRONT
+	push dword[GL_BACK]
 	call renderable_setCulledFace
 	
 	;bind the target framebuffer

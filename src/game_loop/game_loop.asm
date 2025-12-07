@@ -213,6 +213,7 @@ section .text use32
 	extern GL_DEPTH_BUFFER_BIT
 	extern GL_CULL_FACE
 	extern GL_CCW
+	extern GL_BACK
 	extern GL_POINTS
 	extern GL_VENDOR
 	extern GL_RENDERER
@@ -271,6 +272,8 @@ section .text use32
 	extern renderable_setPosition
 	extern renderable_enableDepthTest
 	extern renderable_enableBlending
+	extern renderable_enableFaceCull
+	extern renderable_setCulledFace
 	extern RENDERABLE_ATTRIB_P3
 	extern RENDERABLE_ATTRIB_P3UV2
 	
@@ -689,11 +692,19 @@ gameLoop_main:
 		call framebuffer_bind
 		add esp, 4
 		
-		;enable depth test and disable blending
+		;enable depth test
+		;disable blending
+		;enable face cull
 		push 69
 		call renderable_enableDepthTest
 		push 0
 		call renderable_enableBlending
+		add esp, 8
+		
+		push 69
+		call renderable_enableFaceCull
+		push dword[GL_BACK]
+		call renderable_setCulledFace
 		add esp, 8
 		
 		;calculate the sun direction
@@ -1426,7 +1437,7 @@ gameLoop_doDeferredLighting:
 	push dword[ebp+12]
 	push dword[ebp+16]
 	push dword[ebp+8]
-	;call lightRenderer_ssao
+	call lightRenderer_ssao
 	
 	;render the global lights
 	push view_matrix
