@@ -20,6 +20,8 @@ section .rodata use32
 	point_fragment_shader_path db "shaders/lighting/deferred_point.fag",0
 	
 	TWO dd 2.0
+	
+	print_int_nl db "%d",10,0
 
 section .data use32
 	initialized dd 0
@@ -320,12 +322,12 @@ lightRenderer_prepareTargetFBO:
 	;copy the depth buffer
 	mov eax, dword[ebp+12]
 	push dword[eax]
-	push word[GL_READ_FRAMEBUFFER]
+	push dword[GL_READ_FRAMEBUFFER]
 	call [glBindFramebuffer]
 	
 	mov eax, dword[ebp+8]
 	push dword[eax]
-	push word[GL_DRAW_FRAMEBUFFER]
+	push dword[GL_DRAW_FRAMEBUFFER]
 	call [glBindFramebuffer]
 	
 	mov eax, dword[ebp+8]
@@ -401,7 +403,7 @@ lightRenderer_updateGlobalLights:
 	;calculate the size of the data and alloc it
 	mov ecx, dword[eax]
 	imul ecx, dword[GLOBAL_LIGHT_SIZE]
-	mov dword[ebp-4], ecx
+	mov dword[ebp-8], ecx
 	
 	push ecx
 	call my_malloc
@@ -455,7 +457,6 @@ lightRenderer_updateGlobalLights:
 	push 0
 	push dword[GL_ARRAY_BUFFER]
 	call [glBindBuffer]
-	
 	
 	;free the temp buffer
 	push dword[ebp-4]

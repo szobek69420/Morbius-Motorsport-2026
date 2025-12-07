@@ -33,9 +33,17 @@ section .text use32
 	
 	global light_calculateRadius	;void light_calculateRadius(PointLight* light, float quadraticAttenuation, float linearAttenuation, float constantAttenuation)
 	
+	global light_setPosition		;void light_setPosition(PointLight* light, vec3 pos)
+	global light_setDirection		;void light_setDirection(GlobalLight* light, vec3 pos)
+	global light_setIntensity		;void light_setIntensity(Light* light, float intensity)
+	global light_setColour			;void light_setColour(Light* light, vec3 colour)
+	global light_setIsDirectional	;void light_setIsDirectional(GlobalLight* light, float isDirectional)	//direkt float
+	
 	extern my_malloc
 	extern my_free
 	extern my_memset
+	
+	extern vec3_normalize
 	
 light_createPoint:
 	push ebp
@@ -138,4 +146,71 @@ light_calculateRadius:
 	
 	mov esp, ebp
 	pop ebp
+	ret
+	
+	
+light_setPosition:
+	mov eax, dword[esp+4]
+	
+	mov ecx, dword[esp+8]
+	mov dword[eax], ecx
+	mov edx, dword[esp+12]
+	mov dword[eax+4], edx
+	mov ecx, dword[esp+16]
+	mov dword[eax+8], ecx
+	
+	ret
+	
+	
+light_setDirection:
+	push ebp
+	mov ebp, esp
+	
+	mov eax, dword[ebp+8]
+	
+	mov ecx, dword[ebp+12]
+	mov dword[eax], ecx
+	mov edx, dword[ebp+16]
+	mov dword[eax+4], edx
+	mov ecx, dword[ebp+20]
+	mov dword[eax+8], ecx
+	
+	push eax
+	call vec3_normalize
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+light_setColour:
+	push ebp
+	push esi
+	push edi
+	mov ebp, esp
+	
+	lea esi, [ebp+12]
+	mov edi, dword[ebp+8]
+	lea edi, [edi+16]
+	movsd
+	movsd
+	movsd
+	
+	mov esp, ebp
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+light_setIntensity:
+	mov eax, dword[esp+4]
+	mov ecx, dword[esp+8]
+	mov dword[eax+24], ecx
+	ret
+	
+light_setIsDirectional:
+	mov eax, dword[esp+4]
+	mov ecx, dword[esp+8]
+	mov dword[eax+12], ecx
 	ret

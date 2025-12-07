@@ -14,5 +14,5 @@ void main()
 	lightColour=aLightColour.a*aLightColour.rgb;
 	lightViewPos=(viewMat*vec4(aLightPos.xyz, 1.0)).xyz;
 
-	gl_Position=pv*(aLightPos.w*aPos+aLightPos.xyz, 1.0);
+	gl_Position=pv*vec4(aLightPos.w*aPos+aLightPos.xyz, 1.0);
 }

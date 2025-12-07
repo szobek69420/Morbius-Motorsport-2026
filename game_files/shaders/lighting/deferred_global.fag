@@ -1,9 +1,9 @@
 #version 460 core
 in vec3 lightColour;
-in vec3 lightViewDir;
+in vec4 lightViewDir;
 in vec2 uv;
 
-layout (location=0) out vec4 fragmentColour;
+layout (location=0) out vec3 fragmentColour;
 
 layout (binding=2) uniform sampler2D gPos;
 layout (binding=3) uniform sampler2D gNormal;
@@ -18,10 +18,12 @@ void main()
 	if(pos.w<0.01)
 		discard;
 		
-	normal=texture(gNormal, uv);
-	albedo=texture(gAlbedo, uv);
+	normal=texture(gNormal, uv).xyz;
+	albedo=texture(gAlbedo, uv).rgb;
 	
-	float diffuseIntensity=max(dot(lightViewDir, normal), 0);
+	float diffuseIntensity=1;
+	if(abs(lightViewDir.w)>0.01)			//directional
+		max(dot(lightViewDir.xyz, normal), 0);
 	
-	fragmentColour=vec4(diffuseIntensity*albedo, 1);
+	fragmentColour=diffuseIntensity*albedo;
 }

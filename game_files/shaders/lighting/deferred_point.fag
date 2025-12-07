@@ -2,7 +2,7 @@
 in vec3 lightColour;
 in vec3 lightViewPos;
 
-layout (location=0) out vec4 fragmentColour;
+layout (location=0) out vec3 fragmentColour;
 
 uniform vec2 twoPerScreenSize;
 layout (binding=2) uniform sampler2D gPos;
@@ -30,5 +30,5 @@ void main()
 	
 	float diffuseIntensity=max(dot(normalize(lightViewPos-viewPos.xyz), viewNormal), 0.0);
 	
-	fragmentColour=vec4(attenuation*diffuseIntensity*lightColour, 1.0);
+	fragmentColour=attenuation*diffuseIntensity*lightColour;
 }

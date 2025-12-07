@@ -407,6 +407,9 @@ section .text use32
 	extern settings_read
 	extern settings_resolutionInfo
 	
+	extern lightRenderer_init
+	extern lightRenderer_deinit
+	
 gameLoop_main:
 	push ebp
 	push esi
@@ -484,6 +487,9 @@ gameLoop_main:
 	
 	;create framebuffers
 	call gameLoop_createFramebuffers
+	
+	;init light renderer
+	call lightRenderer_init
 	
 	;create chunk manager 4d
 	call chunkManager4d_create
@@ -752,8 +758,13 @@ gameLoop_main:
 		push dword[framebuffer_ssao]
 		push dword[framebuffer_gbuffer]
 		push dword[framebuffer_pp]
-		call postProcessing_deferredLighting
+		;call postProcessing_deferredLighting
 		add esp, 20
+		
+		push dword[framebuffer_gbuffer]
+		push dword[framebuffer_pp]
+		call gameLoop_doDeferredLighting
+		add esp, 8
 		
 		;do the forward rendering things--------------------------
 		
@@ -912,6 +923,9 @@ gameLoop_main:
 	push dword[pplayer]
 	call player_destroy
 	add esp, 4
+	
+	;deinit light renderer
+	call lightRenderer_deinit
 	
 	;destroy the framebuffers
 	call gameLoop_yeetFramebuffers
@@ -1172,7 +1186,7 @@ gameLoop_createFramebuffers:
 	add esp, 4
 
 	push 0
-	push FRAMEBUFFER_RGB
+	push FRAMEBUFFER_RGB16F
 	push dword[framebuffer_pp]
 	call framebuffer_colourAttachment
 	call framebuffer_depthAttachment
@@ -1364,6 +1378,72 @@ gameLoop_handleWindowResize:
 	pop ebp
 	ret
 	
+	
+extern lightRenderer_prepareTargetFBO
+extern lightRenderer_updateGlobalLights
+extern lightRenderer_renderGlobalLights
+extern light_createGlobal
+extern light_setDirection
+extern light_setColour
+extern light_setIntensity
+
+	
+;void gameLoop_doDeferredLighting(Framebuffer* hdrTarget, Framebuffer* gBuffer)
+gameLoop_doDeferredLighting:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4		;sun global light					4
+	sub esp, 16		;imitated global light vector		20
+	
+	;create sun global light
+	push 69
+	call light_createGlobal
+	mov dword[ebp-4], eax
+	
+	mov eax, SUN_DIRECTION_BUFFER
+	push dword[eax+8]
+	push dword[eax+4]
+	push dword[eax]
+	push dword[ebp-4]
+	call light_setDirection
+	
+	push dword[ONE]
+	push dword[ONE]
+	push dword[ONE]
+	push dword[ebp-4]
+	call light_setColour
+	
+	push dword[ONE]
+	push dword[ebp-4]
+	call light_setIntensity
+	
+	;create the imitated vector
+	lea eax, [ebp-4]
+	mov dword[ebp-8], eax
+	mov dword[ebp-12], 4
+	mov dword[ebp-16], 1
+	mov dword[ebp-20], 1
+	
+	;send the light data to the renderer
+	lea eax, [ebp-20]
+	push eax
+	call lightRenderer_updateGlobalLights
+	
+	;prepare the target fbo
+	push dword[ebp+12]
+	push dword[ebp+8]
+	call lightRenderer_prepareTargetFBO
+	
+	;render the global lights
+	push view_matrix
+	push dword[ebp+12]
+	push dword[ebp+8]
+	call lightRenderer_renderGlobalLights
+	
+	mov esp, ebp
+	pop ebp
+	ret
 	
 	
 	extern uiElement_create
