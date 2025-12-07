@@ -22,6 +22,7 @@ section .rodata use32
 
 	test_text db "buzi lightyear",10,0
 	
+	ONE dd 1.0
 	TWO dd 2.0
 	FOUR dd 4.0
 
@@ -37,7 +38,7 @@ section .text use32
 	global light_setDirection		;void light_setDirection(GlobalLight* light, vec3 pos)
 	global light_setIntensity		;void light_setIntensity(Light* light, float intensity)
 	global light_setColour			;void light_setColour(Light* light, vec3 colour)
-	global light_setIsDirectional	;void light_setIsDirectional(GlobalLight* light, float isDirectional)	//direkt float
+	global light_setIsDirectional	;void light_setIsDirectional(GlobalLight* light, int isDirectional)
 	
 	extern my_malloc
 	extern my_free
@@ -212,5 +213,9 @@ light_setIntensity:
 light_setIsDirectional:
 	mov eax, dword[esp+4]
 	mov ecx, dword[esp+8]
-	mov dword[eax+12], ecx
+	mov dword[eax+12], 0
+	test ecx, ecx
+	jz light_setIsDirectional_end
+		mov dword[eax+12], 0x3f800000
+	light_setIsDirectional_end:
 	ret

@@ -23,7 +23,7 @@ void main()
 	
 	float diffuseIntensity=1;
 	if(abs(lightViewDir.w)>0.01)			//directional
-		max(dot(lightViewDir.xyz, normal), 0);
+		diffuseIntensity=max(dot(lightViewDir.xyz, normal), 0);
 	
 	fragmentColour=diffuseIntensity*albedo;
 }

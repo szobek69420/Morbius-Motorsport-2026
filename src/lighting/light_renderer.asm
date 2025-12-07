@@ -13,11 +13,14 @@ section .rodata use32
 	
 	uniform_name_viewMat db "viewMat",0
 	uniform_name_twoPerScreenSize db "twoPerScreenSize",0
+	uniform_name_fillColour db "fillColour",0
 	
 	global_vertex_shader_path db "shaders/lighting/deferred_global.vag",0
 	global_fragment_shader_path db "shaders/lighting/deferred_global.fag",0
 	point_vertex_shader_path db "shaders/lighting/deferred_point.vag",0
 	point_fragment_shader_path db "shaders/lighting/deferred_point.fag",0
+	fill_vertex_shader_path db "shaders/lighting/deferred_fill.vag",0
+	fill_fragment_shader_path db "shaders/lighting/deferred_fill.fag",0
 	
 	TWO dd 2.0
 	
@@ -28,12 +31,14 @@ section .data use32
 
 	global_volume_renderable dd 0
 	point_volume_renderable dd 0
+	fill_volume_renderable dd 0		;same as global, but the instance vbo is unnecessary
 	
 	global_instance_vbo dd 0
 	point_instance_vbo dd 0
 	
 	shader_global dd 0
 	shader_point dd 0
+	shader_fill dd 0
 	
 	current_global_count dd 0
 	current_point_count dd 0
@@ -47,6 +52,13 @@ section .text use32
 	;clears the target colour buffer
 	;void lightRenderer_prepareTargetFBO(Framebuffer* hdrTarget, Framebuffer* gBuffer)
 	global lightRenderer_prepareTargetFBO
+	
+	;overwrites the currently bound framebuffer
+	;disables depth test, face cull and blending
+	;overwrites the depth func
+	;fills the parts of the screen where there is no geometry with a solid colour
+	;void lightRenderer_fillEmpty(Framebuffer* target, vec3 colour)
+	global lightRenderer_fillEmpty
 	
 	global lightRenderer_updateGlobalLights	;void lightRenderer_updateGlobalLights(vector<GlobalLight*>* allOfTheLights)
 	global lightRenderer_updatePointLights	;void lightRenderer_updatePointLights(vector<PointLight*>* allOfTheLights)
@@ -81,6 +93,7 @@ section .text use32
 	extern renderable_enableFaceCull
 	extern renderable_setDepthFunc
 	extern renderable_setCulledFace
+	extern renderable_renderCustom
 	extern renderable_renderCustomInstanced
 	extern renderable_setExtraTexture2D
 	
@@ -89,6 +102,7 @@ section .text use32
 	extern renderable_destroyShader
 	extern renderable_setUniform
 	extern RENDERABLE_UNIFORM_VEC2
+	extern RENDERABLE_UNIFORM_VEC3
 	extern RENDERABLE_UNIFORM_MAT4
 	
 	extern framebuffer_bind
@@ -123,6 +137,7 @@ section .text use32
 	extern GL_SRC_ALPHA
 	extern GL_ONE_MINUS_SRC_ALPHA
 	extern GL_LESS
+	extern GL_LEQUAL
 	extern GL_GREATER
 	extern GL_FRONT
 	
@@ -146,6 +161,8 @@ lightRenderer_init:
 	mov dword[global_volume_renderable], eax
 	call lightVolume_createPoint
 	mov dword[point_volume_renderable], eax
+	call lightVolume_createGlobal
+	mov dword[fill_volume_renderable], eax
 	
 	;create shaders
 	push 0
@@ -159,6 +176,12 @@ lightRenderer_init:
 	push point_vertex_shader_path
 	call renderable_createShader
 	mov dword[shader_point], eax
+	
+	push 0
+	push fill_fragment_shader_path
+	push fill_vertex_shader_path
+	call renderable_createShader
+	mov dword[shader_fill], eax
 	
 	;create and bind the instance vbos
 	push global_instance_vbo
@@ -368,6 +391,61 @@ lightRenderer_prepareTargetFBO:
 	mov esp, ebp
 	pop ebp
 	ret
+	
+	
+	
+lightRenderer_fillEmpty:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 64			;dummy pv matrix
+	
+	;set state things
+	push 0
+	call renderable_enableBlending
+	call renderable_enableFaceCull
+	
+	push 69
+	call renderable_enableDepthTest
+	push dword[GL_LEQUAL]
+	call renderable_setDepthFunc
+	
+	;bind the shader and set the colour unifom
+	push dword[shader_fill]
+	call renderable_useShader
+	
+	push dword[ebp+20]
+	push dword[ebp+16]
+	push dword[ebp+12]
+	push dword[RENDERABLE_UNIFORM_VEC3]
+	push uniform_name_fillColour
+	push dword[shader_fill]
+	call renderable_setUniform
+	
+	;bind the fbo
+	push dword[ebp+8]
+	call framebuffer_bind
+	
+	;rendor
+	lea eax, [ebp-64]
+	push 0
+	push dword[shader_fill]
+	push eax
+	push dword[fill_volume_renderable]
+	call renderable_renderCustom
+	
+	;reset the state things
+	push dword[GL_LESS]
+	call renderable_setDepthFunc
+	push 0
+	call renderable_enableBlending
+
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
 	
 	
 lightRenderer_updateGlobalLights:

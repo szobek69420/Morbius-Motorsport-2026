@@ -165,7 +165,7 @@ section .text use32
 	global renderable_enableDepthTest	;void renderable_enableDepthTest(int enable)
 	
 	;it is a system state setting function
-	;for example GL_LESS
+	;for example dword[GL_LESS]
 	global renderable_setDepthFunc		;void renderable_setDepthFunc(Glenum func)
 	
 	;it is a system state setting function

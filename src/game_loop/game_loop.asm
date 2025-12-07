@@ -1320,22 +1320,6 @@ gameLoop_clearFramebuffers:
 	call [glClear]
 	
 	
-	;clear the framebuffers with colour=sky colour
-	sub esp, 16
-	mov eax, esp
-	push eax
-	push dword[TIME_OF_DAY]
-	call sky_getColour
-	add esp, 8
-	call [glClearColor]
-	
-	push dword[framebuffer_pp]
-	call framebuffer_bind
-	add esp, 4
-	
-	push dword[ebp-4]
-	call [glClear]
-	
 	mov esp, ebp
 	pop ebp
 	ret
@@ -1380,6 +1364,7 @@ gameLoop_handleWindowResize:
 	
 	
 extern lightRenderer_prepareTargetFBO
+extern lightRenderer_fillEmpty
 extern lightRenderer_updateGlobalLights
 extern lightRenderer_renderGlobalLights
 extern light_createGlobal
@@ -1440,6 +1425,17 @@ gameLoop_doDeferredLighting:
 	push dword[ebp+12]
 	push dword[ebp+8]
 	call lightRenderer_renderGlobalLights
+	
+	
+	;fill the unilluminated parts with the sky colour
+	sub esp, 16
+	mov eax, esp
+	push eax
+	push dword[TIME_OF_DAY]
+	call sky_getColour
+	add esp, 8
+	push dword[ebp+8]
+	call lightRenderer_fillEmpty
 	
 	mov esp, ebp
 	pop ebp
