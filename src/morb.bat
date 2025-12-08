@@ -19,6 +19,7 @@ mkdir build
 %COMMAND% -fobj inventory/hand.asm -o build/hand.o
 %COMMAND% -fobj sun/sun.asm -o build/sun.o
 %COMMAND% -fobj sun/sky.asm -o build/sky.o
+%COMMAND% -fobj world/light_manager4d.asm -o build/light_manager4d.o
 %COMMAND% -fobj world/chunk_manager4d.asm -o build/chunk_manager4d.o
 %COMMAND% -fobj world/chunk4d.asm -o build/chunk4d.o
 %COMMAND% -fobj world/block.asm -o build/block.o
@@ -92,6 +93,7 @@ build/game_states.o ^
 build/settings_loop.o ^
 build/menu_loop.o ^
 build/game_loop.o ^
+build/light_manager4d.o ^
 build/chunk_manager4d.o ^
 build/chunk4d.o ^
 build/block.o ^
