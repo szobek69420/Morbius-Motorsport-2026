@@ -20,6 +20,8 @@ The program needs
 </ul>
 to run.<br>
 <br>
+NOTE: The project is not very stable on Intel GPUs atm. <br>
+<br>
 Currently, the project is far from complete even though it is already eyewateringly beautiful:<br>
 
 ![gaymplay2](https://github.com/user-attachments/assets/4312d276-3c41-4a6b-9104-c0a6f9ceacd6)
