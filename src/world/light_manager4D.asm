@@ -17,7 +17,7 @@ section .text use32
 	global lightManager4d_destroy			;void lightManager4d_destroy(LightManager4D* destroy)
 	
 	global lightManager4d_registerLight		;PointLight4D* lightManager4d_registerLight(LightManager4D* lm, const vec4* pos4D, const vec3* colour, float intensity)
-	global lightManager4d_registerLightArray	;void lightManager4d_registerLightArray(LightManager4D* lm, vector<{vec4, vec3, float}>* lights, vector<PointLight4D*> outIDs)
+	global lightManager4d_registerLightArray	;void lightManager4d_registerLightArray(LightManager4D* lm, vector<{vec4, vec3, float}>* lights, vector<PointLight4D*>* outIDs)
 	
 	global lightManager4d_yeetLight			;void lightManager4d_yeetLight(LightManager4D* lm, PointLight4D* light)
 	
@@ -41,6 +41,7 @@ section .text use32
 	extern tsQueue_sizeNonBlocking
 	extern tsQueue_lock
 	extern tsQueue_unlock
+	extern tsQueue_queue
 	
 	
 lightManager4d_create:
@@ -162,6 +163,138 @@ lightManager4d_registerLight:
 	mov eax, dword[ebp-4]
 	
 	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+lightManager4d_registerLightArray:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 4			;queue				4
+	sub esp, 4			;PointLight4D**		8
+	sub esp, 4			;light array		12
+	sub esp, 4			;register gg		16
+	
+	mov dword[ebp-16], 0
+	
+	;check if there are any lights
+	mov eax, dword[ebp+24]
+	cmp dword[eax], 0
+	jle lightManager4d_registerLightArray_end
+	
+	;create all of the lights
+	mov eax, dword[ebp+24]
+	mov eax, dword[eax]
+	shl eax, 2
+	mov dword[ebp-12], eax
+	push dword[ebp-12]
+	call my_malloc
+	mov dword[ebp-8], eax
+	
+	xor ebx, ebx
+	mov esi, dword[ebp+24]
+	mov esi, dword[esi+12]
+	mov edi, dword[ebp-8]
+	lightManager4d_registerLightArray_create_loop_start:
+		push 32
+		call my_malloc
+		mov dword[edi+4*ebx], eax
+		add esp, 4
+		
+		push edi
+		mov edi, dword[edi+4*ebx]
+		movsd
+		movsd
+		movsd
+		movsd
+		movsd
+		movsd
+		movsd
+		movsd
+		pop edi
+		
+		add edi, 4
+		inc ebx
+		cmp ebx, dword[ebp-12]
+		jl lightManager4d_registerLightArray_create_loop_start
+	
+	;lock queue
+	mov eax, dword[ebp+20]
+	add eax, 16
+	push eax
+	call tsQueue_lock
+	
+	;check if there is enough space in the queue
+	call tsQueue_queue
+	mov dword[ebp-4], eax
+	
+	mov ecx, dword[eax+8]
+	sub ecx, dword[eax+4]
+	mov edx, dword[ebp+24]
+	cmp ecx, dword[edx]
+	jge lightManager4d_registerLightArray_enough_space
+		push lightManager4d_registerLightArray_error_not_enough_space
+		call my_printf
+		jmp lightManager4d_registerLight_unlock
+		lightManager4d_registerLightArray_error_not_enough_space db "lightManager4d_registerLightArray: there is not enough space in the pending updates queue",10,0
+	lightManager4d_registerLightArray_enough_space:
+	
+	;register all of the lights
+	mov esi, dword[ebp-8]		;current light in esi
+	mov edi, dword[ebp-12]		;index in edi
+	lightManager4d_registerLightArray_register_loop_start:
+		push 0		;register update
+		push dword[esi]
+		mov eax, dword[ebp+20]
+		add eax, 16
+		push eax
+		call tsQueue_push
+		add esp, 12
+		
+		add esi, 4
+		dec edi
+		jnz lightManager4d_registerLightArray_register_loop_start
+		
+	;registration is complete
+	mov dword[ebp-16], 69
+	
+	lightManager4d_registerLight_unlock:
+	;unlock queue
+	mov eax, dword[ebp+20]
+	add eax, 16
+	push eax
+	call tsQueue_lock
+	
+	;put all of the lights into the out vector
+	test dword[ebp-16], 0xffffffff
+	jz lightManager4d_registerLightArray_freeArray
+		mov ebx, dword[ebp+28]			;vector in ebx
+		mov esi, dword[ebp-8]			;current light in esi
+		mov edi, dword[ebp-12]			;index in edi
+		lightManager4d_registerLightArray_out_loop_start:
+			push dword[esi]
+			push ebx
+			call vector_push_back
+			add esp, 8
+		
+			add esi, 4
+			dec edi
+			jnz lightManager4d_registerLightArray_out_loop_start
+	
+	;free the light array
+	lightManager4d_registerLightArray_freeArray:
+	push dword[ebp-8]
+	call my_free
+	
+	lightManager4d_registerLightArray_end:
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
 	pop ebp
 	ret
 	
