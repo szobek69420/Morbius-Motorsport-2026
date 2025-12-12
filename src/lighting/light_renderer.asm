@@ -3,13 +3,11 @@
 section .rodata use32
 	test_text db "olive delights",10,0
 
-	MAX_LIGHT_COUNT dd 100
+	global LIGHT_RENDERER_MAX_LIGHTS
+	LIGHT_RENDERER_MAX_LIGHTS dd 100
+
 	POINT_LIGHT_SIZE dd 32		;the size of the data of one point light in the instance vbo
 	GLOBAL_LIGHT_SIZE dd 32		;the size of the data of one global light in the instance vbo
-
-	ATTENUATION_CONSTANT dd 1.0
-	ATTENUATION_LINEAR dd 0.7
-	ATTENUATION_QUADRATIC dd 1.8
 	
 	uniform_name_viewMat db "viewMat",0
 	uniform_name_twoPerScreenSize db "twoPerScreenSize",0
@@ -221,7 +219,7 @@ lightRenderer_init:
 	
 	push dword[GL_DYNAMIC_DRAW]
 	push 0
-	mov eax, dword[MAX_LIGHT_COUNT]
+	mov eax, dword[LIGHT_RENDERER_MAX_LIGHTS]
 	imul eax, dword[GLOBAL_LIGHT_SIZE]
 	push eax
 	push dword[GL_ARRAY_BUFFER]
@@ -270,7 +268,7 @@ lightRenderer_init:
 	
 	push dword[GL_DYNAMIC_DRAW]
 	push 0
-	mov eax, dword[MAX_LIGHT_COUNT]
+	mov eax, dword[LIGHT_RENDERER_MAX_LIGHTS]
 	imul eax, dword[POINT_LIGHT_SIZE]
 	push eax
 	push dword[GL_ARRAY_BUFFER]
@@ -489,9 +487,9 @@ lightRenderer_updateGlobalLights:
 	;check if the vector is kosher
 	mov eax, dword[ebp+20]
 	mov ecx, dword[eax]
-	cmp ecx, dword[MAX_LIGHT_COUNT]
+	cmp ecx, dword[LIGHT_RENDERER_MAX_LIGHTS]
 	jbe lightRenderer_updateGlobalLights_valid_light_count
-		push dword[MAX_LIGHT_COUNT]
+		push dword[LIGHT_RENDERER_MAX_LIGHTS]
 		push ecx
 		push lightRenderer_updateGlobalLights_error_too_many_lights
 		call my_printf
@@ -588,9 +586,9 @@ lightRenderer_updatePointLights:
 	;check if the vector is kosher
 	mov eax, dword[ebp+20]
 	mov ecx, dword[eax]
-	cmp ecx, dword[MAX_LIGHT_COUNT]
+	cmp ecx, dword[LIGHT_RENDERER_MAX_LIGHTS]
 	jbe lightRenderer_updatePointLights_valid_light_count
-		push dword[MAX_LIGHT_COUNT]
+		push dword[LIGHT_RENDERER_MAX_LIGHTS]
 		push ecx
 		push lightRenderer_updatePointLights_error_too_many_lights
 		call my_printf
