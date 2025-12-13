@@ -16,7 +16,9 @@
 ;	padding of 8 bytes
 ;	GLuint shader;											200
 ;	TextureArrayInfo* blockTextures;						204
-;}	208 bytes
+;	padding of 16 bytes
+;	LightManager4D* lightManager;							224
+;}	228 bytes
 
 ;layout:
 ;struct GraphicsUpdate{
@@ -127,6 +129,8 @@ section .text use32
 	global chunkManager4d_getHyperPlane			;HyperPlane* chunkManager4d_getHyperPlane(ChunkManager4D* cm)
 	global chunkManager4d_setHyperPlane			;void chunkManager4d_setHyperPlane(ChunkManager4D* cm, HyperPlane* ph)
 	
+	global chunkManager4d_getLightManager		;LightManager4D* chunkManager4d_getLightManager(ChunkManager4D* cm)
+	
 	global chunkManager4d_getPlayerChunk4D			;void chunkManager4d_getPlayerChunk4D(ChunkManager4D* cm, vec3* playerPos3D, int* chunkX, int* chunkZ, int* chunkW)
 	
 	extern my_printf
@@ -231,6 +235,11 @@ section .text use32
 	extern sun_getAngle
 	extern sun_setAngle
 	
+	extern lightManager4d_create
+	extern lightManager4d_destroy
+	extern lightManager4d_registerLightArray
+	extern lightManager4d_yeetLightArray
+	
 chunkManager4d_create:
 	push ebp
 	mov ebp, esp
@@ -240,7 +249,7 @@ chunkManager4d_create:
 	
 	
 	;alloc chunk manager
-	push 208
+	push 228
 	call my_malloc
 	mov dword[ebp-4], eax
 	
@@ -320,6 +329,11 @@ chunkManager4d_create:
 	call block_importTextures
 	mov ecx, dword[ebp-4]
 	mov dword[ecx+204], eax
+	
+	;create light manager
+	call lightManager4d_create
+	mov ecx, dword[ebp-4]
+	mov dword[ecx+224], eax
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -1529,6 +1543,11 @@ chunkManager4d_getHyperPlane:
 	add eax, 100
 	ret
 	
+chunkManager4d_getLightManager:
+	mov eax, dword[esp+4]
+	mov eax, dword[eax+224]
+	ret
+	
 	
 chunkManager4d_getPlayerChunk:
 	push ebp
@@ -1700,9 +1719,16 @@ chunkManager4d_loadChunk_internal:
 	sub esp, 4			;block type array					32
 	sub esp, 4			;chunk pos array					36
 	sub esp, 4			;block pos array					40
+	sub esp, 16			;vector<{vec4,vec3,float}> lightInfos	56
 	
 	mov dword[ebp-4], 0
 	mov dword[ebp-8], 0
+	
+	;create the light infos vector
+	push 16
+	lea eax, [ebp-56]
+	push eax
+	call vector_init
 	
 	;get the changed blocks vector
 	mov eax, dword[ebp+20]
@@ -1724,6 +1750,8 @@ chunkManager4d_loadChunk_internal:
 	cmp eax, -1
 	je chunkManager4d_loadChunk_internal_not_veteran
 		;veteran
+		lea ecx, [ebp-56]
+		push ecx
 		push 0
 		push dword[ebp-12]
 		push dword[ebp+32]
@@ -1750,6 +1778,8 @@ chunkManager4d_loadChunk_internal:
 		call vector_init
 		
 		;generate chunk
+		lea ecx, [ebp-56]
+		push ecx
 		lea eax, [ebp-28]
 		push eax
 		push dword[ebp-12]
@@ -1832,6 +1862,23 @@ chunkManager4d_loadChunk_internal:
 		call vector_destroy
 	
 	chunkManager4d_loadChunk_internal_load_done:
+	
+	;register the lights
+	mov eax, dword[ebp-4]
+	add eax, 80
+	lea ecx, [ebp-56]
+	push eax
+	push ecx
+	mov edx, dword[ebp+20]
+	push edx
+	call chunkManager4d_getLightManager
+	mov dword[esp], eax
+	call lightManager4d_registerLightArray
+	
+	;destroy the light infos vector
+	lea eax, [ebp-56]
+	push eax
+	call vector_destroy
 	
 	;create graphics update
 	mov eax, dword[ebp-4]
@@ -1967,6 +2014,15 @@ chunkManager4d_unloadChunk_internal:
 	push dword[ebp+24]
 	push dword[ebp+20]
 	call tsVector_remove
+	
+	;unregister the lights
+	mov eax, dword[ebp+24]
+	add eax, 80
+	push eax
+	push dword[ebp+20]
+	call chunkManager4d_getLightManager
+	mov dword[esp], eax
+	call lightManager4d_yeetLightArray
 	
 	;get the renderable
 	mov eax, dword[ebp+24]

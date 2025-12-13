@@ -9,7 +9,9 @@
 ;	vec4 lowerBound, upperBound;				;20
 ;	void* vertices, int vertexFloatCount		;52			;temporary, deleted as soon as the renderable is constructed
 ;	int chunkAlreadyProcessed;					;60			;is the chunk in its final state (in practice; is there a graphics load update waiting for the chunk)
-;}		64 bytes overall
+;	20 bytes padding
+;	vector<PointLight4D*> lights;				;80
+;}		96 bytes overall
 
 SIDE_POS_X equ 0x0000
 SIDE_NEG_X equ 0x0001
@@ -75,7 +77,7 @@ section .text use32
 	;changedBlocks can be null
 	;firstGenChangedBlocks should be empty initially, it is filled with blocks connected to terrain generation (e.g. trees) and serves as an output variable that will be used by the calling chunkmanager
 	;firstGenChangedBlocks is null if it is not the first generation of the chunk
-	global chunk4d_generate			;Chunk4D* chunk4d_generate(int chunkX, int chunkZ, int chunkW, const vector<ChangedBlock>* nullableChangedBlocks, vector<ChangedBlock>* firstGenChangedBlocks)
+	global chunk4d_generate			;Chunk4D* chunk4d_generate(int chunkX, int chunkZ, int chunkW, const vector<ChangedBlock>* nullableChangedBlocks, vector<ChangedBlock>* firstGenChangedBlocks, vector<{vec4, vec3, float}>* outLightInfos)
 	;the renderable is destroyed by the chunk manager
 	global chunk4d_destroy			;void chunk4d_destroy(Chunk4D* chunk)
 	
@@ -98,7 +100,9 @@ section .text use32
 	extern vector_push_back_buffer
 	
 	extern vec4_add
-	
+
+	extern block_isEmissive
+	extern block_getEmissionInfo
 	extern BLOCK_AIR
 	extern BLOCK_GRASS
 	extern BLOCK_DIRT
@@ -235,6 +239,13 @@ chunk4d_destroy:
 		call physics4d_unregisterColliderGroup
 	chunk4d_destroy_no_collider_group:
 	
+	;destroy lights
+	;NOTE: no need to unregister the lights as it is the chunk manager's job
+	mov eax, dword[ebp+8]
+	add eax, 80
+	push eax
+	call vector_destroy
+	
 	;dealloc chunk
 	push dword[ebp+8]
 	call my_free
@@ -273,7 +284,7 @@ chunk4d_generate:
 	sub esp, 16				;conversion helper					104
 	
 	;alloc space for chunk
-	push 64
+	push 96
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
@@ -295,6 +306,13 @@ chunk4d_generate:
 	mov dword[eax+56], 0			;vertexFloatCount
 	
 	mov dword[eax+60], 0			;the chunk is not yet processed
+	
+	;init the light vector
+	mov eax, dword[ebp-4]
+	add eax, 80
+	push 4
+	push eax
+	call vector_init
 	
 	;alloc space for heightmap
 	push dword[CHUNK_HEIGHT_MAP_LENGTH]
@@ -871,8 +889,10 @@ chunk4d_generate:
 					
 					;add an aabb if the block is visible
 					;the aabbs sind local to the chunk yet
+					;also add a light if the block is emissive
 					cmp dword[ebp-56], 0
-					je chunk4d_generate_mesh_no_aabb
+					je chunk4d_generate_mesh_not_visible
+						;create the aabb
 						lea eax, [ebp-104]
 						push AABB_SCALE
 						push eax
@@ -881,8 +901,33 @@ chunk4d_generate:
 						push dword[ebp-52]
 						call colliderGroup4d_addCollider
 						add esp, 16
+						
+						jmp chunk4d_generate_mesh_visible_nonemissive
+						movzx eax, byte[esi]
+						push eax
+						call block_isEmissive
+						add esp, 4
+						test eax, eax
+						jz chunk4d_generate_mesh_visible_nonemissive
+							;register the light
+							sub esp, 16
+							mov ecx, esp
+							push ecx
+							movzx edx, byte[esi]
+							push edx
+							call block_getEmissionInfo
+							add esp, 8
+							push dword[ebp-92]
+							push dword[ebp-96]
+							push dword[ebp-100]
+							push dword[ebp-104]
+							push dword[ebp+40]
+							call vector_push_back
+							add esp, 36
+						
+						chunk4d_generate_mesh_visible_nonemissive:
 					
-					chunk4d_generate_mesh_no_aabb:
+					chunk4d_generate_mesh_not_visible:
 					
 					
 					chunk4d_generate_mesh_w_loop_continue:

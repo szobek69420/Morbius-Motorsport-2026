@@ -20,6 +20,10 @@ section .rodata use32
 	ATTENUATION_QUADRATIC dd 1.8
 	
 	ONE dd 1.0
+	
+	print_int_nl db "%d",10,0
+	
+	test_text db "all of the lights",10,0
 
 section .text use32
 
@@ -475,6 +479,7 @@ lightManager4d_processUpdates:
 			push dword[ebp-12]
 			push dword[ebp+8]
 			call vector_push_back
+			add esp, 8
 			
 			jmp lightManager4d_processUpdates_loop_start
 		
@@ -484,12 +489,18 @@ lightManager4d_processUpdates:
 			push lightManager4d_processUpdates_loop_delete_cmp
 			push dword[ebp+8]
 			call vector_search
+			add esp, 12
 			cmp eax, -1
 			je lightManager4d_processUpdates_loop_start
 			
 			push eax
 			push dword[ebp+8]
 			call vector_remove_at
+			add esp, 8
+			
+			push dword[ebp-12]
+			call my_free
+			add esp, 4
 			
 			jmp lightManager4d_processUpdates_loop_start
 			lightManager4d_processUpdates_loop_delete_cmp:		;int func(PointLight4D** pElement, PointLight4D* key)
