@@ -18,7 +18,8 @@
 ;	TextureArrayInfo* blockTextures;						204
 ;	padding of 16 bytes
 ;	LightManager4D* lightManager;							224
-;}	228 bytes
+;	int shouldUpdateLightManager;							228
+;}	232 bytes
 
 ;layout:
 ;struct GraphicsUpdate{
@@ -103,7 +104,7 @@ section .text use32
 	;int chunkManager4d_processPendingChunkReloads(ChunkManager4D* cm, int maxReloads)
 	global chunkManager4d_processPendingChunkReloads
 	
-	global chunkManager4d_render					;void chunkManager4d_render(ChunkManager4D* manager, mat4* view, mat4* projection)
+	global chunkManager4d_render					;void chunkManager4d_render(ChunkManager4D* manager, mat4* view, mat4* projection, vec4* playerPos4d)
 	
 	;should be called from the graphics thread
 	;returns 0 if no graphics update has been processed
@@ -130,6 +131,7 @@ section .text use32
 	global chunkManager4d_setHyperPlane			;void chunkManager4d_setHyperPlane(ChunkManager4D* cm, HyperPlane* ph)
 	
 	global chunkManager4d_getLightManager		;LightManager4D* chunkManager4d_getLightManager(ChunkManager4D* cm)
+	global chunkManager4d_setLightUpdateFlag	;void chunkManager4d_setLightUpdateFlag(ChunkManager4D* cm)
 	
 	global chunkManager4d_getPlayerChunk4D			;void chunkManager4d_getPlayerChunk4D(ChunkManager4D* cm, vec3* playerPos3D, int* chunkX, int* chunkZ, int* chunkW)
 	
@@ -239,6 +241,7 @@ section .text use32
 	extern lightManager4d_destroy
 	extern lightManager4d_registerLightArray
 	extern lightManager4d_yeetLightArray
+	extern lightManager4d_update3d
 	
 chunkManager4d_create:
 	push ebp
@@ -334,6 +337,7 @@ chunkManager4d_create:
 	call lightManager4d_create
 	mov ecx, dword[ebp-4]
 	mov dword[ecx+224], eax
+	mov dword[ecx+228], 69			;should update
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -359,6 +363,23 @@ chunkManager4d_render:
 	;refresh hyperplane if necessary
 	push dword[ebp+20]
 	call chunkManager4d_applyHyperPlane_internal
+	
+	;recalculate the lights if necessary
+	mov eax, dword[ebp+20]
+	test dword[eax+228], 0xffffffff
+	jz chunkManager4d_render_skip_light_reload
+		push dword[ebp+32]
+		push dword[ebp+20]
+		call chunkManager4d_getHyperPlane
+		mov dword[esp], eax
+		push dword[ebp+20]
+		call chunkManager4d_getLightManager
+		mov dword[esp], eax
+		call lightManager4d_update3d
+		
+		mov eax, dword[ebp+20]
+		mov dword[eax+228], 0			;clear the update flag
+	chunkManager4d_render_skip_light_reload:
 	
 	;calculate the pv matrix
 	mov eax, dword[ebp+24]			;view
@@ -1546,6 +1567,11 @@ chunkManager4d_getHyperPlane:
 chunkManager4d_getLightManager:
 	mov eax, dword[esp+4]
 	mov eax, dword[eax+224]
+	ret
+	
+chunkManager4d_setLightUpdateFlag:
+	mov eax, dword[esp+4]
+	mov dword[eax+228], 69
 	ret
 	
 	

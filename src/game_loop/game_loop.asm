@@ -260,6 +260,7 @@ section .text use32
 	extern player_update
 	extern player_updatePhysics
 	extern player_drawRaycastHypercube
+	extern player_getPosition4d
 	
 	extern hyperPlane_directionTo3d
 	
@@ -361,6 +362,8 @@ section .text use32
 	extern chunkManager4d_processPendingChunkReloads
 	extern chunkManager4d_render
 	extern chunkManager4d_getHyperPlane
+	extern chunkManager4d_getLightManager
+	extern chunkManager4d_setLightUpdateFlag
 	
 	extern sun_init
 	extern sun_deinit
@@ -412,6 +415,7 @@ section .text use32
 	
 	extern lightRenderer_init
 	extern lightRenderer_deinit
+	extern lightManager4d_processUpdates
 	
 gameLoop_main:
 	push ebp
@@ -715,12 +719,19 @@ gameLoop_main:
 		call sun_setAngle
 		add esp, 4
 		
+		
 		;render 4d chunks
+		sub esp, 16
+		mov eax, esp
+		push eax
+		push dword[pplayer]
+		call player_getPosition4d
+		add esp, 4
 		push projection_matrix
 		push view_matrix
 		push dword[chunk_manager_4d]
 		call chunkManager4d_render
-		add esp, 12
+		add esp, 32
 		
 		;render the hand
 		mov eax, dword[chunk_manager_4d]
@@ -1109,6 +1120,20 @@ gameLoop_chunkLoader:
 			push dword[chunk_manager_4d]
 			call chunkManager4d_processPendingChunkReloads
 			add esp, 8
+			
+			;process the light updates
+			push dword[chunk_manager_4d]
+			call chunkManager4d_getLightManager
+			mov dword[esp], eax
+			call lightManager4d_processUpdates
+			test eax, eax
+			jz gameLoop_chunk_loader_loop_skip_light_update
+				mov ecx, dword[chunk_manager_4d]
+				mov dword[esp], ecx
+				call chunkManager4d_setLightUpdateFlag
+			gameLoop_chunk_loader_loop_skip_light_update:
+			add esp, 4
+			
 			
 			;set the displayed delta time
 			call [GetTickCount]

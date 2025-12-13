@@ -117,7 +117,8 @@ section .text use32
 	global player_updatePhysics			;void player_updatePhysics(player* player, float deltaTime)
 	global player_lookDirection			;void player_lookDirection(player* player, vec4* buffer)
 	global player_drawRaycastHypercube	;void player_drawRaycastHypercube(Player* player, mat4* pv)
-	
+	global player_getPosition4d			;void player_getPosition4d(Player* player, vec4* buffer)
+
 	extern my_malloc
 	extern my_free
 	extern my_printf
@@ -615,6 +616,29 @@ player_drawRaycastHypercube:
 	add esp, 4
 	
 	player_drawRaycastHypercube_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+player_getPosition4d:
+	push ebp
+	mov ebp, esp
+	
+	mov eax, dword[ebp+8]
+	push dword[eax+24]
+	call aabb4d_getPosition
+	
+	mov ecx, dword[ebp+12]
+	mov edx, dword[eax]
+	mov dword[ecx], edx
+	mov edx, dword[eax+4]
+	mov dword[ecx+4], edx
+	mov edx, dword[eax+8]
+	mov dword[ecx+8], edx
+	mov edx, dword[eax+12]
+	mov dword[ecx+12], edx
+	
 	mov esp, ebp
 	pop ebp
 	ret

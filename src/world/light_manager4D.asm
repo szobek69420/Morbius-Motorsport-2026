@@ -36,7 +36,9 @@ section .text use32
 	global lightManager4d_yeetLight			;void lightManager4d_yeetLight(LightManager4D* lm, PointLight4D* light)
 	global lightManager4d_yeetLightArray	;void lightManager4d_yeetLightArray(LightManager4D* lm, vector<PointLight4D*>* lights)
 	
-	global lightManager4d_processUpdates	;void lightManager4d_processUpdates(LightManager4D* lm)
+	;returns the number of updates processed
+	;int lightManager4d_processUpdates(LightManager4D* lm)
+	global lightManager4d_processUpdates
 	
 	;recalculates the rendered lights
 	;should be called from the graphics thread
@@ -446,14 +448,17 @@ lightManager4d_processUpdates:
 	
 	sub esp, 4			;tsQueue*		4
 	sub esp, 8			;update buffer	12
+	sub esp, 4			;updates processed	16
 	
 	mov eax, dword[ebp+8]
 	add eax, 16
 	mov dword[ebp-4], eax
 	
+	mov dword[ebp-16], 0
+	
 	;check if there are updates
 	push dword[ebp-4]
-	call tsQueue_sizeNonBlocking
+	call tsQueue_sizeNonBlocking	
 	test eax, eax
 	jz lightManager4d_processUpdates_end
 	
@@ -471,6 +476,8 @@ lightManager4d_processUpdates:
 		add esp, 8
 		test eax, eax
 		jnz lightManager4d_processUpdates_loop_end	;empty
+		
+		inc dword[ebp-16]
 		
 		test dword[ebp-8], 0xffffffff
 		jnz lightManager4d_processUpdates_loop_delete
@@ -510,14 +517,17 @@ lightManager4d_processUpdates:
 				cmp ecx, dword[esp+8]
 				jne lightManager4d_processUpdates_loop_delete_cmp_end
 					xor eax, eax
-				lightManager4d_processUpdates_loop_delete_cmp_end
+				lightManager4d_processUpdates_loop_delete_cmp_end:
 				ret
 			
 	lightManager4d_processUpdates_loop_end:
 	
 	;unlock the queue
 	push dword[ebp-4]
-	call tsQueue_lock
+	call tsQueue_unlock
+	
+	;set return value
+	mov eax, dword[ebp-16]
 	
 	lightManager4d_processUpdates_end:
 	mov esp, ebp
@@ -538,7 +548,7 @@ lightManager4d_update3d:
 	sub esp, 4			;scaled intensity					;44
 	sub esp, 12			;3d pos								;56
 	sub esp, 16			;vec4 helper						;72
-	
+
 	;check if there are any lights
 	mov eax, dword[ebp+20]
 	cmp dword[eax], 0
