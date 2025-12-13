@@ -627,8 +627,8 @@ chunk4d_generate:
 					
 					;add the side to the vertex data if it may be visible (neighbouring block is transparent)
 					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH_SQUARED]
-					cmp byte[esi+eax], 0
-					jne chunk4d_generate_mesh_not_pos_x
+					test byte[esi+eax], 0xff
+					jnz chunk4d_generate_mesh_not_pos_x
 						sub esp, 8
 						lea eax, [ebp-48]
 						mov dword[esp], eax				;vertex vector
@@ -661,8 +661,8 @@ chunk4d_generate:
 					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH_SQUARED]
 					not eax
 					inc eax
-					cmp byte[esi+eax], 0
-					jne chunk4d_generate_mesh_not_neg_x
+					test byte[esi+eax], 0xff
+					jnz chunk4d_generate_mesh_not_neg_x
 						sub esp, 8
 						lea eax, [ebp-48]
 						mov dword[esp], eax				;vertex vector
@@ -693,8 +693,8 @@ chunk4d_generate:
 					chunk4d_generate_mesh_not_neg_x:
 					
 					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH_CUBED]
-					cmp byte[esi+eax], 0
-					jne chunk4d_generate_mesh_not_pos_y
+					test byte[esi+eax], 0xff
+					jnz chunk4d_generate_mesh_not_pos_y
 						sub esp, 8
 						lea eax, [ebp-48]
 						mov dword[esp], eax				;vertex vector
@@ -727,8 +727,8 @@ chunk4d_generate:
 					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH_CUBED]
 					not eax
 					inc eax
-					cmp byte[esi+eax], 0
-					jne chunk4d_generate_mesh_not_neg_y
+					test byte[esi+eax], 0xff
+					jnz chunk4d_generate_mesh_not_neg_y
 						sub esp, 8
 						lea eax, [ebp-48]
 						mov dword[esp], eax				;vertex vector
@@ -759,8 +759,8 @@ chunk4d_generate:
 					chunk4d_generate_mesh_not_neg_y:
 					
 					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH]
-					cmp byte[esi+eax], 0
-					jne chunk4d_generate_mesh_not_pos_z
+					test byte[esi+eax], 0xff
+					jnz chunk4d_generate_mesh_not_pos_z
 						sub esp, 8
 						lea eax, [ebp-48]
 						mov dword[esp], eax				;vertex vector
@@ -793,8 +793,8 @@ chunk4d_generate:
 					mov eax, dword[CHUNK_HEIGHT_MAP_WIDTH]
 					not eax
 					inc eax
-					cmp byte[esi+eax], 0
-					jne chunk4d_generate_mesh_not_neg_z
+					test byte[esi+eax], 0xff
+					jnz chunk4d_generate_mesh_not_neg_z
 						sub esp, 8
 						lea eax, [ebp-48]
 						mov dword[esp], eax				;vertex vector
@@ -824,8 +824,8 @@ chunk4d_generate:
 						add esp, 8
 					chunk4d_generate_mesh_not_neg_z:
 					
-					cmp byte[esi+1], 0
-					jne chunk4d_generate_mesh_not_pos_w
+					test byte[esi+1], 0xff
+					jnz chunk4d_generate_mesh_not_pos_w
 						sub esp, 8
 						lea eax, [ebp-48]
 						mov dword[esp], eax				;vertex vector
@@ -856,8 +856,8 @@ chunk4d_generate:
 						
 					chunk4d_generate_mesh_not_pos_w:
 					
-					cmp byte[esi-1], 0
-					jne chunk4d_generate_mesh_not_neg_w
+					test byte[esi-1], 0xff
+					jnz chunk4d_generate_mesh_not_neg_w
 						sub esp, 8
 						lea eax, [ebp-48]
 						mov dword[esp], eax				;vertex vector
@@ -902,7 +902,7 @@ chunk4d_generate:
 						call colliderGroup4d_addCollider
 						add esp, 16
 						
-						jmp chunk4d_generate_mesh_visible_nonemissive
+						;check if light
 						movzx eax, byte[esi]
 						push eax
 						call block_isEmissive

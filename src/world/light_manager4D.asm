@@ -6,9 +6,10 @@
 ;}		32 bytes overall
 
 ;struct LightManager4D{
-;	vector<PointLight4D*> registeredLights;								0
-;	tsQueue<{PointLight4D*, int isDeleteUpdate}> pendingUpdates;		16
-;}		24 bytes overall
+;	tsVector<PointLight4D*> registeredLights;							0
+;	padding of 8 bytes
+;	queue<{PointLight4D*, int isDeleteUpdate}> pendingUpdates;			16
+;}		36 bytes overall
 
 section .rodata use32
 	
@@ -53,6 +54,13 @@ section .text use32
 	
 	extern my_qsort
 	
+	extern tsVector_init
+	extern tsVector_destroy
+	extern tsVector_vector
+	extern tsVector_lock
+	extern tsVector_unlock
+	extern tsVector_forEach
+	
 	extern vector_init
 	extern vector_destroy
 	extern vector_push_back
@@ -61,15 +69,12 @@ section .text use32
 	extern vector_for_each
 	extern vector_at
 	
-	extern tsQueue_init
-	extern tsQueue_destroy
-	extern tsQueue_pop
-	extern tsQueue_push
-	extern tsQueue_pushArray
-	extern tsQueue_sizeNonBlocking
-	extern tsQueue_lock
-	extern tsQueue_unlock
-	extern tsQueue_queue
+	extern queue_init
+	extern queue_destroy
+	extern queue_pop
+	extern queue_push
+	extern queue_pushArray
+	extern queue_size
 	
 	extern vec4_sub
 	extern vec4_sqrMagnitude
@@ -102,7 +107,7 @@ lightManager4d_create:
 	mov eax, dword[ebp-4]
 	push 4
 	push eax
-	call vector_init
+	call tsVector_init
 	
 	;init update queue
 	mov eax, dword[ebp-4]
@@ -110,7 +115,7 @@ lightManager4d_create:
 	push 16384
 	push 8
 	push eax
-	call tsQueue_init
+	call queue_init
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -132,16 +137,16 @@ lightManager4d_destroy:
 	push 0
 	push lightManager4d_destroy_free_light
 	push dword[ebp+8]
-	call vector_for_each
+	call tsVector_forEach
 	
 	;destroy the update queue and the light vector
 	mov eax, dword[ebp+8]
 	push eax
 	add eax, 16
 	push eax
-	call tsQueue_destroy
+	call queue_destroy
 	add esp, 4
-	call vector_destroy
+	call tsVector_destroy
 	
 	;free the lightmanager
 	push dword[ebp+8]
@@ -199,7 +204,7 @@ lightManager4d_registerLight:
 	push 0			;not delete update
 	push dword[ebp-4]
 	push eax
-	call tsQueue_push
+	call queue_push
 	
 	;return the light
 	mov eax, dword[ebp-4]
@@ -216,9 +221,9 @@ lightManager4d_registerLightArray:
 	push ebx
 	mov ebp, esp
 	
-	sub esp, 4			;queue				4
+	sub esp, 4			;unused				4
 	sub esp, 4			;PointLight4D**		8
-	sub esp, 4			;light array		12
+	sub esp, 4			;light array length	12
 	sub esp, 4			;register gg		16
 	
 	mov dword[ebp-16], 0
@@ -231,8 +236,8 @@ lightManager4d_registerLightArray:
 	;create all of the lights
 	mov eax, dword[ebp+24]
 	mov eax, dword[eax]
-	shl eax, 2
 	mov dword[ebp-12], eax
+	shl eax, 2
 	push dword[ebp-12]
 	call my_malloc
 	mov dword[ebp-8], eax
@@ -264,15 +269,10 @@ lightManager4d_registerLightArray:
 		cmp ebx, dword[ebp-12]
 		jl lightManager4d_registerLightArray_create_loop_start
 	
-	;lock queue
-	mov eax, dword[ebp+20]
-	add eax, 16
-	push eax
-	call tsQueue_lock
 	
 	;check if there is enough space in the queue
-	call tsQueue_queue
-	mov dword[ebp-4], eax
+	mov eax, dword[ebp+20]
+	add eax, 16
 	
 	mov ecx, dword[eax+8]
 	sub ecx, dword[eax+4]
@@ -281,7 +281,7 @@ lightManager4d_registerLightArray:
 	jge lightManager4d_registerLightArray_enough_space
 		push lightManager4d_registerLightArray_error_not_enough_space
 		call my_printf
-		jmp lightManager4d_registerLight_unlock
+		jmp lightManager4d_registerLightArray_freeArray
 		lightManager4d_registerLightArray_error_not_enough_space db "lightManager4d_registerLightArray: there is not enough space in the pending updates queue",10,0
 	lightManager4d_registerLightArray_enough_space:
 	
@@ -294,7 +294,7 @@ lightManager4d_registerLightArray:
 		mov eax, dword[ebp+20]
 		add eax, 16
 		push eax
-		call tsQueue_push
+		call queue_push
 		add esp, 12
 		
 		add esi, 4
@@ -304,12 +304,6 @@ lightManager4d_registerLightArray:
 	;registration is complete
 	mov dword[ebp-16], 69
 	
-	lightManager4d_registerLight_unlock:
-	;unlock queue
-	mov eax, dword[ebp+20]
-	add eax, 16
-	push eax
-	call tsQueue_lock
 	
 	;put all of the lights into the out vector
 	test dword[ebp-16], 0xffffffff
@@ -350,7 +344,7 @@ lightManager4d_yeetLight:
 	push 69			;delete update
 	push dword[ebp+12]
 	push eax
-	call tsQueue_push
+	call queue_push
 	
 	mov esp, ebp
 	pop ebp
@@ -384,21 +378,17 @@ lightManager4d_yeetLightArray:
 	push dword[ebp+24]
 	call vector_for_each
 	
-	;add the updates to the pending queue if possible
+	
 	mov eax, dword[ebp+20]
 	add eax, 16
-	push eax
-	call tsQueue_lock
-	
-	call tsQueue_queue
 	mov ecx, dword[eax+8]
 	sub ecx, dword[eax+4]
-	mov edx, dword[ebp+20]
+	mov edx, dword[ebp+24]
 	cmp ecx, dword[edx]
 	jge lightManager4d_yeetLightArray_enough_space		;enough space
 		push lightManager4d_yeetLightArray_error_not_enough_space
 		call my_printf
-		jmp lightManager4d_yeetLightArray_unlock
+		jmp lightManager4d_yeetLightArray_destroy_vector
 	
 		lightManager4d_yeetLightArray_error_not_enough_space db "lightManager4d_yeetLightArray: not enough space in the update queue",10,0
 	lightManager4d_yeetLightArray_enough_space:
@@ -408,14 +398,9 @@ lightManager4d_yeetLightArray:
 	push dword[ebp-16]
 	push dword[ebp-4]
 	push eax
-	call tsQueue_pushArray
+	call queue_pushArray
 	
-	lightManager4d_yeetLightArray_unlock:
-	mov eax, dword[ebp+20]
-	add eax, 16
-	push eax
-	call tsQueue_unlock
-	
+	lightManager4d_yeetLightArray_destroy_vector:
 	;destroy vector
 	lea eax, [ebp-16]
 	push eax
@@ -449,6 +434,7 @@ lightManager4d_processUpdates:
 	sub esp, 4			;tsQueue*		4
 	sub esp, 8			;update buffer	12
 	sub esp, 4			;updates processed	16
+	sub esp, 4			;vector*		20
 	
 	mov eax, dword[ebp+8]
 	add eax, 16
@@ -456,23 +442,26 @@ lightManager4d_processUpdates:
 	
 	mov dword[ebp-16], 0
 	
+	push dword[ebp+8]
+	call tsVector_vector
+	mov dword[ebp-20], eax
+	
 	;check if there are updates
 	push dword[ebp-4]
-	call tsQueue_sizeNonBlocking	
+	call queue_size
 	test eax, eax
 	jz lightManager4d_processUpdates_end
 	
-	;lock the queue
-	push dword[ebp-4]
-	call tsQueue_lock
+	;lock the vector
+	push dword[ebp+8]
+	call tsVector_lock
 	
-	
-	lightManager4d_processUpdates_loop_start:
+	lightManager4d_processUpdates_loop_start:	
 		;pop update
 		lea eax, [ebp-12]
 		push eax
 		push dword[ebp-4]
-		call tsQueue_pop
+		call queue_pop
 		add esp, 8
 		test eax, eax
 		jnz lightManager4d_processUpdates_loop_end	;empty
@@ -484,7 +473,7 @@ lightManager4d_processUpdates:
 		lightManager4d_processUpdates_loop_register:
 			;register update
 			push dword[ebp-12]
-			push dword[ebp+8]
+			push dword[ebp-20]
 			call vector_push_back
 			add esp, 8
 			
@@ -494,14 +483,14 @@ lightManager4d_processUpdates:
 			;delete update
 			push dword[ebp-12]
 			push lightManager4d_processUpdates_loop_delete_cmp
-			push dword[ebp+8]
+			push dword[ebp-20]
 			call vector_search
 			add esp, 12
 			cmp eax, -1
 			je lightManager4d_processUpdates_loop_start
 			
 			push eax
-			push dword[ebp+8]
+			push dword[ebp-20]
 			call vector_remove_at
 			add esp, 8
 			
@@ -522,9 +511,9 @@ lightManager4d_processUpdates:
 			
 	lightManager4d_processUpdates_loop_end:
 	
-	;unlock the queue
-	push dword[ebp-4]
-	call tsQueue_unlock
+	;unlock the vector
+	push dword[ebp+8]
+	call tsVector_unlock
 	
 	;set return value
 	mov eax, dword[ebp-16]
@@ -548,11 +537,18 @@ lightManager4d_update3d:
 	sub esp, 4			;scaled intensity					;44
 	sub esp, 12			;3d pos								;56
 	sub esp, 16			;vec4 helper						;72
+	sub esp, 4			;light4d vector						;76
+	sub esp, 16			;vector<PointLight*> 3dLights		;92		//the 3d lights vector that will be sent to the light renderer
 
 	;check if there are any lights
 	mov eax, dword[ebp+20]
 	cmp dword[eax], 0
 	jle lightManager4d_update3d_end
+	
+	;get the light vector
+	push dword[ebp+20]
+	call tsVector_vector
+	mov dword[ebp-76], eax
 	
 	;get the hyperplane equation
 	lea eax, [ebp-36]
@@ -566,8 +562,12 @@ lightManager4d_update3d:
 	push eax
 	call vector_init
 	
+	;lock the vector
+	push dword[ebp+20]
+	call tsVector_lock
+	
 	;create 3d lights if they are close enough to the plane
-	mov esi, dword[ebp+20]
+	mov esi, dword[ebp-76]
 	mov edi, dword[esi]			;index in edi
 	mov esi, dword[esi+12]
 	lightManager4d_update3d_create_loop_start:
@@ -642,6 +642,10 @@ lightManager4d_update3d:
 		dec edi
 		jnz lightManager4d_update3d_create_loop_start
 		
+	;unlock the vector
+	push dword[ebp+20]
+	call tsVector_unlock
+		
 	;check if sort and shortening is necessary
 	mov eax, dword[ebp-16]
 	cmp eax, dword[LIGHT_RENDERER_MAX_LIGHTS]
@@ -692,14 +696,42 @@ lightManager4d_update3d:
 			ret
 	lightManager4d_update3d_skip_sort:
 	
+	;create and fill the vector that will be sent to the renderer
+	push 4
+	lea eax, [ebp-92]
+	push eax
+	call vector_init
+	push lightManager4d_update3d_forEach_transformer
+	lea ecx, [ebp-16]
+	push ecx
+	call vector_for_each
+	jmp lightManager4d_update3d_transform_done
+	
+	lightManager4d_update3d_forEach_transformer:	;void func({PointLight*, float}* light, vector<PointLight*>* lights)
+		push ebp
+		mov ebp, esp
+		
+		mov eax, dword[ebp+8]
+		push dword[eax]
+		push dword[ebp+12]
+		call vector_push_back
+		
+		mov esp, ebp
+		pop ebp
+		ret
+	lightManager4d_update3d_transform_done:
+	
 	;send all of the lights to the renderer
-	lea eax, [ebp-16]
+	lea eax, [ebp-92]
 	push eax
 	call lightRenderer_updatePointLights
 	
-	;destroy the 3d light vector
+	;destroy both 3d light vectors
 	lea eax, [ebp-16]
 	push eax
+	call vector_destroy
+	lea ecx, [ebp-92]
+	push ecx
 	call vector_destroy
 	
 	lightManager4d_update3d_end:

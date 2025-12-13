@@ -375,7 +375,7 @@ chunkManager4d_render:
 		push dword[ebp+20]
 		call chunkManager4d_getLightManager
 		mov dword[esp], eax
-		call lightManager4d_update3d
+		;call lightManager4d_update3d
 		
 		mov eax, dword[ebp+20]
 		mov dword[eax+228], 0			;clear the update flag
