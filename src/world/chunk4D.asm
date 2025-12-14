@@ -212,6 +212,7 @@ chunk4d_vec4ToBlockPos:
 	pop ebp
 	ret
 	
+	
 chunk4d_destroy:
 	push ebp
 	mov ebp, esp

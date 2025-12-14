@@ -10,6 +10,7 @@
 
 section .data use32
 	stdout_handle dd 0		;0, if not yet queried
+	critical_section dd 0
 
 section .bss use32
 	
@@ -24,6 +25,10 @@ section .text use32
 	extern my_sprintf
 	extern my_memcpy
 	
+	extern criticalSection_create
+	extern criticalSection_lock
+	extern criticalSection_unlock
+	
 	dll_import kernel32.dll, GetStdHandle
 	dll_import kernel32.dll, WriteFile
 	
@@ -34,6 +39,9 @@ my_printf:
 	;check for stdout and find it if necessary
 	cmp dword[stdout_handle], 0
 	jne my_printf_stdout_loaded
+		call criticalSection_create
+		mov dword[critical_section], eax
+		
 		call get_stdout_handle
 		cmp dword[stdout_handle], 0
 		jne my_printf_stdout_loaded
@@ -100,12 +108,18 @@ my_printf:
 	push eax
 	call my_memcpy
 	add esp, 12
+
+	;lock the critical sex
+	push dword[critical_section]
+	call criticalSection_lock
+	add esp, 4
 	
+	;get the string length
 	push dword[ebp+8]
 	push printf_buffer
 	call my_sprintf
 	call my_strlen
-
+	
 	;output the created string onto the console
 	push 0
 	push 0
@@ -113,6 +127,10 @@ my_printf:
 	push printf_buffer
 	push dword[stdout_handle]
 	call [WriteFile]
+	
+	;unlock the critical sex
+	push dword[critical_section]
+	call criticalSection_unlock
 	
 	my_printf_end:
 	mov esp, ebp

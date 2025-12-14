@@ -375,7 +375,7 @@ chunkManager4d_render:
 		push dword[ebp+20]
 		call chunkManager4d_getLightManager
 		mov dword[esp], eax
-		;call lightManager4d_update3d
+		call lightManager4d_update3d
 		
 		mov eax, dword[ebp+20]
 		mov dword[eax+228], 0			;clear the update flag
@@ -1895,8 +1895,7 @@ chunkManager4d_loadChunk_internal:
 	lea ecx, [ebp-56]
 	push eax
 	push ecx
-	mov edx, dword[ebp+20]
-	push edx
+	push dword[ebp+20]
 	call chunkManager4d_getLightManager
 	mov dword[esp], eax
 	call lightManager4d_registerLightArray

@@ -604,9 +604,9 @@ lightRenderer_updatePointLights:
 	jz lightRenderer_updatePointLights_end
 	
 	;calculate the size of the data and alloc it
-	mov ecx, dword[eax]
+	mov ecx, dword[current_point_count]
 	imul ecx, dword[POINT_LIGHT_SIZE]
-	mov dword[ebp-4], ecx
+	mov dword[ebp-8], ecx
 	
 	push ecx
 	call my_malloc
@@ -661,7 +661,6 @@ lightRenderer_updatePointLights:
 	push dword[GL_ARRAY_BUFFER]
 	call [glBindBuffer]
 	
-	
 	;free the temp buffer
 	push dword[ebp-4]
 	call my_free
@@ -689,6 +688,7 @@ lightRenderer_renderPointLights:
 	;check if there are any point lights
 	cmp dword[current_point_count], 0
 	jle lightRenderer_renderPointLights_end
+	
 	
 	;enable blending, depth test and face cull
 	push 69

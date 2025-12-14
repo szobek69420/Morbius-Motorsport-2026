@@ -1404,6 +1404,7 @@ extern lightRenderer_prepareTargetFBO
 extern lightRenderer_fillEmpty
 extern lightRenderer_updateGlobalLights
 extern lightRenderer_renderGlobalLights
+extern lightRenderer_renderPointLights
 extern lightRenderer_ssao
 extern light_createGlobal
 extern light_setDirection
@@ -1470,6 +1471,12 @@ gameLoop_doDeferredLighting:
 	push dword[ebp+8]
 	call lightRenderer_renderGlobalLights
 	
+	;render the point lights
+	push view_matrix
+	push pv_matrix
+	push dword[ebp+12]
+	push dword[ebp+8]
+	call lightRenderer_renderPointLights
 	
 	;fill the unilluminated parts with the sky colour
 	sub esp, 16

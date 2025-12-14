@@ -238,7 +238,7 @@ lightManager4d_registerLightArray:
 	mov eax, dword[eax]
 	mov dword[ebp-12], eax
 	shl eax, 2
-	push dword[ebp-12]
+	push eax
 	call my_malloc
 	mov dword[ebp-8], eax
 	
@@ -264,7 +264,6 @@ lightManager4d_registerLightArray:
 		movsd
 		pop edi
 		
-		add edi, 4
 		inc ebx
 		cmp ebx, dword[ebp-12]
 		jl lightManager4d_registerLightArray_create_loop_start
@@ -478,6 +477,7 @@ lightManager4d_processUpdates:
 			add esp, 8
 			
 			jmp lightManager4d_processUpdates_loop_start
+			lightManager4d_processUpdates_register_debug_message db "light registered, count: %d",10,0
 		
 		lightManager4d_processUpdates_loop_delete:
 			;delete update
@@ -508,6 +508,7 @@ lightManager4d_processUpdates:
 					xor eax, eax
 				lightManager4d_processUpdates_loop_delete_cmp_end:
 				ret
+			lightManager4d_processUpdates_yeet_debug_message db "light yeeted, remaining: %d",10,0
 			
 	lightManager4d_processUpdates_loop_end:
 	
@@ -539,16 +540,26 @@ lightManager4d_update3d:
 	sub esp, 16			;vec4 helper						;72
 	sub esp, 4			;light4d vector						;76
 	sub esp, 16			;vector<PointLight*> 3dLights		;92		//the 3d lights vector that will be sent to the light renderer
-
-	;check if there are any lights
-	mov eax, dword[ebp+20]
-	cmp dword[eax], 0
-	jle lightManager4d_update3d_end
+	sub esp, 4			;no lights							;96
+	
+	mov dword[ebp-96], 0
+	
+	;lock the vector
+	push dword[ebp+20]
+	call tsVector_lock
 	
 	;get the light vector
 	push dword[ebp+20]
 	call tsVector_vector
 	mov dword[ebp-76], eax
+
+	;check if there are any lights
+	mov eax, dword[ebp-76]
+	cmp dword[eax], 0
+	jg lightManager4d_update3d_there_are_lights
+		mov dword[ebp-96], 69
+		jmp lightManager4d_update3d_unlock_vector
+	lightManager4d_update3d_there_are_lights:
 	
 	;get the hyperplane equation
 	lea eax, [ebp-36]
@@ -561,10 +572,6 @@ lightManager4d_update3d:
 	lea eax, [ebp-16]
 	push eax
 	call vector_init
-	
-	;lock the vector
-	push dword[ebp+20]
-	call tsVector_lock
 	
 	;create 3d lights if they are close enough to the plane
 	mov esi, dword[ebp-76]
@@ -642,9 +649,14 @@ lightManager4d_update3d:
 		dec edi
 		jnz lightManager4d_update3d_create_loop_start
 		
+	lightManager4d_update3d_unlock_vector:
+	
 	;unlock the vector
 	push dword[ebp+20]
 	call tsVector_unlock
+	
+	test dword[ebp-96], 0xffffffff
+	jnz lightManager4d_update3d_end		;there are no lights
 		
 	;check if sort and shortening is necessary
 	mov eax, dword[ebp-16]
