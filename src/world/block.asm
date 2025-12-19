@@ -143,7 +143,6 @@ block_isEmissive:
 block_getEmissionInfo:
 	mov eax, dword[esp+4]
 	rol eax, 4
-	add eax, 12
 	add eax, BLOCK_EMISSIONS
 	
 	mov ecx, dword[esp+8]

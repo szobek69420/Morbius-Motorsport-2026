@@ -153,8 +153,9 @@ section .text use32
 	extern GL_BACK
 	extern GL_FRONT
 	
+	extern vec3_print
 	extern vec4_print
-	
+	extern light_printPointInfo
 	
 lightRenderer_init:
 	push ebp
@@ -612,6 +613,9 @@ lightRenderer_updatePointLights:
 	call my_malloc
 	mov dword[ebp-4], eax
 	
+	push test_text
+	call my_printf
+	
 	;fill up the buffer
 	mov eax, dword[ebp+20]
 	mov ebx, dword[eax]			;index in ebx
@@ -638,6 +642,10 @@ lightRenderer_updatePointLights:
 		mov dword[edi+24], ecx
 		mov edx, dword[eax+28]
 		mov dword[edi+28], edx
+		
+		push eax
+		call light_printPointInfo
+		add esp, 4
 		
 		add esi, 4
 		add edi, dword[POINT_LIGHT_SIZE]

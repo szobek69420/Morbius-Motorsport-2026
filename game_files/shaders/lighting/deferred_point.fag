@@ -31,4 +31,5 @@ void main()
 	float diffuseIntensity=max(dot(normalize(lightViewPos-viewPos.xyz), viewNormal), 0.0);
 	
 	fragmentColour=attenuation*diffuseIntensity*lightColour*albedo;
+	fragmentColour=vec3(1,0,0);
 }

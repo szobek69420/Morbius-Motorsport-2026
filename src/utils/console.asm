@@ -111,7 +111,7 @@ my_printf:
 
 	;lock the critical sex
 	push dword[critical_section]
-	call criticalSection_lock
+	;call criticalSection_lock
 	add esp, 4
 	
 	;get the string length
@@ -130,7 +130,7 @@ my_printf:
 	
 	;unlock the critical sex
 	push dword[critical_section]
-	call criticalSection_unlock
+	;call criticalSection_unlock
 	
 	my_printf_end:
 	mov esp, ebp

@@ -23,6 +23,7 @@ section .rodata use32
 	ONE dd 1.0
 	
 	print_int_nl db "%d",10,0
+	print_four_floats_nl db "%f %f %f %f",10,0
 	
 	test_text db "all of the lights",10,0
 
@@ -597,6 +598,7 @@ lightManager4d_update3d:
 		movss xmm1, dword[ebp-40]
 		mulss xmm1, dword[DISTANCE_SCALER]
 		subss xmm0, xmm1
+		mulss xmm0, dword[ebx+28]
 		movss dword[ebp-44], xmm0
 		
 		lea eax, [ebp-56]
@@ -636,6 +638,14 @@ lightManager4d_update3d:
 		push dword[ATTENUATION_QUADRATIC]
 		push dword[ebp-40]
 		call light_calculateRadius
+		
+		push dword[ebp-40]
+		push dword[ebx+24]
+		push dword[ebx+20]
+		push dword[ebx+16]
+		push print_four_floats_nl
+		;call my_printf
+		add esp, 20
 		
 		;add to vector
 		lea eax, [ebp-16]

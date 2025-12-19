@@ -40,6 +40,9 @@ section .text use32
 	global light_setColour			;void light_setColour(Light* light, vec3 colour)
 	global light_setIsDirectional	;void light_setIsDirectional(GlobalLight* light, int isDirectional)
 	
+	global light_printPointInfo		;void light_printPointInfo(PointLight* light)
+	
+	extern my_printf
 	extern my_malloc
 	extern my_free
 	extern my_memset
@@ -121,7 +124,6 @@ light_calculateRadius:
 	maxss xmm0, dword[eax+20]
 	maxss xmm0, dword[eax+24]
 	mulss xmm0, dword[eax+28]
-	movss dword[ebp-4], xmm0
 	
 	;calculate the cutoff radius
 	;prepared equation, don't try to make sense of this
@@ -217,3 +219,45 @@ light_setIsDirectional:
 		mov dword[eax+12], 0x3f800000
 	light_setIsDirectional_end:
 	ret
+	
+	
+light_printPointInfo:
+	push ebp
+	push ebx
+	mov ebp, esp
+	
+	mov ebx, dword[ebp+12]
+	
+	push ebx
+	push light_printPointInfo_print_header
+	call my_printf
+	
+	push dword[ebx+8]
+	push dword[ebx+4]
+	push dword[ebx]
+	push light_printPointInfo_print_position
+	call my_printf
+	
+	push dword[ebx+12]
+	push light_printPointInfo_print_radius
+	call my_printf
+	
+	push dword[ebx+24]
+	push dword[ebx+20]
+	push dword[ebx+16]
+	push light_printPointInfo_print_colour
+	call my_printf
+	
+	push dword[ebx+28]
+	push light_printPointInfo_print_intensity
+	call my_printf
+	
+	mov esp, ebp
+	pop ebx
+	pop ebp
+	ret
+	light_printPointInfo_print_header db	"Light #%d:",10,0
+	light_printPointInfo_print_position db	"   position:   (%f, %f, %f)",10,0
+	light_printPointInfo_print_radius db	"   radius:     %f",10,0
+	light_printPointInfo_print_colour db	"   colour:     rgb(%f, %f, %f)",10,0
+	light_printPointInfo_print_intensity db	"   intensity:  %f",10,0

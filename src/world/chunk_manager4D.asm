@@ -1751,7 +1751,7 @@ chunkManager4d_loadChunk_internal:
 	mov dword[ebp-8], 0
 	
 	;create the light infos vector
-	push 16
+	push 32
 	lea eax, [ebp-56]
 	push eax
 	call vector_init
