@@ -47,6 +47,8 @@ section .text use32
 	;void lightManager4d_update3d(LightManager4D* lm, HyperPlane* hp, vec4* playerPos)
 	global lightManager4d_update3d
 	
+	global lightManager4d_triggerUpdate		;void lightManager4d_triggerUpdate(LightManager4D* lm)
+	
 	extern LIGHT_RENDERER_MAX_LIGHTS
 	
 	extern my_printf
@@ -77,8 +79,10 @@ section .text use32
 	extern queue_pushArray
 	extern queue_size
 	
+	extern vec3_print
 	extern vec4_sub
 	extern vec4_sqrMagnitude
+	extern vec4_print
 	
 	extern lightRenderer_updatePointLights
 	extern light_createPoint
@@ -99,7 +103,7 @@ lightManager4d_create:
 	sub esp, 4			;lm			4
 	
 	;alloc space
-	push 24
+	push 36
 	call my_malloc
 	mov dword[ebp-4], eax
 	
@@ -171,7 +175,7 @@ lightManager4d_registerLight:
 	sub esp, 4		;point light		4
 	
 	;alloc point light
-	push 16
+	push 32
 	call my_malloc
 	mov dword[ebp-4], eax
 	
@@ -639,14 +643,6 @@ lightManager4d_update3d:
 		push dword[ebp-40]
 		call light_calculateRadius
 		
-		push dword[ebp-40]
-		push dword[ebx+24]
-		push dword[ebx+20]
-		push dword[ebx+16]
-		push print_four_floats_nl
-		;call my_printf
-		add esp, 20
-		
 		;add to vector
 		lea eax, [ebp-16]
 		push dword[ebp-60]		;sqrMagnitude
@@ -764,3 +760,24 @@ lightManager4d_update3d:
 	pop ebp
 	ret
 	
+	
+lightManager4d_triggerUpdate:
+	push ebp
+	mov ebp, esp
+	
+	push dword[lightManager4d_triggerUpdate_intensity]
+	push lightManager4d_triggerUpdate_colour
+	push lightManager4d_triggerUpdate_position
+	push dword[ebp+8]
+	call lightManager4d_registerLight
+	
+	push eax
+	push dword[ebp+8]
+	call lightManager4d_yeetLight
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	lightManager4d_triggerUpdate_position dd 0.0, -10000.0, 0.0, 0.0
+	lightManager4d_triggerUpdate_colour dd 1.0, 1.0, 1.0
+	lightManager4d_triggerUpdate_intensity dd 1.0

@@ -15,7 +15,13 @@
 ;	Renderable* debugNormal			64
 ;	GLuint debugNormalShader		68
 ;	float hyperPlaneRotationLeft	72	//the remaining rotation in angles that needs to be completed
-;}		76 bytes
+;	int lastLightUpdate				76	//-1 if the last frame was not a significant rotation (the plane also didn't rotate)
+;}		80 bytes
+
+%macro dll_import 2
+    import %2 %1
+    extern %2
+%endmacro
 
 section .rodata use32
 	ZERO dd 0.0
@@ -59,6 +65,8 @@ section .rodata use32
 	CUM_NORMAL_FOV dd 60.0
 	CUM_ZOOM_FOV dd 10.0
 	CUM_FOV_INTERPOLATION_STRENGTH dd 0.2
+	
+	LIGHT_UPDATE_INTERVAL dd 100
 	
 	raycast_hypercube_texture db "sprites/player_hypercube.bmp",0
 	
@@ -118,6 +126,8 @@ section .text use32
 	global player_lookDirection			;void player_lookDirection(player* player, vec4* buffer)
 	global player_drawRaycastHypercube	;void player_drawRaycastHypercube(Player* player, mat4* pv)
 	global player_getPosition4d			;void player_getPosition4d(Player* player, vec4* buffer)
+
+	dll_import kernel32.dll, GetTickCount
 
 	extern my_malloc
 	extern my_free
@@ -191,6 +201,7 @@ section .text use32
 	extern chunkManager4d_getHyperPlane
 	extern chunkManager4d_setHyperPlane
 	extern chunkManager4d_registerChangedBlock
+	extern chunkManager4d_getLightManager
 	
 	extern renderable_createCustom
 	extern renderable_destroy
@@ -225,13 +236,15 @@ section .text use32
 	extern inventoryAtlas_getSelectedHotbarSlot
 	extern inventoryAtlas_getHotbarContent
 	
+	extern lightManager4d_triggerUpdate
+	
 player_init:
 	push ebp
 	mov ebp, esp
 	
 	sub esp, 4		;player*
 	
-	push 76
+	push 80
 	call my_malloc
 	mov dword[ebp-4], eax
 	add esp, 4
@@ -329,6 +342,10 @@ player_init:
 	push block_place_sound_path
 	call sigmaudio_import
 	add esp, 8
+	
+	;set last update time
+	mov eax, dword[ebp-4]
+	mov dword[eax+76], -1
 	
 	;set return value
 	mov eax, dword[ebp-4]
@@ -988,6 +1005,9 @@ player_rotatePlane:
 	
 	sub esp, 64			;hyperplane				76
 	
+	sub esp, 4			;should update lights	80
+	
+	mov dword[ebp-80], 0
 	
 	;obtain scroll delta
 	lea eax, [ebp-8]
@@ -1018,92 +1038,130 @@ player_rotatePlane:
 	mov ecx, dword[eax+72]
 	and ecx, 0x7fffffff
 	cmp ecx, dword[HYPERPLANE_MIN_ROTATION_ANGLE]
-	jb player_rotatePlane_end
+	jb player_rotatePlane_no_rotation
+		;calculate the rotation that needs to be done in this frame
+		;also update the remaining rotation
+		mov eax, dword[ebp+8]
+		
+		mov edx, dword[eax+72]
+		mov dword[ebp-12], edx		;reuse this variable
+		
+		push dword[ebp+12]
+		push dword[HYPERPLANE_ROTATION_ANGLE_INTERPOLATOR]
+		push 0
+		push dword[eax+72]
+		call math_lerp
+		mov eax, dword[ebp+8]
+		fstp dword[eax+72]
+		movss xmm0, dword[eax+72]
+		subss xmm0, dword[ebp-12]
+		movss dword[ebp-12], xmm0
+		
+		
+		;update the hyperplane point
+		;the hyperplane's new center is the players position in 4d, which is the players movement since the last rotation event
+		mov eax, dword[ebp+8]
+		push dword[eax+24]
+		call aabb4d_getPosition
+		push eax					;save aabb.position
+		
+		mov ecx, dword[ebp+8]
+		push dword[ecx+28]
+		call chunkManager4d_getHyperPlane
+		push 64
+		push eax
+		lea ecx, [ebp-76]
+		push ecx
+		call my_memcpy
+		add esp, 16
+		
+		pop ecx						;restore aabb.position
+		lea eax, [ebp-76]
+		
+		mov edx, dword[ecx]
+		mov dword[eax], edx
+		mov edx, dword[ecx+4]
+		mov dword[eax+4], edx
+		mov edx, dword[ecx+8]
+		mov dword[eax+8], edx
+		mov edx, dword[ecx+12]
+		mov dword[eax+12], edx
+		
+		;set the camera's position to EYE_OFFSET, as the new center of the 3D space is the player
+		mov ecx, dword[ebp+8]
+		mov ecx, dword[ecx]
+		
+		mov eax, EYE_OFFSET
+		mov edx, dword[eax]
+		mov dword[ecx], edx
+		mov edx, dword[eax+4]
+		mov dword[ecx+4], edx
+		mov edx, dword[eax+8]
+		mov dword[ecx+8], edx
+		
+		;rotate plane
+		push dword[ebp-12]
+		push HYPERPLANE_ROTATION_VECTOR_2
+		push HYPERPLANE_ROTATION_VECTOR_1
+		lea eax, [ebp-76]
+		push eax
+		call hyperPlane_rotate
+		pop eax					;restore hyperplane
+		add esp, 12
+		
+		;set the aabb4d's hyperplane
+		push eax
+		call aabb4d_setHyperPlane
+		add esp, 4
+		
+		;set the chunk manager's hyperplane
+		mov eax, dword[ebp+8]
+		mov eax, dword[eax+28]
+		lea ecx, [ebp-76]
+		push ecx
+		push eax
+		call chunkManager4d_setHyperPlane
+		
+		;check if all of the lights should update
+		call [GetTickCount]
+		mov ecx, dword[ebp+8]
+		sub eax, dword[ecx+76]
+		cmp eax, dword[LIGHT_UPDATE_INTERVAL]
+		jl player_rotatePlane_rotation_no_light_update
+			add dword[ecx+76], eax
+			mov dword[ebp-80], 69		;all of the lights should update
+		player_rotatePlane_rotation_no_light_update:
+		
+		jmp player_rotatePlane_rotation_end
+		
+	player_rotatePlane_no_rotation:
+		;check if the lights should update
+		;to make sure that the lights are up-to-date after the end of a rotation
+		mov eax, dword[ebp+8]
+		mov ecx, dword[eax+76]
+		mov dword[eax+76], -1		;non-significant frame
+		cmp ecx, -1
+		je player_rotatePlane_rotation_end
+			mov dword[ebp-80], 69		;lights should update
 	
-	;calculate the rotation that needs to be done in this frame
-	;also update the remaining rotation
-	mov eax, dword[ebp+8]
+	player_rotatePlane_rotation_end:
 	
-	mov edx, dword[eax+72]
-	mov dword[ebp-12], edx		;reuse this variable
+	;update the lights if necessary
+	test dword[ebp-80], 0xffffffff
+	jz player_rotatePlane_no_light_update
+		;trigger a light update
+		mov eax, dword[ebp+8]
+		push dword[eax+28]
+		call chunkManager4d_getLightManager
+		mov dword[esp], eax
+		call lightManager4d_triggerUpdate
+		
+		push test_text
+		call my_printf
+		add esp, 4
+		
+	player_rotatePlane_no_light_update:
 	
-	push dword[ebp+12]
-	push dword[HYPERPLANE_ROTATION_ANGLE_INTERPOLATOR]
-	push 0
-	push dword[eax+72]
-	call math_lerp
-	mov eax, dword[ebp+8]
-	fstp dword[eax+72]
-	movss xmm0, dword[eax+72]
-	subss xmm0, dword[ebp-12]
-	movss dword[ebp-12], xmm0
-	
-	
-	;update the hyperplane point
-	;the hyperplane's new center is the players position in 4d, which is the players movement since the last rotation event
-	mov eax, dword[ebp+8]
-	push dword[eax+24]
-	call aabb4d_getPosition
-	push eax					;save aabb.position
-	
-	mov ecx, dword[ebp+8]
-	push dword[ecx+28]
-	call chunkManager4d_getHyperPlane
-	push 64
-	push eax
-	lea ecx, [ebp-76]
-	push ecx
-	call my_memcpy
-	add esp, 16
-	
-	pop ecx						;restore aabb.position
-	lea eax, [ebp-76]
-	
-	mov edx, dword[ecx]
-	mov dword[eax], edx
-	mov edx, dword[ecx+4]
-	mov dword[eax+4], edx
-	mov edx, dword[ecx+8]
-	mov dword[eax+8], edx
-	mov edx, dword[ecx+12]
-	mov dword[eax+12], edx
-	
-	;set the camera's position to EYE_OFFSET, as the new center of the 3D space is the player
-	mov ecx, dword[ebp+8]
-	mov ecx, dword[ecx]
-	
-	mov eax, EYE_OFFSET
-	mov edx, dword[eax]
-	mov dword[ecx], edx
-	mov edx, dword[eax+4]
-	mov dword[ecx+4], edx
-	mov edx, dword[eax+8]
-	mov dword[ecx+8], edx
-	
-	;rotate plane
-	push dword[ebp-12]
-	push HYPERPLANE_ROTATION_VECTOR_2
-	push HYPERPLANE_ROTATION_VECTOR_1
-	lea eax, [ebp-76]
-	push eax
-	call hyperPlane_rotate
-	pop eax					;restore hyperplane
-	add esp, 12
-	
-	;set the aabb4d's hyperplane
-	push eax
-	call aabb4d_setHyperPlane
-	add esp, 4
-	
-	;set the chunk manager's hyperplane
-	mov eax, dword[ebp+8]
-	mov eax, dword[eax+28]
-	lea ecx, [ebp-76]
-	push ecx
-	push eax
-	call chunkManager4d_setHyperPlane
-	
-	player_rotatePlane_end:
 	mov esp, ebp
 	pop ebp
 	ret

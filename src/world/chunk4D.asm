@@ -308,6 +308,23 @@ chunk4d_generate:
 	
 	mov dword[eax+60], 0			;the chunk is not yet processed
 	
+	;calculate the chunk's position
+	cvtsi2ss xmm0, dword[CHUNK_WIDTH]
+	
+	cvtsi2ss xmm1, dword[ebp+20]
+	mulss xmm1, xmm0
+	movss dword[ebp-72], xmm1
+	
+	mov dword[ebp-68], 0
+	
+	cvtsi2ss xmm2, dword[ebp+24]
+	mulss xmm2, xmm0
+	movss dword[ebp-64], xmm2
+	
+	cvtsi2ss xmm3, dword[ebp+28]
+	mulss xmm3, xmm0
+	movss dword[ebp-60], xmm3
+	
 	;init the light vector
 	mov eax, dword[ebp-4]
 	add eax, 80
@@ -893,8 +910,15 @@ chunk4d_generate:
 					;also add a light if the block is emissive
 					cmp dword[ebp-56], 0
 					je chunk4d_generate_mesh_not_visible
+						;calculate positions
+						movups xmm0, [ebp-104]
+						movups xmm1, [ebp-72]
+						addps xmm0, xmm1
+						sub esp, 16
+						movups [esp], xmm0
+						
 						;create the aabb
-						lea eax, [ebp-104]
+						mov eax, esp
 						push AABB_SCALE
 						push eax
 						call aabb4d_create
@@ -918,15 +942,17 @@ chunk4d_generate:
 							push edx
 							call block_getEmissionInfo
 							add esp, 8
-							push dword[ebp-92]
-							push dword[ebp-96]
-							push dword[ebp-100]
-							push dword[ebp-104]
+							lea eax, [esp+16]
+							push dword[eax+12]
+							push dword[eax+8]
+							push dword[eax+4]
+							push dword[eax]
 							push dword[ebp+40]
 							call vector_push_back
 							add esp, 36
 						
 						chunk4d_generate_mesh_visible_nonemissive:
+						add esp, 16
 					
 					chunk4d_generate_mesh_not_visible:
 					
@@ -996,65 +1022,6 @@ chunk4d_generate:
 	push dword[ebp-12]
 	call my_free
 	add esp, 4
-	
-	;calculate the chunk's position
-	cvtsi2ss xmm0, dword[CHUNK_WIDTH]
-	
-	cvtsi2ss xmm1, dword[ebp+20]
-	mulss xmm1, xmm0
-	movss dword[ebp-72], xmm1
-	
-	mov dword[ebp-68], 0
-	
-	cvtsi2ss xmm2, dword[ebp+24]
-	mulss xmm2, xmm0
-	movss dword[ebp-64], xmm2
-	
-	cvtsi2ss xmm3, dword[ebp+28]
-	mulss xmm3, xmm0
-	movss dword[ebp-60], xmm3
-	
-	
-	;translate the collider group by the position of the chunk
-	;as the current position and bound values are local to the chunk
-	mov eax, dword[ebp-52]
-	lea eax, [eax+16]
-	lea ecx, [ebp-72]
-	push ecx
-	push eax
-	push eax
-	call vec4_add
-	mov eax, dword[ebp-52]
-	lea eax, [eax+32]
-	mov dword[esp+4], eax
-	mov dword[esp], eax
-	call vec4_add
-	
-	mov eax, dword[ebp-52]
-	mov esi, dword[eax+12]			;colliders in esi
-	mov edi, dword[eax]			;index in edi
-	test edi, edi
-	jz chunk4d_generate_translate_colliders_loop_end
-	lea eax, [ebp-72]
-	push eax						;pre-push chunk position
-	chunk4d_generate_translate_colliders_loop_start:
-		mov ebx, dword[esi]			;collider in ebx
-		
-		push ebx
-		call aabb4d_getPosition
-		add esp, 4
-		
-		push eax
-		push eax
-		call vec4_add
-		add esp, 8
-	
-		add esi, 4
-		dec edi
-		test edi, edi
-		jnz chunk4d_generate_translate_colliders_loop_start
-	
-	chunk4d_generate_translate_colliders_loop_end:
 	
 	;register the collider group in the physics	
 	push dword[ebp-52]

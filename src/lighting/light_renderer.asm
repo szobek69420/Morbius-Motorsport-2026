@@ -10,7 +10,7 @@ section .rodata use32
 	GLOBAL_LIGHT_SIZE dd 32		;the size of the data of one global light in the instance vbo
 	
 	uniform_name_viewMat db "viewMat",0
-	uniform_name_twoPerScreenSize db "twoPerScreenSize",0
+	uniform_name_onePerScreenSize db "onePerScreenSize",0
 	uniform_name_fillColour db "fillColour",0
 	
 	global_vertex_shader_path db "shaders/lighting/deferred_global.vag",0
@@ -22,6 +22,7 @@ section .rodata use32
 	ssao_vertex_shader_path db "shaders/lighting/deferred_ssao.vag",0
 	ssao_fragment_shader_path db "shaders/lighting/deferred_ssao.fag",0
 	
+	ONE dd 1.0
 	TWO dd 2.0
 	
 	print_int_nl db "%d",10,0
@@ -644,7 +645,7 @@ lightRenderer_updatePointLights:
 		mov dword[edi+28], edx
 		
 		push eax
-		call light_printPointInfo
+		;call light_printPointInfo
 		add esp, 4
 		
 		add esi, 4
@@ -716,7 +717,7 @@ lightRenderer_renderPointLights:
 	call [glDepthMask]
 	
 	;set culled face
-	push dword[GL_BACK]
+	push dword[GL_FRONT]
 	call renderable_setCulledFace
 	
 	;bind the target framebuffer
@@ -755,7 +756,7 @@ lightRenderer_renderPointLights:
 	mov eax, dword[ebp+24]
 	cvtpi2ps xmm0, qword[eax+24]
 	movq qword[ebp-8], xmm0
-	movss xmm0, dword[TWO]
+	movss xmm0, dword[ONE]
 	movss xmm2, xmm0
 	movss xmm1, dword[ebp-8]
 	movss xmm3, dword[ebp-4]
@@ -766,7 +767,7 @@ lightRenderer_renderPointLights:
 	push dword[ebp-4]
 	push dword[ebp-8]
 	push dword[RENDERABLE_UNIFORM_VEC2]
-	push uniform_name_twoPerScreenSize
+	push uniform_name_onePerScreenSize
 	push dword[shader_point]
 	call renderable_setUniform
 	
@@ -788,6 +789,10 @@ lightRenderer_renderPointLights:
 	push dword[GL_ONE_MINUS_SRC_ALPHA]
 	push dword[GL_SRC_ALPHA]
 	call [glBlendFunc]
+	
+	;reset the culled face
+	push dword[GL_BACK]
+	call renderable_setCulledFace
 	
 	;disable blending, depth test and face cull
 	push 0
