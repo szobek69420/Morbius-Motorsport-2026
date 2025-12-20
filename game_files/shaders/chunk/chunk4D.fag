@@ -3,11 +3,12 @@ in vec3 uv;
 in vec3 viewSpace_normal;
 in vec3 viewSpace_position;
 
-layout (location = 0) out vec4 gPosition; //vec4, because the w value decides whether the texel has been shaded
+layout (location = 0) out vec4 gPosition; //w: 1.0 means shaded, 0.0 means not shaded, -intensity means emissive
 layout (location = 1) out vec3 gNormal;
 layout (location = 2) out vec3 gAlbedo;
 
 layout (binding=0) uniform sampler2DArray blockTextures;
+uniform vec4 emissionInfos[7];
 
 void main()
 {
@@ -15,7 +16,13 @@ void main()
 	if(albedo.w<0.01)
 		discard;
 		
-	gPosition=vec4(viewSpace_position.xyz, 1.0);
+	float emissionIntensity = emissionInfos[int(uv.z)].a;
+		
+	if(emissionIntensity==0.0)
+		gPosition=vec4(viewSpace_position.xyz, 1.0);
+	else
+		gPosition=vec4(viewSpace_position.xyz, -1.0);	//constant intensity for now
+	
 	gNormal=viewSpace_normal.xyz;
 	gAlbedo=albedo.rgb;
 }

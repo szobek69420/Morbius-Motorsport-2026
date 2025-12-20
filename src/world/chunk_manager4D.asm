@@ -78,6 +78,8 @@ section .rodata use32
 	uniform_name_projection_mat db "projection_mat",0
 	uniform_name_normal_mat db "normal_mat",0
 	
+	uniform_name_emissionInfos db "emissionInfos",0
+	
 	test_text db "you're so portuguese",10,0
 	test_text2 db "you're so portuguese2",10,0
 	test_text3 db "you're so portuguese3",10,0
@@ -232,6 +234,7 @@ section .text use32
 	extern chunk4d_setProcessed
 	extern CHUNK_WIDTH
 	extern block_importTextures
+	extern block_setEmissionUniforms
 	
 	extern sun_getDirection
 	extern sun_getAngle
@@ -320,13 +323,20 @@ chunkManager4d_create:
 	call chunkManager4d_setHyperPlane
 	call chunkManager4d_applyHyperPlane_internal
 	
-	;create shader
+	;create shader and set uniforms
 	push geometry_shader_path
 	push fragment_shader_path
 	push vertex_shader_path
 	call renderable_createShader
 	mov ecx, dword[ebp-4]
 	mov dword[ecx+200], eax
+	
+	push eax
+	call renderable_useShader
+	mov eax, dword[ebp-4]
+	push uniform_name_emissionInfos
+	push dword[eax+200]
+	call block_setEmissionUniforms
 	
 	;import textures
 	call block_importTextures

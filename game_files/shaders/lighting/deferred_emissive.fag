@@ -1,0 +1,17 @@
+#version 460 core
+in vec2 uv;
+
+out vec3 fragmentColour;
+
+layout (binding=2) uniform sampler2D gPosition;
+layout (binding=3) uniform sampler2D gAlbedo;
+
+void main()
+{
+	float intensity=texture(gPosition, uv).a;
+	if(intensity>=0.0)
+		discard;
+		
+	vec3 albedo=texture(gAlbedo, uv).rgb;
+	fragmentColour=-intensity*albedo;
+}

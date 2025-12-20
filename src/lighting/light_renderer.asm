@@ -21,6 +21,8 @@ section .rodata use32
 	fill_fragment_shader_path db "shaders/lighting/deferred_fill.fag",0
 	ssao_vertex_shader_path db "shaders/lighting/deferred_ssao.vag",0
 	ssao_fragment_shader_path db "shaders/lighting/deferred_ssao.fag",0
+	emissive_vertex_shader_path db "shaders/lighting/deferred_emissive.vag",0
+	emissive_fragment_shader_path db "shaders/lighting/deferred_emissive.fag",0
 	
 	ONE dd 1.0
 	TWO dd 2.0
@@ -43,6 +45,7 @@ section .data use32
 	shader_point dd 0
 	shader_fill dd 0
 	shader_ssao dd 0
+	shader_emissive dd 0
 	
 	current_global_count dd 0
 	current_point_count dd 0
@@ -88,9 +91,14 @@ section .text use32
 	;overwrites the blend func
 	;overwrites the blend equation
 	;overwrites the depth func and depth mask
-	;disables depth test, blending and face cull
+	;disables depth test and face cull
 	;void lightRenderer_ssao(Framebuffer* hdrTarget, Framebuffer* ssaoBuffer, Framebuffer* gBuffer)
 	global lightRenderer_ssao
+	
+	;overwrites the currently bound framebuffer
+	;disables depth test, blending and face cull
+	;void lightRenderer_renderEmissive(Framebuffer* hdrTarget, Framebuffer* gBuffer)
+	global lightRenderer_renderEmissive
 	
 	extern my_printf
 	extern my_malloc
@@ -204,6 +212,12 @@ lightRenderer_init:
 	push ssao_vertex_shader_path
 	call renderable_createShader
 	mov dword[shader_ssao], eax
+	
+	push 0
+	push emissive_fragment_shader_path
+	push emissive_vertex_shader_path
+	call renderable_createShader
+	mov dword[shader_emissive], eax
 	
 	;create and bind the instance vbos
 	push global_instance_vbo
@@ -345,6 +359,8 @@ lightRenderer_deinit:
 	push dword[shader_fill]
 	call renderable_destroyShader
 	push dword[shader_ssao]
+	call renderable_destroyShader
+	push dword[shader_emissive]
 	call renderable_destroyShader
 	
 	;destroy the instance vbos
@@ -614,8 +630,6 @@ lightRenderer_updatePointLights:
 	call my_malloc
 	mov dword[ebp-4], eax
 	
-	push test_text
-	call my_printf
 	
 	;fill up the buffer
 	mov eax, dword[ebp+20]
@@ -643,10 +657,6 @@ lightRenderer_updatePointLights:
 		mov dword[edi+24], ecx
 		mov edx, dword[eax+28]
 		mov dword[edi+28], edx
-		
-		push eax
-		;call light_printPointInfo
-		add esp, 4
 		
 		add esi, 4
 		add edi, dword[POINT_LIGHT_SIZE]
@@ -916,12 +926,6 @@ lightRenderer_ssao:
 	push dword[GL_ONE]
 	call [glBlendFunc]
 	
-	;set depth func and mask
-	push dword[GL_GREATER]
-	call renderable_setDepthFunc
-	push dword[GL_FALSE]
-	call [glDepthMask]
-	
 	;bind the target framebuffer
 	push dword[ebp+8]
 	call framebuffer_bind
@@ -957,14 +961,57 @@ lightRenderer_ssao:
 	push dword[GL_SRC_ALPHA]
 	call [glBlendFunc]
 	
-	push dword[GL_LESS]
-	call renderable_setDepthFunc
-	push dword[GL_TRUE]
-	call [glDepthMask]
-	
 	push 0
 	call renderable_enableBlending
 	call renderable_enableDepthTest
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+lightRenderer_renderEmissive:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 64			;imitated pv matrix		64
+	
+	;disable face cull, depth test and blending
+	push 0
+	call renderable_enableBlending
+	call renderable_enableDepthTest
+	call renderable_enableFaceCull
+	
+	
+	;bind the target framebuffer
+	push dword[ebp+8]
+	call framebuffer_bind
+	
+	;set the texture
+	mov eax, dword[ebp+12]
+	push dword[eax+4]
+	push 0
+	push dword[rectangle_volume_renderable]
+	call renderable_setExtraTexture2D		;position
+	
+	mov eax, dword[ebp+12]
+	push dword[eax+12]
+	push 1
+	push dword[rectangle_volume_renderable]
+	call renderable_setExtraTexture2D		;albedo
+	
+	;use shader
+	push dword[shader_emissive]
+	call renderable_useShader
+	
+	;render
+	lea eax, [ebp-64]
+	push 69
+	push dword[shader_emissive]
+	push eax
+	push dword[rectangle_volume_renderable]
+	call renderable_renderCustom
+	
 	
 	mov esp, ebp
 	pop ebp

@@ -1406,6 +1406,7 @@ extern lightRenderer_updateGlobalLights
 extern lightRenderer_renderGlobalLights
 extern lightRenderer_renderPointLights
 extern lightRenderer_ssao
+extern lightRenderer_renderEmissive
 extern light_createGlobal
 extern light_setDirection
 extern light_setColour
@@ -1477,6 +1478,11 @@ gameLoop_doDeferredLighting:
 	push dword[ebp+12]
 	push dword[ebp+8]
 	call lightRenderer_renderPointLights
+	
+	;render the emissive areas
+	push dword[ebp+12]
+	push dword[ebp+8]
+	call lightRenderer_renderEmissive
 	
 	;fill the unilluminated parts with the sky colour
 	sub esp, 16

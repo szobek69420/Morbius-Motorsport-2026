@@ -38,6 +38,8 @@ section .text use32
 	global sun_setDistance	;void sun_setDistance(float distance)
 	global sun_getDirection ;void sun_getDirection(vec4* buffer)
 	
+	global sun_createLight	;GlobalLight* sun_createLight()
+	
 	extern my_printf
 	
 	extern vec4_scale

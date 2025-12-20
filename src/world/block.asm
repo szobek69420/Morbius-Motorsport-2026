@@ -57,12 +57,20 @@ section .text use32
 	global block_isEmissive			;int block_isEmissive(int blockAsInt)
 	global block_getEmissionInfo	;void block_getEmissionInfo(int blockAsInt, vec4* colourAndIntensity)
 	
+	;sets a uniform array with the length of BLOCK_COUNT, where the elements are vec4(emission colour rgb, intensity)
+	;DOESN'T BIND THE SHADER
+	;void block_setEmissionUniforms(GLuint shader, const char* uniformName)
+	global block_setEmissionUniforms
+	
 	extern my_printf
 	
 	extern textureHandler_loadArray
 	extern textureHandler_unloadArray
 	extern textureHandler_addImageToArray
 	extern textureHandler_generateArrayMipmap
+	
+	extern renderable_setUniform
+	extern RENDERABLE_UNIFORM_VEC4_ARRAY
 	
 	extern GL_REPEAT
 	extern GL_NEAREST
@@ -155,4 +163,21 @@ block_getEmissionInfo:
 	mov edx, dword[eax+12]
 	mov dword[ecx+12], edx
 	
+	ret
+	
+	
+	
+block_setEmissionUniforms:
+	push ebp
+	mov ebp, esp
+	
+	push BLOCK_EMISSIONS
+	push dword[BLOCK_COUNT]
+	push dword[RENDERABLE_UNIFORM_VEC4_ARRAY]
+	push dword[ebp+12]
+	push dword[ebp+8]
+	call renderable_setUniform
+	
+	mov esp, ebp
+	pop ebp
 	ret
