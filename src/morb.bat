@@ -14,6 +14,7 @@ mkdir build
 %COMMAND% -fobj game_loop/settings_loop.asm -o build/settings_loop.o
 %COMMAND% -fobj game_loop/menu_loop.asm -o build/menu_loop.o
 %COMMAND% -fobj game_loop/game_loop.asm -o build/game_loop.o
+%COMMAND% -fobj terminal/terminal.asm -o build/terminal.o
 %COMMAND% -fobj inventory/inventory_ui.asm -o build/inventory_ui.o
 %COMMAND% -fobj inventory/inventory_atlas.asm -o build/inventory_atlas.o
 %COMMAND% -fobj inventory/hand.asm -o build/hand.o
@@ -85,6 +86,7 @@ build/window.o ^
 build/settings.o ^
 build/sun.o ^
 build/sky.o ^
+build/terminal.o ^
 build/inventory_ui.o ^
 build/inventory_atlas.o ^
 build/hand.o ^
