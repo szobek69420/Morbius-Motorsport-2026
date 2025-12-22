@@ -3,9 +3,6 @@
 ;global light: a rectangle that overlays the screen
 ;point light: a sphere with the radius of one and inside facing triangles
 
-section .rodata use32
-	point_volume_model_path db "models/point_volume.geometry",0
-
 section .text use32
 
 	global lightVolume_createGlobal			;Renderable* lightVolume_createGlobal()
@@ -46,6 +43,8 @@ lightVolume_createPoint:
 	
 
 section .rodata use32
+
+point_volume_model_path db "models/point_volume.geometry",0
 
 global_volume_vertex_vector:
 dd 20

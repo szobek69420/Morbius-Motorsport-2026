@@ -167,6 +167,9 @@ section .text use32
 	;void uiElement_setParent(UIElement* element, UIElement* parent)
 	global uiElement_setParent
 	
+	;vector<UIElement*>* uiElement_getChildren(UIElement* element)
+	global uiElement_getChildren
+	
 	;helper function for creating a ui element
 	;sets ALL function pointers to 0
 	;void uiElement_initGeneralPart(UIElement* element)
@@ -784,6 +787,13 @@ uiElement_setParent:
 	mov esp, ebp
 	pop ebp
 	ret
+	
+	
+uiElement_getChildren:
+	mov eax, dword[esp+4]
+	add eax, 24
+	ret
+	
 	
 	
 uiElement_initGeneralPart:
