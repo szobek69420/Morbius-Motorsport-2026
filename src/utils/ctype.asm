@@ -13,6 +13,9 @@ section .text use32
 	global ctype_isInt				;int ctype_isInt(int character)		//checks whether the character can come up in an integer
 	global ctype_isFloat			;int ctype_isFloat(int character)	//checks whether the character can come up in an float
 	
+	global ctype_toUpper			;int ctype_toUpper(int character)	//if the character is in [a;z], it is mapped to [A;Z], otherwise no processing occurs
+	global ctype_isAlnum			;int ctype_isAlnum(int character)	//if the character is in [a;z], [A;Z] or [0;9]
+	
 ctype_isSpace:
 	mov eax, dword[esp+4]
 	cmp al, -1
@@ -78,3 +81,55 @@ ctype_isInArray:
 	ret
 	
 	
+ctype_toUpper:
+	push ebp
+	mov ebp, esp
+	
+	mov eax, dword[ebp+8]
+	cmp eax, 'a'
+	jl ctype_toUpper_end
+	cmp eax, 'z'
+	jg ctype_toUpper_end
+		sub eax, 32	
+	ctype_toUpper_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+ctype_isAlnum:
+	push ebp
+	mov ebp, esp
+	
+	xor eax, eax
+	mov ecx, dword[ebp+8]
+	
+	;check if the character is a lower-case letter
+	cmp ecx, 'a'
+	jl ctype_isAlnum_checkUpperCase
+	cmp ecx, 'z'
+	jg ctype_isAlnum_checkUpperCase
+		mov eax, 69
+		jmp ctype_isAlnum_end
+	
+	;check if the character is an upper-case letter
+	ctype_isAlnum_checkUpperCase:
+	cmp ecx, 'A'
+	jl ctype_isAlnum_checkNumber
+	cmp ecx, 'Z'
+	jg ctype_isAlnum_checkNumber
+		mov eax, 69
+		jmp ctype_isAlnum_end
+	
+	;check if the character is a number
+	ctype_isAlnum_checkNumber:
+	cmp ecx, '0'
+	jl ctype_isAlnum_end
+	cmp ecx, '9'
+	jg ctype_isAlnum_end
+		mov eax, 69
+	
+	ctype_isAlnum_end:
+	mov esp, ebp
+	pop ebp
+	ret

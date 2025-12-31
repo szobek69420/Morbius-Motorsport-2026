@@ -319,6 +319,7 @@ section .text use32
 	dll_import glfw3.dll, glfwGetTime
 	dll_import glfw3.dll, glfwMakeContextCurrent
 	dll_import glfw3.dll, glfwPollEvents
+	dll_import glfw3.dll, glfwSetCharCallback
 	dll_import glfw3.dll, glfwSetCursor
 	dll_import glfw3.dll, glfwSetCursorPos
 	dll_import glfw3.dll, glfwSetCursorPosCallback

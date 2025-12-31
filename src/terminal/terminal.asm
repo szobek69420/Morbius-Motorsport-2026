@@ -23,6 +23,10 @@ section .rodata use32
 	
 	WRITTEN_LINE_COLOUR dd 0.0, 1.0, 1.0, 1.0
 	HISTORY_LINE_COLOUR dd 1.0, 0.85, 0.0, 1.0
+	
+section .data use32
+	terminal_count dd 0
+	registered_callbacks dd 0,0		;tsVector<{GLFWWindow*, Terminal*}>
 
 section .text use32
 
@@ -34,17 +38,20 @@ section .text use32
 	
 	;opens the terminal (resets the input part and makes the element visible)
 	;also recalculates the content
-	;void terminal_open(Terminal* terminal)
+	;void terminal_open(Terminal* terminal, GLFWWindow* pwindow)
 	global terminal_open
 	
 	;closes the terminal
 	;if desired, saves the written line into the history
-	;void terminal_close(Terminal* terminal, int saveWrittenLine)
+	;void terminal_close(Terminal* terminal, GLFWWindow* pwindow, int saveWrittenLine)
 	global terminal_close
 	
 	;processes keyboard input and recalculates the content if necessary
 	;void terminal_processInput(Terminal* terminal)
 	global terminal_processInput
+	
+	
+	extern glfwSetCharCallback
 	
 	extern my_printf
 	extern my_malloc
@@ -52,12 +59,23 @@ section .text use32
 	extern my_strlen
 	extern my_strcpy
 	
+	extern ctype_toUpper
+	extern ctype_isAlnum
+	
 	extern vector_init
 	extern vector_destroy
 	extern vector_insert
 	extern vector_remove
 	extern vector_remove_at
 	extern vector_for_each
+	extern tsVector_init
+	extern tsVector_destroy
+	extern tsVector_pushBack
+	extern tsVector_removeCustom
+	extern tsVector_at
+	extern tsVector_search
+	extern tsVector_lock
+	extern tsVector_unlock
 	
 	extern uiElement_create
 	extern uiElement_destroy
@@ -173,6 +191,14 @@ terminal_create:
 	mov ecx, dword[ebp-4]
 	mov dword[ecx+48], ecx
 	
+	;create the global callback vector if necessary
+	cmp dword[terminal_count], 0
+	jg terminal_create_register_vector_already_created
+		push 8
+		push registered_callbacks
+		call tsVector_init
+	terminal_create_register_vector_already_created:
+	inc dword[terminal_count]
 	
 	terminal_create_end:
 	mov eax, dword[ebp-4]		;set return value
@@ -228,6 +254,13 @@ terminal_destroy:
 	push dword[ebp+20]
 	call my_free
 	
+	;destroy the callback vector if necessary
+	dec dword[terminal_count]
+	jnz terminal_destroy_skip_register_vector_destruction
+		push registered_callbacks
+		call tsVector_destroy
+	terminal_destroy_skip_register_vector_destruction:
+	
 	mov esp, ebp
 	pop ebx
 	pop edi
@@ -256,6 +289,17 @@ terminal_open:
 	push dword[eax+4]
 	call uiElement_setStatus
 	
+	;register the callback
+	push dword[ebp+8]
+	push dword[ebp+12]
+	push registered_callbacks
+	call tsVector_pushBack
+	
+	push terminal_charCallback_internal
+	push dword[ebp+12]
+	call [glfwSetCharCallback]
+	
+	
 	mov esp, ebp
 	pop ebp
 	ret
@@ -265,6 +309,27 @@ terminal_close:
 	push ebp
 	mov ebp, esp
 	
+	;unregister the callback
+	push 0
+	push dword[ebp+12]
+	call [glfwSetCharCallback]
+	
+	push dword[ebp+8]
+	push terminal_close_unregister_helper
+	push registered_callbacks
+	call tsVector_removeCustom
+	jmp terminal_close_unregister_done
+	terminal_close_unregister_helper:		;int func({GLFWWindow*, Terminal*}*, Terminal*)
+		xor eax, eax
+		mov ecx, dword[esp+4]
+		mov edx, dword[esp+8]
+		cmp dword[ecx+4], edx
+		je terminal_close_unregister_helper_end
+			mov eax, 69
+		terminal_close_unregister_helper_end:
+		ret
+	terminal_close_unregister_done:
+	
 	;turn off the visibility of the terminal
 	mov eax, dword[ebp+8]
 	push 0
@@ -273,7 +338,7 @@ terminal_close:
 	call uiElement_setStatus
 	
 	;save the value of the written line if desired
-	test dword[ebp+12], 0xffffffff
+	test dword[ebp+16], 0xffffffff
 	jz terminal_close_no_save
 		;alloc the saved line and copy the data from the written line
 		mov eax, dword[ebp+8]
@@ -334,6 +399,145 @@ terminal_processInput:
 	
 	
 ;internal functinos	-----------------------------------
+
+;if no terminal is mapped to the window, nothing happens
+;otherwise the character is processed and if relevant, the current line is modified
+;void terminal_charCallback_internal(GLFWWindow* pwindow, uint character)
+terminal_charCallback_internal:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 4		;terminal			4
+	sub esp, 4		;uppercase char		8
+	
+	;check if the terminal is registered
+	push registered_callbacks
+	call tsVector_lock
+	
+	push dword[ebp+20]
+	push terminal_charCallback_internal_search_helper
+	push registered_callbacks
+	call tsVector_search
+	cmp eax, -1
+	je terminal_charCallback_internal_not_registered
+	jmp terminal_charCallback_internal_registered
+	
+		terminal_charCallback_internal_search_helper:	;int func({GLFWWindow*, Terminal*}* pelement, GLFWWindow* pwindow)
+			mov eax, 69
+			mov ecx, dword[esp+4]
+			mov edx, dword[esp+8]
+			cmp dword[ecx], edx
+			jne terminal_charCallback_internal_search_helper_end
+				xor eax, eax
+			terminal_charCallback_internal_search_helper_end:
+			ret
+		
+	terminal_charCallback_internal_registered:
+		;get the terminal
+		push eax
+		push registered_callbacks
+		call tsVector_at
+		mov eax, dword[eax+4]
+		mov dword[ebp-4], eax
+		
+		;unlock the vector
+		push registered_callbacks
+		call tsVector_unlock
+		
+		jmp terminal_charCallback_internal_search_done
+	
+	terminal_charCallback_internal_not_registered:
+		;unlcok the vector and flee
+		push registered_callbacks
+		call tsVector_unlock
+		jmp terminal_charCallback_internal_end
+		
+	terminal_charCallback_internal_search_done:
+	
+	;transform the character
+	push dword[ebp+24]
+	call ctype_toUpper
+	mov dword[ebp-8], eax
+	
+	;check if the character is relevant
+	mov eax, dword[ebp-8]
+	cmp eax, 128
+	jae terminal_charCallback_internal_end
+	cmp eax, 8
+	je terminal_charCallback_internal_handleBackspace
+	cmp eax, 10
+	je terminal_charCallback_internal_handleEnter
+	jmp terminal_charCallback_internal_handleRest
+	terminal_charCallback_internal_handleBackspace:
+		;check if there is anything in the current line
+		mov ebx, dword[ebp-4]
+		push dword[ebx+48]
+		call my_strlen
+		test eax, eax
+		jz terminal_charCallback_internal_end
+		
+		;shorten the line and update the ui
+		mov ecx, dword[ebx+48]
+		mov byte[ecx+eax-1], 0
+		
+		push ebx
+		call terminal_recalculateWritten_internal
+		
+		jmp terminal_charCallback_internal_end
+		
+	terminal_charCallback_internal_handleEnter:
+		;TODO: parse statement
+		
+		;close the terminal an save the current line if necessary
+		mov ebx, dword[ebp-4]
+		push dword[ebx+48]
+		call my_strlen
+		push eax
+		push dword[ebp+20]
+		push ebx
+		call terminal_close
+		
+		jmp terminal_charCallback_internal_end
+	
+	terminal_charCallback_internal_handleRest:
+		;check if the character is of alphanumerical type or space
+		push dword[ebp-8]
+		call ctype_isAlnum
+		test eax, eax
+		jnz terminal_charCallback_internal_isKosher
+		cmp dword[ebp-8], 32		;is space?
+		je terminal_charCallback_internal_isKosher
+			jmp terminal_charCallback_internal_end
+		terminal_charCallback_internal_isKosher:
+		
+		;check if there is space left in the current line
+		mov ebx, dword[ebp-4]
+		push dword[ebx+48]
+		call my_strlen
+		cmp dword[ebx+52], eax
+		jge terminal_charCallback_internal_end
+		
+		;append the character and update the displayed written line
+		mov ecx, dword[ebx+48]
+		mov edx, dword[ebp-8]
+		mov byte[ecx+eax], dl
+		mov byte[ecx+eax+1], 0
+		
+		push dword[ebp-4]
+		call terminal_recalculateWritten_internal
+		jmp terminal_charCallback_internal_end
+		
+	
+	terminal_charCallback_internal_end:
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
 
 ;recalculates the content of the terminal based on the history
 ;the previous content is deleted
@@ -514,6 +718,7 @@ terminal_recalculate_internal:
 ;updates the written line text
 ;assumes that a call of terminal_recalculate_internal preceeds the call of this function (no call is necessary before every call of this function, but at least before the first one)
 ;additionally it is also assumes, that the content of the terminal was not tampered with since the call of terminal_recalculate_internal
+;void terminal_recalculateWritten_internal(Terminal* terminal)
 terminal_recalculateWritten_internal:
 	push ebp
 	mov ebp, esp
