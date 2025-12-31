@@ -46,9 +46,8 @@ section .text use32
 	;void terminal_close(Terminal* terminal, GLFWWindow* pwindow, int saveWrittenLine)
 	global terminal_close
 	
-	;processes keyboard input and recalculates the content if necessary
-	;void terminal_processInput(Terminal* terminal)
-	global terminal_processInput
+	;void terminal_setParent(Terminal* terminal, UIElement* parent)
+	global terminal_setParent
 	
 	
 	extern glfwSetCharCallback
@@ -375,25 +374,16 @@ terminal_close:
 	pop ebp
 	ret
 	
-	
-	
-terminal_processInput:
+terminal_setParent:
 	push ebp
-	push esi
-	push edi
-	push ebx
 	mov ebp, esp
 	
-	sub esp, 4			;content changed		4
-	
-	mov dword[ebp-4], 0
-	
-	;check for character input
+	mov eax, dword[ebp+8]
+	push dword[ebp+12]
+	push dword[eax+4]
+	call uiElement_setParent
 	
 	mov esp, ebp
-	pop ebx
-	pop edi
-	pop esi
 	pop ebp
 	ret
 	
