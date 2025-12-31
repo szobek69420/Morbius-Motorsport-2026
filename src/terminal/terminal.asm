@@ -134,7 +134,7 @@ terminal_create:
 	call my_malloc
 	mov dword[ebp-4], eax
 	
-	mov dword[eax], 0		;not visible initially
+	mov dword[eax], 69		;not visible initially
 	
 	;create the root and the background
 	push dword[UI_EMPTY]
@@ -213,6 +213,44 @@ terminal_destroy:
 	push edi
 	push ebx
 	mov ebp, esp
+	
+	;close the terminal if necessary
+	;NOTE: the case where there are multiple GLFWWindows assigned to the terminal is not handled
+	mov eax, dword[ebp+20]
+	test dword[eax], 0xffffffff
+	jnz terminal_destroy_skip_close
+		push registered_callbacks
+		call tsVector_lock
+		
+		push dword[ebp+20]
+		push terminal_destroy_callback_search_helper
+		push registered_callbacks
+		call tsVector_search
+		cmp eax, -1
+		je terminal_destroy_close_skip_close
+			push eax
+			push registered_callbacks
+			call tsVector_at
+			
+			push 0
+			push dword[eax]
+			push dword[ebp+20]
+			call terminal_close
+		
+		terminal_destroy_close_skip_close:
+		push registered_callbacks
+		call tsVector_unlock
+		jmp terminal_destroy_skip_close
+		terminal_destroy_callback_search_helper:		;int func({GLFWWindow*, Terminal*}*, Terminal*)
+			xor eax, eax
+			mov ecx, dword[esp+4]
+			mov edx, dword[esp+8]
+			cmp dword[ecx+4], edx
+			je terminal_destroy_callback_search_helper_end
+				mov eax, 69
+			terminal_destroy_callback_search_helper_end:
+			ret
+	terminal_destroy_skip_close:
 	
 	;unset the parent
 	mov eax, dword[ebp+20]
@@ -298,6 +336,9 @@ terminal_open:
 	push dword[ebp+12]
 	call [glfwSetCharCallback]
 	
+	;unset the isclosed flag
+	mov eax, dword[ebp+8]
+	mov dword[eax], 0
 	
 	mov esp, ebp
 	pop ebp
@@ -369,6 +410,10 @@ terminal_close:
 		terminal_close_save_no_delete:
 		
 	terminal_close_no_save:
+	
+	;set the isclosed flag
+	mov eax, dword[ebp+8]
+	mov dword[eax], 69
 	
 	mov esp, ebp
 	pop ebp
