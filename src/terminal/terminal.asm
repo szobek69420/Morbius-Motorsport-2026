@@ -24,6 +24,11 @@ section .rodata use32
 	WRITTEN_LINE_COLOUR dd 0.0, 1.0, 1.0, 1.0
 	HISTORY_LINE_COLOUR dd 1.0, 0.85, 0.0, 1.0
 	
+	print_int_nl db "%d",10,0
+	print_char_nl db "%c",10,0
+	
+	test_text db "why so serious",10,0
+	
 section .data use32
 	terminal_count dd 0
 	registered_callbacks dd 0,0		;tsVector<{GLFWWindow*, Terminal*}>
@@ -49,6 +54,9 @@ section .text use32
 	;void terminal_setParent(Terminal* terminal, UIElement* parent)
 	global terminal_setParent
 	
+	;int terminal_isOpen(Terminal* terminal)
+	global terminal_isOpen
+	
 	
 	extern glfwSetCharCallback
 	
@@ -67,6 +75,7 @@ section .text use32
 	extern vector_remove
 	extern vector_remove_at
 	extern vector_for_each
+	extern vector_at
 	extern tsVector_init
 	extern tsVector_destroy
 	extern tsVector_pushBack
@@ -182,13 +191,7 @@ terminal_create:
 	mov eax, dword[ebp-4]
 	mov ecx, dword[ebp+12]
 	mov dword[eax+52], ecx
-	
-	inc ecx
-	push ecx
-	call my_malloc
-	mov byte[eax], 0
-	mov ecx, dword[ebp-4]
-	mov dword[ecx+48], ecx
+	mov dword[eax+48], 0
 	
 	;create the global callback vector if necessary
 	cmp dword[terminal_count], 0
@@ -310,10 +313,16 @@ terminal_open:
 	push ebp
 	mov ebp, esp
 	
-	;clear the written line
+	;alloc the written line
 	mov eax, dword[ebp+8]
-	mov eax, dword[eax+48]
+	mov eax, dword[eax+52]
+	inc eax
+	push eax
+	call my_malloc
 	mov byte[eax], 0
+	mov ecx, dword[ebp+8]
+	mov dword[ecx+48], eax
+	
 	
 	;recalculate the content
 	push dword[ebp+8]
@@ -380,23 +389,20 @@ terminal_close:
 	;save the value of the written line if desired
 	test dword[ebp+16], 0xffffffff
 	jz terminal_close_no_save
-		;alloc the saved line and copy the data from the written line
 		mov eax, dword[ebp+8]
 		push dword[eax+48]
-		call my_strlen
-		inc eax
-		push eax
-		call my_malloc
-		
-		mov ecx, dword[ebp+8]
-		push dword[ecx+48]
-		push eax
-		call my_strcpy
-		mov ecx, dword[ebp+8]
-		add ecx, 16
+		call my_printf
+	
+		;save the written line into the history
+		mov eax, dword[ebp+8]
+		lea ecx, [eax+16]
+		push dword[eax+48]
 		push 1
 		push ecx
 		call vector_insert
+		
+		mov eax, dword[ebp+8]
+		mov dword[eax+48], 0
 		
 		;remove the oldest history line if necessary
 		mov eax, dword[ebp+8]
@@ -406,6 +412,10 @@ terminal_close:
 			add eax, 16
 			push ecx
 			push eax
+			call vector_at
+			push dword[eax]
+			call my_free
+			add esp, 4
 			call vector_remove_at
 		terminal_close_save_no_delete:
 		
@@ -430,6 +440,16 @@ terminal_setParent:
 	
 	mov esp, ebp
 	pop ebp
+	ret
+	
+	
+terminal_isOpen:
+	xor eax, eax
+	mov ecx, dword[esp+4]
+	test dword[ecx], 0xffffffff
+	jnz terminal_isOpen_end
+		mov eax, 69
+	terminal_isOpen_end:
 	ret
 	
 	
@@ -503,8 +523,6 @@ terminal_charCallback_internal:
 	jae terminal_charCallback_internal_end
 	cmp eax, 8
 	je terminal_charCallback_internal_handleBackspace
-	cmp eax, 10
-	je terminal_charCallback_internal_handleEnter
 	jmp terminal_charCallback_internal_handleRest
 	terminal_charCallback_internal_handleBackspace:
 		;check if there is anything in the current line
@@ -522,20 +540,6 @@ terminal_charCallback_internal:
 		call terminal_recalculateWritten_internal
 		
 		jmp terminal_charCallback_internal_end
-		
-	terminal_charCallback_internal_handleEnter:
-		;TODO: parse statement
-		
-		;close the terminal an save the current line if necessary
-		mov ebx, dword[ebp-4]
-		push dword[ebx+48]
-		call my_strlen
-		push eax
-		push dword[ebp+20]
-		push ebx
-		call terminal_close
-		
-		jmp terminal_charCallback_internal_end
 	
 	terminal_charCallback_internal_handleRest:
 		;check if the character is of alphanumerical type or space
@@ -547,13 +551,17 @@ terminal_charCallback_internal:
 		je terminal_charCallback_internal_isKosher
 			jmp terminal_charCallback_internal_end
 		terminal_charCallback_internal_isKosher:
-		
+	
 		;check if there is space left in the current line
 		mov ebx, dword[ebp-4]
 		push dword[ebx+48]
 		call my_strlen
-		cmp dword[ebx+52], eax
+		cmp eax, dword[ebx+52]
 		jge terminal_charCallback_internal_end
+		
+		push dword[ebp-8]
+		push print_int_nl
+		call my_printf
 		
 		;append the character and update the displayed written line
 		mov ecx, dword[ebx+48]
@@ -605,7 +613,7 @@ terminal_recalculate_internal:
 		
 		mov esi, dword[ebx+12]
 		mov esi, dword[esi+4*edi]
-		cmp esi, dword[eax+4]
+		cmp esi, dword[eax+8]
 		je terminal_recalculate_internal_delete_loop_no_delete	;don't delete the background
 			;deletable
 			push esi
@@ -619,7 +627,6 @@ terminal_recalculate_internal:
 		terminal_recalculate_internal_delete_loop_continue:
 		cmp edi, dword[ebx]
 		jl terminal_recalculate_internal_delete_loop_start
-		
 	
 	;calculate the background size
 	mov eax, dword[ebp+20]
@@ -712,7 +719,6 @@ terminal_recalculate_internal:
 		push ebx
 		call uiText_setTextAlignment
 		add esp, 8
-		
 		
 		mov eax, HISTORY_LINE_COLOUR
 		test dword[ebp-24], 0xffffffff

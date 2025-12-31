@@ -186,6 +186,8 @@ section .data use32
 	TEXT_MOUSE_3 dd 0
 	
 	INVENTORY_UI dd 0
+	
+	TERMINAL dd 0
 
 section .text use32
 
@@ -243,7 +245,9 @@ section .text use32
 	extern glfwSetFramebufferSizeCallback
 	extern glfwWindowShouldClose
 	extern glfwGetTime
+	extern GLFW_KEY_ENTER
 	extern GLFW_KEY_ESCAPE
+	extern GLFW_KEY_T
 	
 	extern input_init
 	extern input_update
@@ -409,6 +413,13 @@ section .text use32
 	extern memoryUsageDiagram_deinit
 	extern memoryUsageDiagram_update
 	extern memoryUsageDiagram_getTexture
+	
+	extern terminal_create
+	extern terminal_destroy
+	extern terminal_setParent
+	extern terminal_open
+	extern terminal_close
+	extern terminal_isOpen
 	
 	extern settings_read
 	extern settings_resolutionInfo
@@ -952,6 +963,9 @@ gameLoop_main:
 	
 	;destroy the framebuffers
 	call gameLoop_yeetFramebuffers
+	
+	;deinit info canvas
+	call gameLoop_deinitInfoCanvas
 	
 	;deinit ui
 	call uiElement_deinit
@@ -1804,9 +1818,32 @@ gameLoop_initInfoCanvas:
 	push dword[eax]		;get root
 	call uiElement_setParent
 	
+	;create terminal
+	push 30
+	push 10
+	call terminal_create
+	mov dword[TERMINAL], eax
+	push dword[CANVAS_INFO]
+	push eax
+	call terminal_setParent
+	
 	mov esp, ebp
 	pop ebp
 	ret
+	
+	
+gameLoop_deinitInfoCanvas:
+	push ebp
+	mov ebp, esp
+	
+	;destroy the terminal
+	push dword[TERMINAL]
+	call terminal_destroy
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
 	
 	
 gameLoop_updateInfoCanvas:
@@ -2039,6 +2076,33 @@ gameLoop_updateInfoCanvas:
 	;inventory ui
 	push dword[INVENTORY_UI]
 	call inventoryUI_update
+	
+	;check if the terminal should be opened/closed
+	push dword[TERMINAL]
+	call terminal_isOpen
+	test eax, eax
+	jnz gameLoop_updateInfoCanvas_terminal_already_opened	
+		push dword[GLFW_KEY_T]
+		call input_keyReleased
+		test eax, eax
+		jz gameLoop_updateInfoCanvas_terminal_stuff_done
+		
+		push dword[current_window]
+		push dword[TERMINAL]
+		call terminal_open
+		
+	gameLoop_updateInfoCanvas_terminal_already_opened:
+		push dword[GLFW_KEY_ENTER]
+		call input_keyReleased
+		test eax, eax
+		jz gameLoop_updateInfoCanvas_terminal_stuff_done
+		
+		push 69
+		push dword[current_window]
+		push dword[TERMINAL]
+		call terminal_close
+		
+	gameLoop_updateInfoCanvas_terminal_stuff_done:
 	
 	mov esp, ebp
 	pop ebp
