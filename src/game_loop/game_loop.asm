@@ -1819,6 +1819,7 @@ gameLoop_initInfoCanvas:
 	call uiElement_setParent
 	
 	;create terminal
+	push dword[current_window]
 	push 30
 	push 10
 	call terminal_create
@@ -2087,7 +2088,6 @@ gameLoop_updateInfoCanvas:
 		test eax, eax
 		jz gameLoop_updateInfoCanvas_terminal_stuff_done
 		
-		push dword[current_window]
 		push dword[TERMINAL]
 		call terminal_open
 		
@@ -2098,7 +2098,6 @@ gameLoop_updateInfoCanvas:
 		jz gameLoop_updateInfoCanvas_terminal_stuff_done
 		
 		push 69
-		push dword[current_window]
 		push dword[TERMINAL]
 		call terminal_close
 		

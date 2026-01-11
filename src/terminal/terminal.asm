@@ -1,17 +1,20 @@
 [BITS 32]
 
+
 ;layout:
 ;struct Terminal{
-;	int isClosed;						0
-;	UIEmpty* root;						4
-;	UIImage* background;				8
-;	padding of 4 bytes
-;	vector<char*> terminalHistory;		16
-;	int maxHistoryLength;				32
+;	int isOpen;				0
+;	int maxHistoryLength;	4
+;	int maxLineLength;		8
+;	GLFWWindow* window;		12
+;	padding of 16 bytes
+;	queue<char*> history;	32
 ;	padding of 12 bytes
-;	char* currentlyTyped;				48
-;	int maxLineLength;					52
-;}	56 bytes overall
+;	char* currentLine;		64
+;	padding of 12 bytes;
+;	UIEmpty* root;			80
+;	UIImage* background;	84
+;}	88 bytes overall
 
 section .rodata use32
 	FONT_WIDTH dd 6
@@ -38,19 +41,19 @@ section .data use32
 section .text use32
 
 	;initializes the terminal in a closed state
-	;Terminal* terminal_create(int maxHistoryLength, int maxLineLength)
+	;Terminal* terminal_create(int maxHistoryLength, int maxLineLength, GLFWWindow* window)
 	global terminal_create
 	
 	global terminal_destroy		;void terminal_destroy(Terminal* terminator)
 	
 	;opens the terminal (resets the input part and makes the element visible)
 	;also recalculates the content
-	;void terminal_open(Terminal* terminal, GLFWWindow* pwindow)
+	;void terminal_open(Terminal* terminal)
 	global terminal_open
 	
 	;closes the terminal
 	;if desired, saves the written line into the history
-	;void terminal_close(Terminal* terminal, GLFWWindow* pwindow, int saveWrittenLine)
+	;void terminal_close(Terminal* terminal, int saveWrittenLine)
 	global terminal_close
 	
 	;void terminal_setParent(Terminal* terminal, UIElement* parent)
@@ -89,6 +92,13 @@ section .text use32
 	extern tsVector_lock
 	extern tsVector_unlock
 	
+	extern queue_init
+	extern queue_destroy
+	extern queue_push
+	extern queue_pop
+	extern queue_size
+	extern queue_forEach
+	
 	extern uiElement_create
 	extern uiElement_destroy
 	extern uiElement_setParent
@@ -110,7 +120,6 @@ section .text use32
 	extern UI_BOTTOM
 	extern UI_TEXT_ALIGN_BOTTOM
 	extern UI_TEXT_ALIGN_LEFT
-
 
 terminal_create:
 	push ebp
@@ -142,69 +151,67 @@ terminal_create:
 	terminal_create_valid_line_length:
 	
 	
-	;alloc the terminal
-	push 56
+	;alloc terminal
+	push 88
 	call my_malloc
 	mov dword[ebp-4], eax
 	
-	mov dword[eax], 69		;not visible initially
+	;set the properties
+	mov eax, dword[ebp-4]
 	
-	;create the root and the background
+	mov dword[eax], 0			;closed initially
+	
+	mov ecx, dword[ebp+8]
+	mov dword[eax+4], ecx
+	mov edx, dword[ebp+12]
+	mov dword[eax+8], edx
+	
+	mov dword[eax+64], 0		;current line is NULL
+	
+	mov ecx, dword[ebp+16]
+	mov dword[eax+12], ecx		;window
+	
+	;create the history
+	mov eax, dword[ebp-4]
+	add eax, 32
+	mov ecx, dword[ebp+8]
+	inc ecx
+	push ecx
+	push 4
+	push eax
+	call queue_init
+	
+	;create the ui stuff
 	push dword[UI_EMPTY]
 	call uiElement_create
 	mov ecx, dword[ebp-4]
-	mov dword[ecx+4], eax
+	mov dword[ecx+80], eax
 	
 	push 0
 	push 0
-	push dword[ecx+4]
-	call uiElement_setPosition
-	call uiElement_setSize
-	call uiElement_setStatus	;not visible initially
+	push eax
+	call uiElement_setStatus
 	
 	push dword[UI_IMAGE]
 	call uiElement_create
 	mov ecx, dword[ebp-4]
-	mov dword[ecx+8], eax
+	mov dword[ecx+84], eax
 	
-	push word[UI_BOTTOM]
-	push word[UI_LEFT]
-	push eax
-	call uiElement_setAnchor
-	call uiElement_setPivot
-	
-	mov ecx, dword[ebp-4]
-	push dword[ecx+4]
-	push dword[ecx+8]
+	push dword[ecx+80]
+	push dword[ecx+84]
 	call uiElement_setParent
 	
-	
-	;init the history stuff
-	mov eax, dword[ebp-4]
-	add eax, 16
-	push 4
-	push eax
-	call vector_init
-	
-	mov eax, dword[ebp-4]
-	mov ecx, dword[ebp+8]
-	mov dword[eax+32], ecx		;max history length
-	
-	
-	;init the typed line stuff
-	mov eax, dword[ebp-4]
-	mov ecx, dword[ebp+12]
-	mov dword[eax+52], ecx
-	mov dword[eax+48], 0
-	
-	;create the global callback vector if necessary
-	cmp dword[terminal_count], 0
-	jg terminal_create_register_vector_already_created
+	;init the registered callback vector if necessary
+	test dword[terminal_count], 0xffffffff
+	jnz terminal_create_skip_registered_init
 		push 8
 		push registered_callbacks
 		call tsVector_init
-	terminal_create_register_vector_already_created:
+	
+	terminal_create_skip_registered_init:
+	
 	inc dword[terminal_count]
+	
 	
 	terminal_create_end:
 	mov eax, dword[ebp-4]		;set return value
@@ -212,6 +219,7 @@ terminal_create:
 	mov esp, ebp
 	pop ebp
 	ret
+
 	
 	
 terminal_destroy:
@@ -222,83 +230,40 @@ terminal_destroy:
 	mov ebp, esp
 	
 	;close the terminal if necessary
-	;NOTE: the case where there are multiple GLFWWindows assigned to the terminal is not handled
 	mov eax, dword[ebp+20]
 	test dword[eax], 0xffffffff
-	jnz terminal_destroy_skip_close
-		push registered_callbacks
-		call tsVector_lock
-		
-		push dword[ebp+20]
-		push terminal_destroy_callback_search_helper
-		push registered_callbacks
-		call tsVector_search
-		cmp eax, -1
-		je terminal_destroy_close_skip_close
-			push eax
-			push registered_callbacks
-			call tsVector_at
-			
-			push 0
-			push dword[eax]
-			push dword[ebp+20]
-			call terminal_close
-		
-		terminal_destroy_close_skip_close:
-		push registered_callbacks
-		call tsVector_unlock
-		jmp terminal_destroy_skip_close
-		terminal_destroy_callback_search_helper:		;int func({GLFWWindow*, Terminal*}*, Terminal*)
-			xor eax, eax
-			mov ecx, dword[esp+4]
-			mov edx, dword[esp+8]
-			cmp dword[ecx+4], edx
-			je terminal_destroy_callback_search_helper_end
-				mov eax, 69
-			terminal_destroy_callback_search_helper_end:
-			ret
+	jz terminal_destroy_skip_close
+		push 0
+		push eax
+		call terminal_close
 	terminal_destroy_skip_close:
 	
-	;unset the parent
+	;destroy the ui
 	mov eax, dword[ebp+20]
-	push 0
-	push dword[eax+4]
-	call uiElement_setParent
-	
-	;destroy the root
-	mov eax, dword[ebp+20]
-	push dword[eax+4]
+	push dword[eax+80]
 	call uiElement_destroy
 	
-	;stalin the history
+	;destroy the history
 	mov eax, dword[ebp+20]
-	add eax, 16
+	add eax, 32
 	push 0
-	push terminal_destroy_delete_history_helper
+	push terminal_destroy_clear_history_helper
 	push eax
-	call vector_for_each
-	call vector_destroy
-	jmp terminal_destroy_stalin_gg
-	
-	terminal_destroy_delete_history_helper:	;void func(char** pHistoryLine, int nulla)
-		mov eax, dword[esp+4]
-		push dword[eax]
-		call my_free
-		add esp, 4
-		ret
-		
-	terminal_destroy_stalin_gg:
+	call queue_forEach
+	call queue_destroy
 	
 	;free the sus
 	push dword[ebp+20]
 	call my_free
 	
-	;destroy the callback vector if necessary
+	;deinit the registered callbacks if necessary
 	dec dword[terminal_count]
-	jnz terminal_destroy_skip_register_vector_destruction
+	test dword[terminal_count], 0xffffffff
+	jz terminal_destroy_skip_registered_deinit
 		push registered_callbacks
 		call tsVector_destroy
-	terminal_destroy_skip_register_vector_destruction:
+		
+	terminal_destroy_skip_registered_deinit:
 	
 	mov esp, ebp
 	pop ebx
@@ -306,6 +271,13 @@ terminal_destroy:
 	pop esi
 	pop ebp
 	ret
+	terminal_destroy_clear_history_helper:	;void func(char** pHistoryLine, void* idc)
+		mov eax, dword[esp+4]
+		push dword[eax]
+		call my_free
+		add esp, 4
+		ret
+		
 	
 	
 terminal_open:
@@ -314,38 +286,32 @@ terminal_open:
 	
 	;alloc the written line
 	mov eax, dword[ebp+8]
-	mov eax, dword[eax+52]
+	mov eax, dword[eax+8]
 	inc eax
 	push eax
 	call my_malloc
 	mov byte[eax], 0
 	mov ecx, dword[ebp+8]
-	mov dword[ecx+48], eax
+	mov dword[ecx+64], eax
 	
-	;recalculate the content
-	push dword[ebp+8]
-	call terminal_recalculate_internal
-	
-	;set the terminal as visible
-	mov eax, dword[ebp+8]
-	push 0
-	push 69
-	push dword[eax+4]
-	call uiElement_setStatus
+	;TODO: recalculate content
+	;TODO: make the ui part visible
 	
 	;register the callback
-	push dword[ebp+8]
-	push dword[ebp+12]
+	mov eax, dword[ebp+8]
+	push terminal_charCallback_internal
+	push dword[eax+12]
+	call [glfwSetCharCallback]
+	
+	mov eax, dword[ebp+8]
+	push eax
+	push dword[eax+12]
 	push registered_callbacks
 	call tsVector_pushBack
 	
-	push terminal_charCallback_internal
-	push dword[ebp+12]
-	call [glfwSetCharCallback]
-	
-	;unset the isclosed flag
+	;set the isopen flag
 	mov eax, dword[ebp+8]
-	mov dword[eax], 0
+	mov dword[eax], 69
 	
 	mov esp, ebp
 	pop ebp
@@ -356,9 +322,12 @@ terminal_close:
 	push ebp
 	mov ebp, esp
 	
+	sub esp, 4			;delete helper		4
+	
 	;unregister the callback
+	mov eax, dword[ebp+8]
 	push 0
-	push dword[ebp+12]
+	push dword[eax+12]
 	call [glfwSetCharCallback]
 	
 	push dword[ebp+8]
@@ -366,67 +335,54 @@ terminal_close:
 	push registered_callbacks
 	call tsVector_removeCustom
 	jmp terminal_close_unregister_done
-	terminal_close_unregister_helper:		;int func({GLFWWindow*, Terminal*}*, Terminal*)
-		xor eax, eax
-		mov ecx, dword[esp+4]
-		mov edx, dword[esp+8]
-		cmp dword[ecx+4], edx
-		je terminal_close_unregister_helper_end
-			mov eax, 69
-		terminal_close_unregister_helper_end:
-		ret
+		terminal_close_unregister_helper:		;int func({GLFWWindow*, Terminal*}*, Terminal*)
+			xor eax, eax
+			mov ecx, dword[esp+4]
+			mov edx, dword[esp+8]
+			cmp edx, dword[ecx+4]
+			je terminal_close_unregister_helper_end
+				mov eax, 69
+			terminal_close_unregister_helper_end:
+			ret
 	terminal_close_unregister_done:
 	
-	;turn off the visibility of the terminal
-	mov eax, dword[ebp+8]
-	push 0
-	push 0
-	push dword[eax+4]
-	call uiElement_setStatus
+	;TODO: turn off the visibility of the terminal
 	
-	;save the value of the written line if desired
-	test dword[ebp+16], 0xffffffff
-	jz terminal_close_no_save
-	
-		;save the written line into the history
+	;save the line if necessary
+	test dword[ebp+12], 0xffffffff
+	jz terminal_close_discard_line
 		mov eax, dword[ebp+8]
-		lea ecx, [eax+16]
-		push dword[eax+48]
-		push 0
+		lea ecx, [eax+32]
+		push dword[eax+64]
 		push ecx
-		call vector_insert
+		call queue_push
 		
-		mov eax, dword[ebp+8]
-		mov dword[eax+48], 0
+		;check if the history is full
+		call queue_size
+		mov ecx, dword[ebp+8]
+		cmp eax, dword[ecx+4]
+		jle terminal_line_stuff_done
 		
-		;remove the oldest history line if necessary
-		mov eax, dword[ebp+8]
-		mov ecx, dword[eax+32]
-		cmp dword[eax+16], ecx
-		jle terminal_close_save_no_delete
-			add eax, 16
-			push ecx
-			push eax
-			call vector_at
-			push dword[eax]
+			lea eax, [ebp-4]
+			mov dword[esp+4], eax
+			call queue_pop
+			
+			push dword[ebp-4]
 			call my_free
-			add esp, 4
-			call vector_pop_back
-		terminal_close_save_no_delete:
+			jmp terminal_line_stuff_done
 		
-		jmp terminal_close_save_done
-		
-	terminal_close_no_save:
-	
+	terminal_close_discard_line:
 		mov eax, dword[ebp+8]
-		push dword[eax+48]
+		push dword[eax+64]
 		call my_free
+	terminal_line_stuff_done:
 	
-	terminal_close_save_done:
-	
-	;set the isclosed flag
 	mov eax, dword[ebp+8]
-	mov dword[eax], 69
+	mov dword[eax+64], 0
+	
+	;clear the isopen flag
+	mov eax, dword[ebp+8]
+	mov dword[eax], 0
 	
 	mov esp, ebp
 	pop ebp
@@ -438,7 +394,7 @@ terminal_setParent:
 	
 	mov eax, dword[ebp+8]
 	push dword[ebp+12]
-	push dword[eax+4]
+	push dword[eax+80]
 	call uiElement_setParent
 	
 	mov esp, ebp
@@ -447,12 +403,8 @@ terminal_setParent:
 	
 	
 terminal_isOpen:
-	xor eax, eax
-	mov ecx, dword[esp+4]
-	test dword[ecx], 0xffffffff
-	jnz terminal_isOpen_end
-		mov eax, 69
-	terminal_isOpen_end:
+	mov eax, dword[esp+4]
+	mov eax, dword[eax]
 	ret
 	
 	
@@ -528,19 +480,17 @@ terminal_charCallback_internal:
 	je terminal_charCallback_internal_handleBackspace
 	jmp terminal_charCallback_internal_handleRest
 	terminal_charCallback_internal_handleBackspace:
-		;check if there is anything in the current line
+		;check if there is anything in the currently typed line
 		mov ebx, dword[ebp-4]
-		push dword[ebx+48]
+		push dword[ebx+64]
 		call my_strlen
 		test eax, eax
 		jz terminal_charCallback_internal_end
 		
-		;shorten the line and update the ui
-		mov ecx, dword[ebx+48]
+		mov ecx, dword[ebx+64]
 		mov byte[ecx+eax-1], 0
 		
-		push ebx
-		call terminal_recalculateWritten_internal
+		;TODO: recalculate current line
 		
 		jmp terminal_charCallback_internal_end
 	
@@ -557,19 +507,19 @@ terminal_charCallback_internal:
 	
 		;check if there is space left in the current line
 		mov ebx, dword[ebp-4]
-		push dword[ebx+48]
+		push dword[ebx+64]
 		call my_strlen
-		cmp eax, dword[ebx+52]
+		cmp eax, dword[ebx+8]
 		jge terminal_charCallback_internal_end
 		
 		;append the character and update the displayed written line
-		mov ecx, dword[ebx+48]
+		mov ecx, dword[ebx+64]
 		mov edx, dword[ebp-8]
 		mov byte[ecx+eax], dl
 		mov byte[ecx+eax+1], 0
 		
-		push dword[ebp-4]
-		call terminal_recalculateWritten_internal
+		;TODO: recalculate the current line
+		
 		jmp terminal_charCallback_internal_end
 		
 	

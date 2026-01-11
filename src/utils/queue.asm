@@ -58,6 +58,9 @@ section .text use32
 	global queue_pop			;int queue_pop(queue* pqueue, element* nullableBuffer)
 	
 	;returns 0 if there were no problems
+	global queue_popBack		;int queue_popBack(queue* pqueue, element* nullableBuffer)
+	
+	;returns 0 if there were no problems
 	global queue_peek			;int queue_peek(queue* pqueue, element* buffer)
 	
 	;index is calculated from the start of the queue, not the start of the allocated element array
@@ -66,6 +69,8 @@ section .text use32
 	global queue_clear			;void queue_clear(queue* pqueue)
 	
 	global queue_isEmpty		;int queue_isEmpty(queue* pqueue)
+	
+	global queue_isFull			;int queue_isFull(queue* pqueue)
 	
 	global queue_size			;int queue_size(queue* pqueue)
 	
@@ -538,6 +543,57 @@ queue_pop:
 	pop ebp
 	ret
 	
+	
+queue_popFront:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;return value	4
+	
+	mov dword[ebp-4], 0
+	
+	;check if the queue is empty
+	push dword[ebp+8]
+	call queue_isEmpty
+	test eax, eax
+	jz queue_popFront_not_empty
+		mov dword[ebp-4], 69
+		jmp queue_popFront_end
+		
+	queue_popFront_not_empty:
+	
+	;copy the popped element if necessary
+	test dword[ebp+12], 0xffffffff
+	jz queue_popFront_skip_copy
+		mov ecx, dword[ebp+8]
+		mov eax, dword[ecx]
+		add eax, dword[ecx+4]
+		xor edx, edx
+		idiv dword[ecx+8]
+		
+		imul edx, dword[ecx+12]
+		add edx, dword[ecx+16]
+		
+		push dword[ecx+12]
+		push edx
+		push dword[ebp+12]
+		call my_memcpy
+		
+	queue_popFront_skip_copy:
+	
+	;update the queue state
+	mov eax, dword[ebp+8]
+	dec dword[eax+4]
+	
+	queue_popFront_end:
+	mov eax, dword[ebp-4]		;set return value
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+	
 queue_peek:
 	push ebp
 	mov ebp, esp
@@ -625,6 +681,17 @@ queue_isEmpty:
 		mov eax, 69
 	
 	queue_isEmpty_end:
+	ret
+	
+	
+queue_isFull:
+	xor eax, eax
+	mov ecx, dword[esp+4]
+	mov edx, dword[ecx+4]
+	cmp edx, dword[ecx+8]
+	jl queue_isFull_end
+		mov eax, 69
+	queue_isFull_end:
 	ret
 	
 	
