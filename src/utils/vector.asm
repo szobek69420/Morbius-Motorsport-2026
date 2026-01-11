@@ -297,73 +297,102 @@ _pop_back_skip_realloc:
 	
 vector_insert:			;void vector_insert(vector*, int index, <element> element)
 	push ebp
+	push esi
+	push edi
+	push ebx
 	mov ebp, esp
 	
-	mov eax, dword[ebp+8]
-	push eax		;vector* at ebp-4
+	sub esp, 4			;corrected index		4
 	
-	;check if realloc is necessary
+	;check if the index needs correction (below 0 or above the max of the vector)
+	mov ecx, dword[ebp+24]
+	mov dword[ebp-4], ecx
+	
+	test ecx, 0x80000000
+	jz vector_insert_correct_above
+		mov dword[ebp-4], 0
+		jmp vector_insert_correct_done
+	vector_insert_correct_above:
+	mov eax, dword[ebp+20]
+	cmp ecx, dword[eax]
+	jle vector_insert_correct_done
+		mov edx, dword[eax]
+		mov dword[ebp-4], edx
+	vector_insert_correct_done:
+	
+	;check if the capacity needs increase
+	mov eax, dword[ebp+20]
 	mov ecx, dword[eax]
 	cmp ecx, dword[eax+4]
-	jl _insert_realloc_done
-	
-		;calculate new data* size
+	jl vector_insert_cap
 		mov edx, dword[eax+4]
 		shl edx, 1
-		mov dword[eax+4], edx			;save new capacity
 		imul edx, dword[eax+8]
 		
-		
 		push edx
-		push dword[eax+12]
-		call my_realloc
-		add esp, 8
+		call my_malloc
 		
-		mov ecx, dword[ebp-4]
-		mov dword[ecx+12],eax		;save new data*
+		mov ecx, dword[ebp+20]
+		mov edx, dword[ecx]
+		imul edx, dword[ecx+8]
+		push edx
+		push dword[ecx+12]
+		push eax
+		call my_memcpy
 		
-	_insert_realloc_done:
-	mov eax, dword[ebp-4]			;vector* in eax
+		pop eax
+		mov ecx, dword[ebp+20]
+		mov dword[ecx+12], eax
+		
+		call my_free
+		
+	vector_insert_cap:
 	
-	;calculate offset of new element
-	mov ecx, dword[eax+12]
-	mov edx, dword[ebp+12]		;index in edx
-	imul edx, dword[eax+8]			;offset in edx
-	add ecx, edx
-	;calculate the size of the copied data
-	mov edx, dword[eax]		;size of vector
-	sub edx, dword[ebp+12]	;number of elements to copy
-	imul edx, dword[eax+8]		;size copied region
+	;shift the elements above the index
+	mov eax, dword[ebp+20]
 	
-	;copy the current data
-	push ecx			;store ecx
+	mov esi, dword[eax]
+	imul esi, dword[eax+8]
+	add esi, dword[eax+12]
+	dec esi
+	mov edi, esi
+	add edi, dword[eax+8]
 	
-	push edx		;size of copied region
-	push ecx			;src*
-	add ecx, dword[eax+8]
-	push ecx			;dst*
-	call my_memcpy
-	add esp, 12
+	mov ebx, dword[eax]
+	sub ebx, dword[ebp+24]
+	imul ebx, dword[eax+8]
+	cmp ebx, 0
+	jle vector_insert_shift_loop_end
+	std
+	vector_insert_shift_loop_start:
+		movsb
+		dec ebx
+		jnz vector_insert_shift_loop_start
+	vector_insert_shift_loop_end:
+	cld
 	
-	pop ecx			;restore ecx
+	;copy the new element into the vector
+	mov eax, dword[ebp+20]
 	
-	;copy in the new element
-	mov eax, dword[ebp-4]
-	mov edx, dword[eax+8]	;element size in edx
-	push edx
-	lea edx, [ebp+16]		;element* in edx
-	push edx
-	push ecx
-	call my_memcpy
-	add esp, 12
+	lea esi, [ebp+28]
+	mov edi, dword[ebp+24]
+	imul edi, dword[eax+8]
+	add edi, dword[eax+12]
 	
-	;increment size
-	mov eax, dword[ebp-4]
-	mov ecx, dword[eax]
-	inc ecx
-	mov dword[eax], ecx
+	mov ebx, dword[eax+8]
+	vector_insert_copy_loop_start:
+		movsb
+		dec ebx
+		jnz vector_insert_copy_loop_start
+		
+	;increase the size
+	mov eax, dword[ebp+20]
+	inc dword[eax]
 	
 	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
 	pop ebp
 	ret
 	

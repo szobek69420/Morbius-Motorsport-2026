@@ -26,8 +26,10 @@ section .rodata use32
 	
 	print_int_nl db "%d",10,0
 	print_char_nl db "%c",10,0
+	print_string_nl db "%s",10,0
 	
 	test_text db "why so serious",10,0
+	test_text2 db "why so sus",10,0
 	
 section .data use32
 	terminal_count dd 0
@@ -71,7 +73,9 @@ section .text use32
 	
 	extern vector_init
 	extern vector_destroy
+	extern vector_push_back
 	extern vector_insert
+	extern vector_pop_back
 	extern vector_remove
 	extern vector_remove_at
 	extern vector_for_each
@@ -285,11 +289,6 @@ terminal_destroy:
 		
 	terminal_destroy_stalin_gg:
 	
-	;free the line buffer
-	mov eax, dword[ebp+20]
-	push dword[eax+48]
-	call my_free
-	
 	;free the sus
 	push dword[ebp+20]
 	call my_free
@@ -322,7 +321,6 @@ terminal_open:
 	mov byte[eax], 0
 	mov ecx, dword[ebp+8]
 	mov dword[ecx+48], eax
-	
 	
 	;recalculate the content
 	push dword[ebp+8]
@@ -389,15 +387,12 @@ terminal_close:
 	;save the value of the written line if desired
 	test dword[ebp+16], 0xffffffff
 	jz terminal_close_no_save
-		mov eax, dword[ebp+8]
-		push dword[eax+48]
-		call my_printf
 	
 		;save the written line into the history
 		mov eax, dword[ebp+8]
 		lea ecx, [eax+16]
 		push dword[eax+48]
-		push 1
+		push 0
 		push ecx
 		call vector_insert
 		
@@ -416,10 +411,18 @@ terminal_close:
 			push dword[eax]
 			call my_free
 			add esp, 4
-			call vector_remove_at
+			call vector_pop_back
 		terminal_close_save_no_delete:
 		
+		jmp terminal_close_save_done
+		
 	terminal_close_no_save:
+	
+		mov eax, dword[ebp+8]
+		push dword[eax+48]
+		call my_free
+	
+	terminal_close_save_done:
 	
 	;set the isclosed flag
 	mov eax, dword[ebp+8]
@@ -559,10 +562,6 @@ terminal_charCallback_internal:
 		cmp eax, dword[ebx+52]
 		jge terminal_charCallback_internal_end
 		
-		push dword[ebp-8]
-		push print_int_nl
-		call my_printf
-		
 		;append the character and update the displayed written line
 		mov ecx, dword[ebx+48]
 		mov edx, dword[ebp-8]
@@ -666,6 +665,9 @@ terminal_recalculate_internal:
 	push ecx
 	call vector_insert
 	
+	push test_text
+	call my_printf
+	
 	;create the new texts
 	mov eax, dword[ebp+20]
 	mov esi, dword[eax+28]		;current history line in esi
@@ -697,6 +699,13 @@ terminal_recalculate_internal:
 		call uiElement_setAnchor
 		call uiElement_setPivot
 		add esp, 8
+		
+		push edi
+		push print_int_nl
+		call my_printf
+		push dword[esi]
+		push print_string_nl
+		;call my_printf
 		
 		push dword[esi]
 		push ebx
@@ -741,12 +750,15 @@ terminal_recalculate_internal:
 	
 	terminal_recalculate_internal_create_loop_end:
 	
+	push test_text2
+	call my_printf
+	
 	;remove the current line from the history
 	mov eax, dword[ebp+20]
 	lea ecx, [eax+16]
-	push dword[eax+48]
+	push 0
 	push ecx
-	call vector_remove
+	call vector_remove_at
 	
 	mov esp, ebp
 	pop ebx
