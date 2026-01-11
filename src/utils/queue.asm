@@ -79,6 +79,7 @@ section .text use32
 	global queue_search			;int queue_search(queue* pqueue, int (*comparator)(element*, void* searchKey), void* searchKey)
 	
 	global queue_forEach		;void queue_forEach(queue* pqueue, void (*function)(element*, void* param), void* param)
+	global queue_forEachReversed	;void queue_forEachReversed(queue* pqueue, void (*function)(element*, void* param), void* param)
 	
 	global queue_printInfo		;void queue_printInfo(queue* pqueue)
 	
@@ -544,7 +545,7 @@ queue_pop:
 	ret
 	
 	
-queue_popFront:
+queue_popBack:
 	push ebp
 	mov ebp, esp
 	
@@ -556,15 +557,15 @@ queue_popFront:
 	push dword[ebp+8]
 	call queue_isEmpty
 	test eax, eax
-	jz queue_popFront_not_empty
+	jz queue_popBack_not_empty
 		mov dword[ebp-4], 69
-		jmp queue_popFront_end
+		jmp queue_popBack_end
 		
-	queue_popFront_not_empty:
+	queue_popBack_not_empty:
 	
 	;copy the popped element if necessary
 	test dword[ebp+12], 0xffffffff
-	jz queue_popFront_skip_copy
+	jz queue_popBack_skip_copy
 		mov ecx, dword[ebp+8]
 		mov eax, dword[ecx]
 		add eax, dword[ecx+4]
@@ -579,13 +580,13 @@ queue_popFront:
 		push dword[ebp+12]
 		call my_memcpy
 		
-	queue_popFront_skip_copy:
+	queue_popBack_skip_copy:
 	
 	;update the queue state
 	mov eax, dword[ebp+8]
 	dec dword[eax+4]
 	
-	queue_popFront_end:
+	queue_popBack_end:
 	mov eax, dword[ebp-4]		;set return value
 	
 	mov esp, ebp
@@ -798,6 +799,39 @@ queue_forEach:
 		jnz queue_forEach_loop_start
 	
 	queue_forEach_end:
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+queue_forEachReversed:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	mov ebx, dword[ebp+20]
+	mov ebx, dword[ebx+4]
+	dec ebx
+	js queue_forEachReversed_loop_end
+	queue_forEachReversed_loop_start:
+		push ebx
+		push dword[ebp+20]
+		call queue_at
+		push dword[ebp+28]
+		push eax
+		call dword[ebp+24]
+		add esp, 16
+		
+		dec ebx
+		jns queue_forEachReversed_loop_start
+		
+	queue_forEachReversed_loop_end:
+	
 	mov esp, ebp
 	pop ebx
 	pop edi

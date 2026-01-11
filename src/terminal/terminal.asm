@@ -17,15 +17,10 @@
 ;}	88 bytes overall
 
 section .rodata use32
-	FONT_WIDTH dd 6
-	FONT_HEIGHT dd 8
-	FONT_SPACING dd 1
-	LINE_SPACING dd 3
-	PADDING_HORIZONTAL dd 5
-	PADDING_VERTICAL dd 3
+
+	terminal_background_path db "./sprites/ui/ingame/terminal/terminal.bmp",0
 	
-	WRITTEN_LINE_COLOUR dd 0.0, 1.0, 1.0, 1.0
-	HISTORY_LINE_COLOUR dd 1.0, 0.85, 0.0, 1.0
+	TERMINAL_BACKGROUND_COLOUR dd 1.0, 1.0, 1.0, 0.5
 	
 	print_int_nl db "%d",10,0
 	print_char_nl db "%c",10,0
@@ -96,8 +91,10 @@ section .text use32
 	extern queue_destroy
 	extern queue_push
 	extern queue_pop
+	extern queue_popBack
 	extern queue_size
 	extern queue_forEach
+	extern queue_forEachReversed
 	
 	extern uiElement_create
 	extern uiElement_destroy
@@ -113,6 +110,8 @@ section .text use32
 	extern uiText_setTextAlignment
 	extern uiText_setFontSize
 	extern uiText_setSpacing
+	extern uiImage_setTexture
+	extern uiImage_setColour
 	extern UI_EMPTY
 	extern UI_IMAGE
 	extern UI_TEXT
@@ -200,6 +199,20 @@ terminal_create:
 	push dword[ecx+80]
 	push dword[ecx+84]
 	call uiElement_setParent
+	
+	mov ecx, dword[ebp-4]
+	push terminal_background_path
+	push dword[ecx+84]
+	call uiImage_setTexture
+	
+	mov eax, TERMINAL_BACKGROUND_COLOUR
+	mov ecx, dword[ebp-4]
+	push dword[eax+12]
+	push dword[eax+8]
+	push dword[eax+4]
+	push dword[eax]
+	push dword[ecx+84]
+	call uiImage_setColour
 	
 	;init the registered callback vector if necessary
 	test dword[terminal_count], 0xffffffff
@@ -294,8 +307,17 @@ terminal_open:
 	mov ecx, dword[ebp+8]
 	mov dword[ecx+64], eax
 	
-	;TODO: recalculate content
-	;TODO: make the ui part visible
+	;recalculate content
+	push dword[ebp+8]
+	call terminal_recalculate_internal
+	
+	;make the ui part visible
+	mov eax, dword[ebp+8]
+	push 0
+	push 69
+	push dword[eax+80]
+	call uiElement_setStatus
+	
 	
 	;register the callback
 	mov eax, dword[ebp+8]
@@ -346,7 +368,12 @@ terminal_close:
 			ret
 	terminal_close_unregister_done:
 	
-	;TODO: turn off the visibility of the terminal
+	;turn off the visibility of the terminal
+	mov eax, dword[ebp+8]
+	push 0
+	push 0
+	push dword[eax+80]
+	call uiElement_setStatus
 	
 	;save the line if necessary
 	test dword[ebp+12], 0xffffffff
@@ -361,7 +388,7 @@ terminal_close:
 		call queue_size
 		mov ecx, dword[ebp+8]
 		cmp eax, dword[ecx+4]
-		jle terminal_line_stuff_done
+		jle terminal_close_line_stuff_done
 		
 			lea eax, [ebp-4]
 			mov dword[esp+4], eax
@@ -369,13 +396,13 @@ terminal_close:
 			
 			push dword[ebp-4]
 			call my_free
-			jmp terminal_line_stuff_done
+			jmp terminal_close_line_stuff_done
 		
 	terminal_close_discard_line:
 		mov eax, dword[ebp+8]
 		push dword[eax+64]
 		call my_free
-	terminal_line_stuff_done:
+	terminal_close_line_stuff_done:
 	
 	mov eax, dword[ebp+8]
 	mov dword[eax+64], 0
@@ -490,7 +517,9 @@ terminal_charCallback_internal:
 		mov ecx, dword[ebx+64]
 		mov byte[ecx+eax-1], 0
 		
-		;TODO: recalculate current line
+		;recalculate the current line
+		push ebx
+		call terminal_recalculateWritten_internal
 		
 		jmp terminal_charCallback_internal_end
 	
@@ -518,7 +547,9 @@ terminal_charCallback_internal:
 		mov byte[ecx+eax], dl
 		mov byte[ecx+eax+1], 0
 		
-		;TODO: recalculate the current line
+		;recalculate the current line
+		push ebx
+		call terminal_recalculateWritten_internal
 		
 		jmp terminal_charCallback_internal_end
 		
@@ -541,6 +572,20 @@ terminal_recalculate_internal:
 	push ebx
 	mov ebp, esp
 	
+	jmp terminal_recalculate_internal_data_end
+	
+		FONT_WIDTH dd 6
+		FONT_HEIGHT dd 8
+		FONT_SPACING dd 1
+		LINE_SPACING dd 5
+		PADDING_HORIZONTAL dd 10
+		PADDING_VERTICAL dd 8
+		
+		WRITTEN_LINE_COLOUR dd 0.0, 1.0, 1.0, 1.0
+		HISTORY_LINE_COLOUR dd 1.0, 0.85, 0.0, 1.0
+	
+	terminal_recalculate_internal_data_end:
+	
 	sub esp, 4		;background width			4
 	sub esp, 4		;background height			8
 	sub esp, 4		;current x pos				12
@@ -553,7 +598,7 @@ terminal_recalculate_internal:
 	
 	;delete the previous menu texts
 	mov eax, dword[ebp+20]
-	push dword[eax+4]
+	push dword[eax+80]
 	call uiElement_getChildren
 	mov ebx, eax				;vector in ebx
 	xor edi, edi				;index in edi
@@ -562,7 +607,7 @@ terminal_recalculate_internal:
 		
 		mov esi, dword[ebx+12]
 		mov esi, dword[esi+4*edi]
-		cmp esi, dword[eax+8]
+		cmp esi, dword[eax+84]
 		je terminal_recalculate_internal_delete_loop_no_delete	;don't delete the background
 			;deletable
 			push esi
@@ -576,26 +621,55 @@ terminal_recalculate_internal:
 		terminal_recalculate_internal_delete_loop_continue:
 		cmp edi, dword[ebx]
 		jl terminal_recalculate_internal_delete_loop_start
+		
+	
+	;set the root's properties
+	mov ebx, dword[ebp+20]
+	
+	push 0
+	push 0
+	push dword[ebx+80]
+	call uiElement_setPosition
+	call uiElement_setSize
+	
 	
 	;calculate the background size
-	mov eax, dword[ebp+20]
+	mov ebx, dword[ebp+20]
 	mov ecx, dword[FONT_WIDTH]
 	add ecx, dword[FONT_SPACING]
-	imul ecx, dword[eax+52]
+	imul ecx, dword[ebx+8]
 	sub ecx, dword[FONT_SPACING]
 	add ecx, dword[PADDING_HORIZONTAL]
 	add ecx, dword[PADDING_HORIZONTAL]
 	mov dword[ebp-4], ecx
 	
-	mov ecx, dword[eax+16]
-	inc ecx							;for the currently typed line
+	lea ecx, [ebx+32]
+	push ecx
+	call queue_size
+	inc eax							;for the currently typed line
 	mov edx, dword[FONT_HEIGHT]
 	add edx, dword[LINE_SPACING]
-	imul ecx, edx
-	sub ecx, dword[LINE_SPACING]
-	add ecx, dword[PADDING_VERTICAL]
-	add ecx, dword[PADDING_VERTICAL]
-	mov dword[ebp-8], ecx
+	imul eax, edx
+	sub eax, dword[LINE_SPACING]
+	add eax, dword[PADDING_VERTICAL]
+	add eax, dword[PADDING_VERTICAL]
+	mov dword[ebp-8], eax
+	
+	;set the background's properties
+	mov ebx, dword[ebp+20]
+	push 0
+	push 0
+	push dword[ebx+84]
+	call uiElement_setPosition
+	push dword[ebp-8]
+	push dword[ebp-4]
+	push dword[ebx+84]
+	call uiElement_setSize
+	push word[UI_BOTTOM]
+	push word[UI_LEFT]
+	push dword[ebx+84]
+	call uiElement_setAnchor
+	call uiElement_setPivot
 	
 	;calculate the current positions and the delta y
 	mov ecx, dword[FONT_HEIGHT]
@@ -608,80 +682,110 @@ terminal_recalculate_internal:
 	mov dword[ebp-16], edx
 	
 	;add the current line to the history temporarily
-	mov eax, dword[ebp+20]
-	lea ecx, [eax+16]
-	push dword[eax+48]
-	push 0
+	mov ebx, dword[ebp+20]
+	lea ecx, [ebx+32]
+	push dword[ebx+64]
 	push ecx
-	call vector_insert
-	
-	push test_text
-	call my_printf
+	call queue_push
 	
 	;create the new texts
-	mov eax, dword[ebp+20]
-	mov esi, dword[eax+28]		;current history line in esi
-	mov edi, dword[eax+16]		;index in edi
-	cmp edi, 0
-	jle terminal_recalculate_internal_create_loop_end
-	terminal_recalculate_internal_create_loop_start:
+	sub esp, 20			;data block
+	
+	mov ebx, dword[ebp+20]
+	mov eax, dword[ebx+80]
+	mov dword[esp], eax			;root
+	mov ecx, dword[ebx+64]
+	mov dword[esp+4], ecx		;current line
+	mov edx, dword[ebp-12]
+	mov dword[esp+8], edx		;current x pos
+	mov eax, dword[ebp-16]
+	mov dword[esp+12], eax		;current y pos
+	mov ecx, dword[ebp-20]
+	mov dword[esp+16], ecx		;delta y pos
+	
+	mov eax, esp
+	lea ecx, [ebx+32]
+	push eax
+	push terminal_recalculate_internal_create_helper
+	push ecx
+	call queue_forEachReversed
+	jmp terminal_recalculate_internal_create_done
+	
+	;void func(
+	;	char** ptext, 
+	;	struct {
+	;		UIEmpty* root,
+	;		const char* currentLine,
+	;		int currentXPos,
+	;		int currentYPos,
+	;		int deltaYPos
+	;	}* pdata
+	;)
+	terminal_recalculate_internal_create_helper:
+		push ebp
+		push ebx
+		mov ebp, esp
+		
+		sub esp, 4			;root			4
+		sub esp, 8			;current line	8
+		
+		;unwrap the data
+		mov eax, dword[ebp+16]
+		mov ecx, dword[eax]
+		mov dword[ebp-4], ecx
+		mov edx, dword[eax+4]
+		mov dword[ebp-8], edx
+		
+		;create the element and set properties
 		push dword[UI_TEXT]
 		call uiElement_create
-		add esp, 4
 		mov ebx, eax
 		
-		mov eax, dword[ebp+20]
-		push dword[eax+4]
+		push dword[ebp-4]
 		push ebx
 		call uiElement_setParent
-		add esp, 8
+		
+		mov eax, dword[ebp+16]
+		push dword[eax+12]
+		push dword[eax+8]
+		push ebx
+		call uiElement_setPosition
 		
 		push 0
 		push 0
 		push ebx
-		call uiElement_setPosition
 		call uiElement_setSize
-		add esp, 12
 		
 		push word[UI_BOTTOM]
 		push word[UI_LEFT]
 		push ebx
 		call uiElement_setAnchor
 		call uiElement_setPivot
-		add esp, 8
 		
-		push edi
-		push print_int_nl
-		call my_printf
-		push dword[esi]
-		push print_string_nl
-		;call my_printf
-		
-		push dword[esi]
+		mov eax, dword[ebp+12]
+		push dword[eax]
 		push ebx
 		call uiText_setText
-		add esp, 8
 		
 		push dword[FONT_HEIGHT]
 		push dword[FONT_WIDTH]
 		push ebx
 		call uiText_setFontSize
-		add esp, 12
 		
 		push dword[FONT_SPACING]
 		push ebx
 		call uiText_setSpacing
-		add esp, 8
 		
 		push word[UI_TEXT_ALIGN_BOTTOM]
 		push word[UI_TEXT_ALIGN_LEFT]
 		push ebx
 		call uiText_setTextAlignment
-		add esp, 8
 		
 		mov eax, HISTORY_LINE_COLOUR
-		test dword[ebp-24], 0xffffffff
-		jz terminal_recalculate_internal_create_loop_not_written_line
+		mov ecx, dword[ebp+12]
+		mov ecx, dword[ecx]
+		cmp ecx, dword[ebp-8]
+		jne terminal_recalculate_internal_create_loop_not_written_line
 			mov eax, WRITTEN_LINE_COLOUR
 			mov dword[ebp-24], 0
 		terminal_recalculate_internal_create_loop_not_written_line:	
@@ -691,24 +795,25 @@ terminal_recalculate_internal:
 		push dword[eax]
 		push ebx
 		call uiText_setColour
-		add esp, 20
 		
+		;update the current y pos
+		mov eax, dword[ebp+16]
+		mov ecx, dword[eax+16]
+		add dword[eax+12], ecx
 		
-		add esi, 4
-		dec edi
-		jnz terminal_recalculate_internal_create_loop_start
-	
-	terminal_recalculate_internal_create_loop_end:
-	
-	push test_text2
-	call my_printf
+		mov esp, ebp
+		pop ebx
+		pop ebp
+		ret
+		
+	terminal_recalculate_internal_create_done:
 	
 	;remove the current line from the history
-	mov eax, dword[ebp+20]
-	lea ecx, [eax+16]
+	mov ebx, dword[ebp+20]
+	add ebx, 32
 	push 0
-	push ecx
-	call vector_remove_at
+	push ebx
+	call queue_popBack
 	
 	mov esp, ebp
 	pop ebx
@@ -727,12 +832,12 @@ terminal_recalculateWritten_internal:
 	mov ebp, esp
 	
 	mov eax, dword[ebp+8]
-	push dword[eax+4]
+	push dword[eax+80]
 	call uiElement_getChildren
 	
 	mov ecx, dword[eax+12]
 	mov edx, dword[ebp+8]
-	push dword[edx+48]
+	push dword[edx+64]
 	push dword[ecx+4]			;only the background is before the written line
 	call uiText_setText
 	
