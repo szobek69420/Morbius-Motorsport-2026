@@ -17,6 +17,17 @@ section .text use32
 	
 	global my_sprintf		;void my_sprintf(char* buffer, const char* format, ...args), it expects single-precision floating point numbers
 	
+	;the substrings need to be freed by the caller
+	;the substrings are appended to the end of the outSubstrings vector
+	;if there are multiple consecutive splitters, they are interpreted as one
+	;void my_ssplit(const char* string, int splitterChar, vector<char*>* outSubstrings)
+	global my_ssplit
+	
+	
+	extern my_malloc
+	extern my_memcpy
+	
+	extern vector_push_back
 	
 my_strlen:
 	push ebp
@@ -503,3 +514,74 @@ my_sprintf_print_float:	;void my_sprintf_print_float(char** currentPositionInBuf
 	pop ebp
 	ret
 	
+	
+	
+my_ssplit:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	mov esi, dword[ebp+20]		;start of the current substring in esi
+	xor edi, edi				;index of currently examined character in edi
+	my_ssplit_loop_start:
+		mov al, byte[ebp+24]
+		cmp byte[esi+edi], al
+		je my_ssplit_loop_substring_end
+		test byte[esi+edi], 0xff
+		jz my_ssplit_loop_substring_end
+		
+		my_ssplit_loop_continue:
+		inc edi
+		jmp my_ssplit_loop_start 
+		
+		my_ssplit_loop_substring_end:
+			;alloc and fill the substring
+			push edi
+			inc dword[esp]
+			call my_malloc
+			add esp, 4
+			mov byte[eax+edi], 0
+			
+			push edi
+			push esi
+			push eax
+			call my_memcpy
+			pop eax
+			add esp, 8
+			
+			push eax
+			push dword[ebp+28]
+			call vector_push_back
+			add esp, 4
+			
+			;check if it is the end of the string
+			test byte[esi+edi], 0xff
+			jz my_ssplit_loop_end
+			
+			;check if there are following splitters
+			mov bl, byte[ebp+24]
+			my_ssplit_loop_substring_end_splitter_loop_start:
+				inc edi
+				cmp byte[esi+edi], bl
+				je my_ssplit_loop_substring_end_splitter_loop_start
+				
+			;check if it is the end of the string again
+			test byte[esi+edi], 0xff
+			jz my_ssplit_loop_end
+			
+			;update the start of the substring
+			add esi, edi
+			xor edi, edi
+			jmp my_ssplit_loop_start
+				
+	my_ssplit_loop_end:
+	
+	my_ssplit_end:
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret

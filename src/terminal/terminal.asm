@@ -16,7 +16,29 @@
 ;	UIImage* background;	84
 ;}	88 bytes overall
 
+;struct TerminalCommand{
+;	int commandType;		0
+;	int dataSize;			4
+;	void* data;
+;}	12 bytes overall
+
 section .rodata use32
+	TERMINAL_COMMAND_NONE dd 0
+	TERMINAL_COMMAND_WARP dd 1
+	
+	global TERMINAL_COMMAND_NONE
+	global TERMINAL_COMMAND_WARP
+	
+	TERMINAL_COMMAND_BEGIN db "()",0
+	TERMINAL_COMMAND_BEGIN_LENGTH db 2
+	
+	
+	TERMINAL_COMMAND_NAMES:		;indexed by the terminal command type
+		dd TERMINAL_COMMAND_NAME_NONE
+		dd TERMINAL_COMMAND_NAME_WARP
+		
+		TERMINAL_COMMAND_NAME_NONE db "NIGGASUS9000",0
+		TERMINAL_COMMAND_NAME_WARP db "WARP",0
 
 	terminal_background_path db "./sprites/ui/ingame/terminal/terminal.bmp",0
 	
@@ -57,6 +79,11 @@ section .text use32
 	;int terminal_isOpen(Terminal* terminal)
 	global terminal_isOpen
 	
+	;interprets the current line as a command and returns the interpreted data (even if it's an invalid command, in that case a command of type TERMINAL_COMMAND_NONE is returned)
+	;the terminal command struct needs to be freed by the caller
+	;TerminalCommand* terminal_interpretLine(Terminal*)
+	global terminal_interpretLine
+	
 	
 	extern glfwSetCharCallback
 	
@@ -68,6 +95,7 @@ section .text use32
 	
 	extern ctype_toUpper
 	extern ctype_isAlnum
+	extern ctype_isSpace
 	
 	extern vector_init
 	extern vector_destroy
@@ -378,25 +406,9 @@ terminal_close:
 	;save the line if necessary
 	test dword[ebp+12], 0xffffffff
 	jz terminal_close_discard_line
-		mov eax, dword[ebp+8]
-		lea ecx, [eax+32]
-		push dword[eax+64]
-		push ecx
-		call queue_push
-		
-		;check if the history is full
-		call queue_size
-		mov ecx, dword[ebp+8]
-		cmp eax, dword[ecx+4]
-		jle terminal_close_line_stuff_done
-		
-			lea eax, [ebp-4]
-			mov dword[esp+4], eax
-			call queue_pop
-			
-			push dword[ebp-4]
-			call my_free
-			jmp terminal_close_line_stuff_done
+		push dword[ebp+8]
+		call terminal_saveLine_internal
+		jmp terminal_close_line_stuff_done
 		
 	terminal_close_discard_line:
 		mov eax, dword[ebp+8]
@@ -433,6 +445,9 @@ terminal_isOpen:
 	mov eax, dword[esp+4]
 	mov eax, dword[eax]
 	ret
+	
+	
+terminal_interpretLine:
 	
 	
 ;internal functinos	-----------------------------------
@@ -574,10 +589,10 @@ terminal_recalculate_internal:
 	
 	jmp terminal_recalculate_internal_data_end
 	
-		FONT_WIDTH dd 6
-		FONT_HEIGHT dd 8
+		FONT_WIDTH dd 12
+		FONT_HEIGHT dd 16
 		FONT_SPACING dd 1
-		LINE_SPACING dd 5
+		LINE_SPACING dd 8
 		PADDING_HORIZONTAL dd 10
 		PADDING_VERTICAL dd 8
 		
@@ -842,5 +857,84 @@ terminal_recalculateWritten_internal:
 	call uiText_setText
 	
 	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;saves the currently written line if it's not empty
+;allocates space for the next line
+;void terminal_saveLine_internal(Terminal*)
+terminal_saveLine_internal:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 4			;removal helper		4
+	
+	;check if the line is empty
+	mov esi, dword[ebp+20]
+	mov esi, dword[esi+64]			;current line in esi
+	xor edi, edi					;index in edi
+	xor ebx, ebx					;found a non white space?
+	terminal_saveLine_internal_space_loop_start:
+		test byte[esi+edi], 0xff
+		jz terminal_saveLine_internal_space_loop_end
+		
+		movzx eax, byte[esi+edi]
+		push eax
+		call ctype_isSpace
+		add esp, 4
+		
+		test eax, eax
+		setz bl
+		jz terminal_saveLine_internal_space_loop_end
+		
+		inc edi
+		jmp terminal_saveLine_internal_space_loop_start
+		
+	terminal_saveLine_internal_space_loop_end:
+	
+	test ebx, ebx
+	jz terminal_saveLine_internal_end
+	
+	
+	;add the line to the history
+	mov ebx, dword[ebp+20]		;terminal in ebx
+	
+	lea eax, [ebx+32]
+	push dword[ebx+64]
+	push eax
+	call queue_push
+	
+	;check if the last element needs yeeting
+	call queue_size
+	cmp eax, dword[ebx+4]
+	jle terminal_saveLine_internal_skip_yeet
+		lea eax, [ebx+32]
+		lea ecx, [ebp-4]
+		push ecx
+		push eax
+		call queue_pop
+		
+		push dword[ebp-4]
+		call my_free
+		
+	terminal_saveLine_internal_skip_yeet:
+	
+	
+	;alloc the new line
+	push dword[ebx+8]
+	inc dword[esp]
+	call my_malloc
+	mov byte[eax], 0
+	mov dword[ebx+64], eax
+	
+	terminal_saveLine_internal_end:
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
 	pop ebp
 	ret

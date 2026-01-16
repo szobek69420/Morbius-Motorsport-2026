@@ -428,6 +428,9 @@ section .text use32
 	extern lightRenderer_deinit
 	extern lightManager4d_processUpdates
 	
+	extern my_ssplit
+	extern vector_for_each
+	
 gameLoop_main:
 	push ebp
 	push esi
