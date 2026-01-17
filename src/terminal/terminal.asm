@@ -16,30 +16,7 @@
 ;	UIImage* background;	84
 ;}	88 bytes overall
 
-;struct TerminalCommand{
-;	int commandType;		0
-;	int dataSize;			4
-;	void* data;
-;}	12 bytes overall
-
 section .rodata use32
-	TERMINAL_COMMAND_NONE dd 0
-	TERMINAL_COMMAND_WARP dd 1
-	
-	global TERMINAL_COMMAND_NONE
-	global TERMINAL_COMMAND_WARP
-	
-	TERMINAL_COMMAND_BEGIN db "()",0
-	TERMINAL_COMMAND_BEGIN_LENGTH db 2
-	
-	
-	TERMINAL_COMMAND_NAMES:		;indexed by the terminal command type
-		dd TERMINAL_COMMAND_NAME_NONE
-		dd TERMINAL_COMMAND_NAME_WARP
-		
-		TERMINAL_COMMAND_NAME_NONE db "NIGGASUS9000",0
-		TERMINAL_COMMAND_NAME_WARP db "WARP",0
-
 	terminal_background_path db "./sprites/ui/ingame/terminal/terminal.bmp",0
 	
 	TERMINAL_BACKGROUND_COLOUR dd 1.0, 1.0, 1.0, 0.5
@@ -80,10 +57,12 @@ section .text use32
 	global terminal_isOpen
 	
 	;interprets the current line as a command and returns the interpreted data (even if it's an invalid command, in that case a command of type TERMINAL_COMMAND_NONE is returned)
-	;the terminal command struct needs to be freed by the caller
+	;the terminal command struct needs to be freed by calling the terminal_destroyCommand function
 	;TerminalCommand* terminal_interpretLine(Terminal*)
 	global terminal_interpretLine
 	
+	;void terminal_destroyCommand(TerminalCommand* command)
+	global terminal_destroyCommand
 	
 	extern glfwSetCharCallback
 	
@@ -448,6 +427,39 @@ terminal_isOpen:
 	
 	
 terminal_interpretLine:
+	push ebp
+	push esi
+	push edi
+	push ebx
+	mov ebp, esp
+	
+	sub esp, 16			;
+	
+	mov esp, ebp
+	pop ebx
+	pop edi
+	pop esi
+	pop ebp
+	ret
+	
+	
+terminal_destroyCommand:
+	push ebp
+	mov ebp, esp
+	
+	mov eax, dword[ebp+8]
+	test dword[eax+8], 0xffffffff
+	jz terminal_destroyCommand_skip_data_yeet
+		push dword[eax+8]
+		call my_free
+	terminal_destroyCommand_skip_data_yeet:
+	
+	push dword[ebp+8]
+	call my_free
+	
+	mov esp, ebp
+	pop ebp
+	ret
 	
 	
 ;internal functinos	-----------------------------------

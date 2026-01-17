@@ -25,6 +25,10 @@ section .text use32
 	;float cvt_str2float(const char* str)
 	global cvt_str2float
 	
+	;returns 0 if the parsing was successful
+	;int cvt_trystr2int(const char* str, int* outBuffer)
+	global cvt_trystr2int
+	
 	extern my_memset_dword
 	extern my_printf
 	extern my_strlen
@@ -229,6 +233,39 @@ cvt_str2float:
 	cvt_str2float_end:
 	fld dword[ebp-204]			;set return value
 	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+cvt_trystr2int:	
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4		;str2int return value		4
+	
+	push dword[ebp+8]
+	call cvt_str2int
+	mov dword[ebp-4], eax
+	
+	test eax, eax
+	jnz cvt_trystr2int_valid
+		push dword[ebp+8]
+		call cvt_isValidInt_internal
+		test eax, eax
+		jnz cvt_trystr2int_valid
+			;not valid
+			mov eax, 69
+			jmp cvt_trystr2int_end
+	
+	cvt_trystr2int_valid:
+		;valid
+		mov ecx, dword[ebp+12]
+		mov dword[ecx], eax
+		
+		xor eax, eax		;set return val
+	
+	cvt_trystr2int_end:
 	mov esp, ebp
 	pop ebp
 	ret
