@@ -184,9 +184,76 @@ terminalInterpreter_createCommandNone:
 	
 terminalInterpreter_createCommandWarp:
 	push ebp
+	push ebx
 	mov ebp, esp
 	
+	sub esp, 4		;command		4
+	sub esp, 4		;z pos			8
+	sub esp, 4		;y pos			12
+	sub esp, 4		;x pos			16
+	sub esp, 4		;is valid warp	20
+	
+	;parse the coordinates if possible
+	push dword[ebp+12]
+	call vector_size
+	cmp eax, 4			;command plus 3 positions
+	jl terminalInterpreter_createCommandWarp_none
+		mov ebx, 2
+		terminalInterpreter_createCommandWarp_parse_loop_start:
+			lea eax, [ebx+1]
+			push eax
+			push dword[ebp+12]
+			call vector_at
+			
+			lea ecx, [ebp-16+4*ebx]
+			push ecx
+			push dword[eax]
+			call cvt_trystr2int
+			
+			test eax, eax
+			jnz terminalInterpreter_createCommandWarp_none		;unsuccessful parse
+			
+			add esp, 16
+			dec ebx
+			jns terminalInterpreter_createCommandWarp_parse_loop_start
+		
+	
+	;fill up the command with sus
+	terminalInterpreter_createCommandWarp_none:
+		push dword[ebp+12]
+		call terminalInterpreter_createCommandNone
+		mov dword[ebp-4], eax
+		jmp terminalInterpreter_createCommandWarp_end
+	
+	terminalInterpreter_createCommandWarp_warp:
+		;alloc space and init values
+		push 12
+		call my_malloc
+		mov dword[ebp-4], eax
+		
+		mov ecx, dword[TERMINAL_COMMAND_WARP]
+		mov dword[eax], ecx
+		mov dword[eax+4], 12
+		
+		;alloc data block and fill it
+		push 12
+		call my_malloc
+		mov ecx, dword[ebp-4]
+		mov dword[ecx+8], eax
+		
+		mov edx, dword[ebp-16]
+		mov dword[eax], edx
+		mov ecx, dword[ebp-12]
+		mov dword[eax+4], ecx
+		mov edx, dword[ebp-8]
+		mov dword[eax+8], edx
+		
+		jmp terminalInterpreter_createCommandWarp_end
+	
+	terminalInterpreter_createCommandWarp_end:
+	mov eax, dword[ebp-4]			;set return value
 	
 	mov esp, ebp
+	pop ebx
 	pop ebp
 	ret

@@ -247,6 +247,7 @@ section .text use32
 	extern glfwGetTime
 	extern GLFW_KEY_ENTER
 	extern GLFW_KEY_ESCAPE
+	extern GLFW_KEY_BACKSPACE
 	extern GLFW_KEY_T
 	
 	extern input_init
@@ -420,6 +421,7 @@ section .text use32
 	extern terminal_open
 	extern terminal_close
 	extern terminal_isOpen
+	extern terminal_sendKeyEvent
 	
 	extern settings_read
 	extern settings_resolutionInfo
@@ -427,9 +429,6 @@ section .text use32
 	extern lightRenderer_init
 	extern lightRenderer_deinit
 	extern lightManager4d_processUpdates
-	
-	extern my_ssplit
-	extern vector_for_each
 	
 gameLoop_main:
 	push ebp
@@ -2095,14 +2094,36 @@ gameLoop_updateInfoCanvas:
 		call terminal_open
 		
 	gameLoop_updateInfoCanvas_terminal_already_opened:
+		push dword[GLFW_KEY_BACKSPACE]
+		call input_keyReleased
+		test eax, eax
+		jnz gameLoop_updateInfoCanvas_terminal_already_opened_backspace
 		push dword[GLFW_KEY_ENTER]
 		call input_keyReleased
 		test eax, eax
-		jz gameLoop_updateInfoCanvas_terminal_stuff_done
+		jnz gameLoop_updateInfoCanvas_terminal_already_opened_close
+		jmp gameLoop_updateInfoCanvas_terminal_stuff_done
 		
-		push 69
-		push dword[TERMINAL]
-		call terminal_close
+		gameLoop_updateInfoCanvas_terminal_already_opened_backspace:
+			push 8		;backspace
+			push dword[TERMINAL]
+			call terminal_sendKeyEvent
+			jmp gameLoop_updateInfoCanvas_terminal_stuff_done
+	
+		gameLoop_updateInfoCanvas_terminal_already_opened_close:
+			push ebp
+			mov ebp, esp
+			
+			sub esp, 4			;command			4
+			
+			push 69
+			push dword[TERMINAL]
+			call terminal_close
+			
+			mov esp, ebp
+			pop ebp
+			jmp gameLoop_updateInfoCanvas_terminal_stuff_done
+			
 		
 	gameLoop_updateInfoCanvas_terminal_stuff_done:
 	

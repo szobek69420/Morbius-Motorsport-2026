@@ -64,6 +64,9 @@ section .text use32
 	;void terminal_destroyCommand(TerminalCommand* command)
 	global terminal_destroyCommand
 	
+	;void terminal_sendKeyEvent(Terminal*, uint keyASCII)
+	global terminal_sendKeyEvent
+	
 	extern glfwSetCharCallback
 	
 	extern my_printf
@@ -456,6 +459,20 @@ terminal_destroyCommand:
 	
 	push dword[ebp+8]
 	call my_free
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+terminal_sendKeyEvent:
+	push ebp
+	mov ebp, esp
+	
+	mov eax, dword[ebp+8]
+	push dword[ebp+12]
+	push dword[eax+12]
+	call terminal_charCallback_internal
 	
 	mov esp, ebp
 	pop ebp
