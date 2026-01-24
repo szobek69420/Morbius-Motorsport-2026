@@ -171,32 +171,21 @@ my_memcmp:
 	my_memcmp_byteCount_valid:
 	
 	;compare
-	mov eax, dword[ebp+20]		;size in eax
+	xor eax, eax
+	mov ebx, dword[ebp+20]		;size in eax
 	mov ecx, dword[ebp+12]		;m1 in ecx
 	mov edx, dword[ebp+16]		;m2 in edx
 	my_memcmp_loop_start:
-		mov bl, byte[ecx]
-		cmp bl, byte[edx]
-		je my_memcmp_loop_continue
-		jg my_memcmp_loop_greater
-		jl my_memcmp_loop_less
-		
-		my_memcmp_loop_greater:
-			mov eax, 69
-			jmp my_memcmp_end
-		my_memcmp_loop_less:
-			mov eax, -69
-			jmp my_memcmp_end
+		mov al, byte[ecx]
+		sub al, byte[edx]
+		test al, 0xff
+		jnz my_memcmp_end
 			
-		my_memcmp_loop_continue:
 		inc ecx
 		inc edx
-		dec eax
-		test eax, eax
+		dec ebx
+		test ebx, ebx
 		jnz my_memcmp_loop_start
-			;in this case the memory regions are equal
-			xor eax, eax
-			jmp my_memcmp_end
 	
 	my_memcmp_end:
 	mov esp, ebp

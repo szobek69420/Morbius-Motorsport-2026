@@ -8,6 +8,8 @@
 
 section .rodata use32
 
+	test_text db "data maduroaming",10,0
+
 	TERMINAL_COMMAND_COUNT dd 2
 
 	TERMINAL_COMMAND_NONE dd 0
@@ -17,7 +19,7 @@ section .rodata use32
 	global TERMINAL_COMMAND_WARP
 	
 	TERMINAL_COMMAND_BEGIN db "()",0
-	TERMINAL_COMMAND_BEGIN_LENGTH db 2
+	TERMINAL_COMMAND_BEGIN_LENGTH dd 2
 	
 	
 	TERMINAL_COMMAND_NAMES:			;indexed by the terminal command type
@@ -43,6 +45,34 @@ section .text use32
 	;TerminalCommand* terminalInterpreter_interpretLine(const char* line)
 	global terminalInterpreter_interpretLine
 	
+	;void terminalInterpreter_executeWarp(TerminalCommand* warpCommand, ChunkManager4D* cm, Player* player)
+	global terminalInterpreter_executeWarp
+	
+	extern my_printf
+	extern my_malloc
+	extern my_free
+	extern my_memcmp
+	
+	extern my_strlen
+	extern my_ssplit
+	
+	extern cvt_trystr2float
+	
+	extern vector_init
+	extern vector_destroy
+	extern vector_at
+	extern vector_size
+	extern vector_for_each
+	
+	extern chunkManager4d_getHyperPlane
+	
+	extern aabb4d_getPosition
+	
+	extern hyperPlane_positionTo4d
+	
+	extern player_getCollider
+	
+	
 terminalInterpreter_interpretLine:	
 	push ebp
 	push esi
@@ -58,6 +88,8 @@ terminalInterpreter_interpretLine:
 	push 4
 	push eax
 	call vector_init
+
+
 	
 	;check if the command starts with a command
 	push dword[TERMINAL_COMMAND_BEGIN_LENGTH]
@@ -77,7 +109,7 @@ terminalInterpreter_interpretLine:
 		
 	terminalInterpreter_interpretLine_create_else:
 		;split the string
-		mov eax, dword[ebp+8]
+		mov eax, dword[ebp+20]
 		add eax, dword[TERMINAL_COMMAND_BEGIN_LENGTH]
 		lea ecx, [ebp-16]
 		mov dl, ' '
@@ -86,6 +118,7 @@ terminalInterpreter_interpretLine:
 		push edx
 		push eax
 		call my_ssplit
+		
 		
 		;check if the buffer is empty
 		cmp dword[ebp-16], 0
@@ -106,7 +139,7 @@ terminalInterpreter_interpretLine:
 			add esp, 4
 			
 			push eax
-			push dword[TERMINAL_COMMAND_NAMES]
+			push dword[TERMINAL_COMMAND_NAMES+4*ebx]
 			push esi
 			call my_memcmp
 			add esp, 12
@@ -137,6 +170,7 @@ terminalInterpreter_interpretLine:
 	push terminalInterpreter_interpretLine_destroy_helper
 	push eax
 	call vector_for_each
+	call vector_destroy
 	jmp terminalInterpreter_interpretLine_destroy_done
 	
 	terminalInterpreter_interpretLine_destroy_helper:
@@ -162,6 +196,51 @@ terminalInterpreter_interpretLine:
 	ret
 	
 	
+terminalInterpreter_executeWarp:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4		;player aabb		4
+	sub esp, 4		;cm hyperplane		8
+	sub esp, 16		;position in 4d		24
+	
+	;get player collider
+	push dword[ebp+16]
+	call player_getCollider
+	mov dword[ebp-4], eax
+	
+	;get the hyperplane
+	push dword[ebp+12]
+	call chunkManager4d_getHyperPlane
+	mov dword[ebp-8], eax
+	
+	;calculate the 4d position
+	mov eax, dword[ebp+8]
+	lea ecx, [ebp-24]
+	push ecx
+	push dword[eax+8]
+	push dword[ebp-8]
+	call hyperPlane_positionTo4d
+	
+	;set the player's position
+	push dword[ebp-4]
+	call aabb4d_getPosition
+	mov ecx, dword[ebp-24]
+	mov dword[eax], ecx
+	mov edx, dword[ebp-20]
+	mov dword[eax+4], edx
+	mov ecx, dword[ebp-16]
+	mov dword[eax+8], ecx
+	mov edx, dword[ebp-12]
+	mov dword[eax+12], edx
+	
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+;internal functinos	-------------------------------------
 	
 terminalInterpreter_createCommandNone:
 	push ebp
@@ -193,11 +272,14 @@ terminalInterpreter_createCommandWarp:
 	sub esp, 4		;x pos			16
 	sub esp, 4		;is valid warp	20
 	
+	mov dword[ebp-20], 69
+	
+	
 	;parse the coordinates if possible
 	push dword[ebp+12]
 	call vector_size
 	cmp eax, 4			;command plus 3 positions
-	jl terminalInterpreter_createCommandWarp_none
+	jne terminalInterpreter_createCommandWarp_invalid
 		mov ebx, 2
 		terminalInterpreter_createCommandWarp_parse_loop_start:
 			lea eax, [ebx+1]
@@ -208,17 +290,28 @@ terminalInterpreter_createCommandWarp:
 			lea ecx, [ebp-16+4*ebx]
 			push ecx
 			push dword[eax]
-			call cvt_trystr2int
+			call cvt_trystr2float
 			
 			test eax, eax
-			jnz terminalInterpreter_createCommandWarp_none		;unsuccessful parse
+			jnz terminalInterpreter_createCommandWarp_invalid		;unsuccessful parse
 			
 			add esp, 16
 			dec ebx
 			jns terminalInterpreter_createCommandWarp_parse_loop_start
+			
+		jmp terminalInterpreter_createCommandWarp_done
 		
+	terminalInterpreter_createCommandWarp_invalid:
+		mov dword[ebp-20], 0
+	
+	terminalInterpreter_createCommandWarp_done:
+	
+	
 	
 	;fill up the command with sus
+	test dword[ebp-20], 0xffffffff
+	jnz terminalInterpreter_createCommandWarp_warp
+	
 	terminalInterpreter_createCommandWarp_none:
 		push dword[ebp+12]
 		call terminalInterpreter_createCommandNone
@@ -226,6 +319,7 @@ terminalInterpreter_createCommandWarp:
 		jmp terminalInterpreter_createCommandWarp_end
 	
 	terminalInterpreter_createCommandWarp_warp:
+	
 		;alloc space and init values
 		push 12
 		call my_malloc
@@ -250,7 +344,7 @@ terminalInterpreter_createCommandWarp:
 		
 		jmp terminalInterpreter_createCommandWarp_end
 	
-	terminalInterpreter_createCommandWarp_end:
+	terminalInterpreter_createCommandWarp_end:	
 	mov eax, dword[ebp-4]			;set return value
 	
 	mov esp, ebp

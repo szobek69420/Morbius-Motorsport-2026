@@ -422,6 +422,8 @@ section .text use32
 	extern terminal_close
 	extern terminal_isOpen
 	extern terminal_sendKeyEvent
+	extern terminal_destroyCommand
+	extern terminal_interpretLine
 	
 	extern settings_read
 	extern settings_resolutionInfo
@@ -2116,9 +2118,21 @@ gameLoop_updateInfoCanvas:
 			
 			sub esp, 4			;command			4
 			
+			;interpret line
+			push dword[TERMINAL]
+			call terminal_interpretLine
+			mov dword[ebp-4], eax
+			
+			;close terminal
 			push 69
 			push dword[TERMINAL]
 			call terminal_close
+			
+			;execute command
+			
+			;destroy command
+			push dword[ebp-4]
+			call terminal_destroyCommand
 			
 			mov esp, ebp
 			pop ebp

@@ -29,6 +29,10 @@ section .text use32
 	;int cvt_trystr2int(const char* str, int* outBuffer)
 	global cvt_trystr2int
 	
+	;returns 0 if the parsing was successful
+	;int cvt_trystr2float(const char* str, int* outBuffer)
+	global cvt_trystr2float
+	
 	extern my_memset_dword
 	extern my_printf
 	extern my_strlen
@@ -269,6 +273,43 @@ cvt_trystr2int:
 	mov esp, ebp
 	pop ebp
 	ret
+	
+	
+cvt_trystr2float:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4		;str2float return value		4
+	
+	;convert the nigga
+	push dword[ebp+8]
+	call cvt_str2float
+	fstp dword[ebp-4]
+	
+	test eax, eax
+	jnz cvt_trystr2float_valid
+		;if the return value is zero, it can still be valid
+		push dword[ebp+8]
+		call cvt_isValidFloat_internal
+		test eax, eax
+		jnz cvt_trystr2float_valid
+			;not valid
+			mov eax, 69
+			jmp cvt_trystr2float_end
+	
+	cvt_trystr2float_valid:
+		;valid
+		mov eax, dword[ebp-4]
+		mov ecx, dword[ebp+12]
+		mov dword[ecx], eax
+		
+		xor eax, eax		;set return val
+	
+	cvt_trystr2float_end:
+	mov esp, ebp
+	pop ebp
+	ret
+	
 
 ;internal functinos -----------------------------------------------------------------
 

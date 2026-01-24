@@ -69,6 +69,8 @@ section .text use32
 	
 	extern glfwSetCharCallback
 	
+	extern terminalInterpreter_interpretLine
+	
 	extern my_printf
 	extern my_malloc
 	extern my_free
@@ -431,17 +433,14 @@ terminal_isOpen:
 	
 terminal_interpretLine:
 	push ebp
-	push esi
-	push edi
-	push ebx
 	mov ebp, esp
 	
-	sub esp, 16			;
+	;call the command interpreter
+	mov eax, dword[ebp+8]
+	push dword[eax+64]
+	call terminalInterpreter_interpretLine
 	
 	mov esp, ebp
-	pop ebx
-	pop edi
-	pop esi
 	pop ebp
 	ret
 	
@@ -568,15 +567,11 @@ terminal_charCallback_internal:
 		jmp terminal_charCallback_internal_end
 	
 	terminal_charCallback_internal_handleRest:
-		;check if the character is of alphanumerical type or space
+		;check if the character is printable
 		push dword[ebp-8]
-		call ctype_isAlnum
+		call terminal_charCallback_internal_isCharPrintable
 		test eax, eax
-		jnz terminal_charCallback_internal_isKosher
-		cmp dword[ebp-8], 32		;is space?
-		je terminal_charCallback_internal_isKosher
-			jmp terminal_charCallback_internal_end
-		terminal_charCallback_internal_isKosher:
+		jz terminal_charCallback_internal_end
 	
 		;check if there is space left in the current line
 		mov ebx, dword[ebp-4]
@@ -605,6 +600,42 @@ terminal_charCallback_internal:
 	pop esi
 	pop ebp
 	ret
+	
+	
+;int func(uint char)
+terminal_charCallback_internal_isCharPrintable:
+	push ebp
+	mov ebp, esp
+	
+	sub esp, 4			;return value
+	mov dword[ebp-4], 69
+	
+	push dword[ebp+8]
+	call ctype_isAlnum
+	test eax, eax
+	jnz terminal_charCallback_internal_isCharPrintable_end
+	
+	xor eax, eax
+	mov cl, byte[ebp+8]
+	terminal_charCallback_internal_isCharPrintable_special_loop_start:
+		cmp cl, byte[eax+terminal_charCallback_internal_isCharPrintable_specialChars]
+		je terminal_charCallback_internal_isCharPrintable_end
+
+		inc eax
+		test byte[eax+terminal_charCallback_internal_isCharPrintable_specialChars], 0xff
+		jnz terminal_charCallback_internal_isCharPrintable_special_loop_start
+	
+	mov dword[ebp-4], 0
+	
+	terminal_charCallback_internal_isCharPrintable_end:
+	mov eax, dword[ebp-4]		;set return value
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	terminal_charCallback_internal_isCharPrintable_specialChars:
+	db ' ','.', ',', ':', '/', '(', ')', 0
+	
 
 ;recalculates the content of the terminal based on the history
 ;the previous content is deleted

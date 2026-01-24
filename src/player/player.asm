@@ -126,6 +126,8 @@ section .text use32
 	global player_lookDirection			;void player_lookDirection(player* player, vec4* buffer)
 	global player_drawRaycastHypercube	;void player_drawRaycastHypercube(Player* player, mat4* pv)
 	global player_getPosition4d			;void player_getPosition4d(Player* player, vec4* buffer)
+	
+	global player_getCollider			;AABB* player_getCollider(Player*)
 
 	dll_import kernel32.dll, GetTickCount
 
@@ -661,6 +663,12 @@ player_getPosition4d:
 	ret
 	
 	
+player_getCollider:
+	mov eax, dword[esp+4]
+	mov eax, dword[eax+24]
+	ret
+	
+	
 ;internal functions
 ;-------------------------------------------------------------------------------
 ;-------------------------------------------------------------------------------
@@ -1155,10 +1163,6 @@ player_rotatePlane:
 		call chunkManager4d_getLightManager
 		mov dword[esp], eax
 		call lightManager4d_triggerUpdate
-		
-		push test_text
-		call my_printf
-		add esp, 4
 		
 	player_rotatePlane_no_light_update:
 	
