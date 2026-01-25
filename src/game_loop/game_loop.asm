@@ -2129,6 +2129,8 @@ gameLoop_updateInfoCanvas:
 			call terminal_close
 			
 			;execute command
+			push dword[ebp-4]
+			call gameLoop_executeCommand
 			
 			;destroy command
 			push dword[ebp-4]
@@ -2140,6 +2142,55 @@ gameLoop_updateInfoCanvas:
 			
 		
 	gameLoop_updateInfoCanvas_terminal_stuff_done:
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+	
+;void gameLoop_executeCommand(TerminalCommand* command)
+extern terminal_executeWarp3
+extern terminal_executeWarp4
+extern terminal_executeTime
+extern TERMINAL_COMMAND_WARP3
+extern TERMINAL_COMMAND_WARP4
+extern TERMINAL_COMMAND_TIME
+gameLoop_executeCommand:
+	push ebp
+	mov ebp, esp
+	
+	mov eax, dword[ebp+8]
+	mov eax, dword[eax]
+	cmp eax, dword[TERMINAL_COMMAND_WARP3]
+	je gameLoop_executeCommand_warp3
+	cmp eax, dword[TERMINAL_COMMAND_WARP4]
+	je gameLoop_executeCommand_warp4
+	cmp eax, dword[TERMINAL_COMMAND_TIME]
+	je gameLoop_executeCommand_time
+	jmp gameLoop_executeCommand_done
+	
+	gameLoop_executeCommand_warp3:
+		push dword[pplayer]
+		push dword[chunk_manager_4d]
+		push dword[ebp+8]
+		call terminal_executeWarp3
+		jmp gameLoop_executeCommand_done
+		
+	gameLoop_executeCommand_warp4:
+		push dword[pplayer]
+		push dword[chunk_manager_4d]
+		push dword[ebp+8]
+		call terminal_executeWarp4
+		jmp gameLoop_executeCommand_done
+		
+	gameLoop_executeCommand_time:
+		push TIME_OF_DAY
+		push dword[ebp+8]
+		call terminal_executeTime
+		jmp gameLoop_executeCommand_done
+	
+	gameLoop_executeCommand_done:
 	
 	mov esp, ebp
 	pop ebp

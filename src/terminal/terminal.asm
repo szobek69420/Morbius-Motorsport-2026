@@ -64,12 +64,24 @@ section .text use32
 	;void terminal_destroyCommand(TerminalCommand* command)
 	global terminal_destroyCommand
 	
+	;void terminal_executeWarp3(TerminalCommand* warp3Command, ChunkManager4D* cm, Player* player)
+	global terminal_executeWarp3
+	
+	;void terminal_executeWarp4(TerminalCommand* warp3Command, ChunkManager4D* cm, Player* player)
+	global terminal_executeWarp4
+	
+	;void terminal_executeWarp(TerminalCommand* timeCommand, float* normalizedTimeBuffer)
+	global terminal_executeTime
+	
 	;void terminal_sendKeyEvent(Terminal*, uint keyASCII)
 	global terminal_sendKeyEvent
 	
 	extern glfwSetCharCallback
 	
 	extern terminalInterpreter_interpretLine
+	extern terminalInterpreter_executeWarp3
+	extern terminalInterpreter_executeWarp4
+	extern terminalInterpreter_executeTime
 	
 	extern my_printf
 	extern my_malloc
@@ -464,6 +476,47 @@ terminal_destroyCommand:
 	ret
 	
 	
+terminal_executeWarp3:
+	push ebp
+	mov ebp, esp
+	
+	push dword[ebp+16]
+	push dword[ebp+12]
+	push dword[ebp+8]
+	call terminalInterpreter_executeWarp3
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+terminal_executeWarp4:
+	push ebp
+	mov ebp, esp
+	
+	push dword[ebp+16]
+	push dword[ebp+12]
+	push dword[ebp+8]
+	call terminalInterpreter_executeWarp4
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
+terminal_executeTime:
+	push ebp
+	mov ebp, esp
+	
+	push dword[ebp+12]
+	push dword[ebp+8]
+	call terminalInterpreter_executeTime
+	
+	mov esp, ebp
+	pop ebp
+	ret
+	
+	
 terminal_sendKeyEvent:
 	push ebp
 	mov ebp, esp
@@ -634,7 +687,7 @@ terminal_charCallback_internal_isCharPrintable:
 	pop ebp
 	ret
 	terminal_charCallback_internal_isCharPrintable_specialChars:
-	db ' ','.', ',', ':', '/', '(', ')', 0
+	db ' ','.', ',', ':', ';', '/', '(', ')', 0
 	
 
 ;recalculates the content of the terminal based on the history
